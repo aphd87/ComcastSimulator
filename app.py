@@ -496,27 +496,43 @@ else:
 
     # ── Main Tabs ─────────────────────────────────────────────────────────────
     tabs = st.tabs([
-        "📊 Portfolio",
-        "📅 Schedule & Amortization",
-        "💰 P&L / OCF",
-        "🎬 Green Light",
-        "🔄 Renewal Engine",
-        "📈 10-Year Forecast",
+        "📊 Simulation",
         "🏆 Leaderboard",
+        "📖 Theory",
     ])
 
-    from pages.portfolio_v2  import render as render_portfolio
-    from pages.schedule      import render as render_schedule
-    from pages.finance       import render as render_finance
-    from pages.greenlight    import render as render_greenlight
-    from pages.renewal       import render as render_renewal
-    from pages.forecast      import render as render_forecast
-    from pages.leaderboard   import render as render_leaderboard
+    from pages.portfolio_v2 import render as render_portfolio
+    from pages.leaderboard  import render as render_leaderboard
 
-    with tabs[0]: render_portfolio()
-    with tabs[1]: render_schedule()
-    with tabs[2]: render_finance()
-    with tabs[3]: render_greenlight()
-    with tabs[4]: render_renewal()
-    with tabs[5]: render_forecast()
-    with tabs[6]: render_leaderboard()
+    with tabs[0]:
+        render_portfolio()
+
+    with tabs[1]:
+        render_leaderboard()
+
+    with tabs[2]:
+        st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
+        cols = st.columns(3)
+        theory_items = list(THEORY_CONTENT.values())
+        for i, col in enumerate(cols):
+            if i < len(theory_items):
+                t = theory_items[i]
+                col.markdown(f"""
+                <div class="theory-card">
+                  <div class="theory-icon">{t['icon']}</div>
+                  <div class="theory-title">{t['title']}</div>
+                  <div class="theory-body">{t['brief']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        cols2 = st.columns(2)
+        for i, col in enumerate(cols2):
+            idx = i + 3
+            if idx < len(theory_items):
+                t = theory_items[idx]
+                col.markdown(f"""
+                <div class="theory-card">
+                  <div class="theory-icon">{t['icon']}</div>
+                  <div class="theory-title">{t['title']}</div>
+                  <div class="theory-body">{t['brief']}</div>
+                </div>
+                """, unsafe_allow_html=True)
