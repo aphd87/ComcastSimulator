@@ -53,7 +53,7 @@ def render():
               <div style="font-family:DM Mono,monospace;font-size:13px;font-weight:600;
                    color:{info['color2']};">{info['display_name']}</div>
               <div style="font-family:DM Serif Display,serif;font-size:28px;
-                   color:{score_c};margin:8px 0;">{off:.0f if off else '—'}</div>
+                   color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
               <div style="font-size:10px;font-family:DM Mono,monospace;color:#555a6e;">
                 {'OFFICIAL SCORE' if off else 'NOT SUBMITTED'}
               </div>
