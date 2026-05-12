@@ -171,16 +171,16 @@ def render():
     rating_range = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
     cost_range   = [300, 500, 750, 1000, 1500, 2000]
 
+    rating_cols = [f"{r:.1f}" for r in rating_range]
     sens_rows = []
     for ep_c in cost_range:
-        row = {f"${ep_c}K/ep": f"${ep_c}K"}
+        row = {"Ep Cost": f"${ep_c}K"}
         for r in rating_range:
             lin = greenlight_linear(eps, ep_c, r, mkt_spend, year)
             row[f"{r:.1f}"] = round(lin["ocf"], 2)
         sens_rows.append(row)
 
-    sens_df = pd.DataFrame(sens_rows).set_index(f"${cost_range[0]}K/ep")
-    sens_df.index.name = "Cost/Ep → Rating ↓"
+    sens_df = pd.DataFrame(sens_rows)
 
     def color_cells(val):
         try:
@@ -191,10 +191,13 @@ def render():
         except: return ""
 
     st.dataframe(
-        sens_df.style.map(color_cells).format("{:.2f}"),
+        sens_df.style
+        .map(color_cells, subset=rating_cols)
+        .format("{:.2f}", subset=rating_cols)
+        .hide(axis="index"),
         use_container_width=True
     )
-    st.caption("Rows = episode cost. Columns = projected 18-49 rating. Cell = Linear OCF in $M.")
+    st.caption("Rows = episode cost (Ep Cost col). Columns = projected 18-49 rating. Cell = Linear OCF in $M.")
 
     st.divider()
 
