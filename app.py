@@ -48,9 +48,10 @@ def init_state():
         "renewal_decisions": {},
         "last_score":      None,
         "submitted":       False,
-        "sim_year":        1,
-        "sim_phase":       "setup",   # "setup" | "results"
-        "year_results":    {},
+        "sim_month":       1,
+        "sim_phase":       "decisions",
+        "monthly_log":     [],
+        "cancelled_shows": set(),
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -135,12 +136,13 @@ with st.sidebar:
 
             if not locked:
                 if st.button(label, key=f"net_{net}", use_container_width=True):
-                    ss.active_network = net
-                    ss.submitted  = False
-                    ss.sim_year   = 1
-                    ss.sim_phase  = "setup"
-                    ss.year_results = {}
-                    ss.year       = 1
+                    ss.active_network  = net
+                    ss.submitted       = False
+                    ss.sim_month       = 1
+                    ss.sim_phase       = "decisions"
+                    ss.monthly_log     = []
+                    ss.cancelled_shows = set()
+                    ss.year            = 1
                     st.rerun()
             else:
                 st.markdown(
@@ -442,56 +444,6 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Year Simulation Progress Bar ──────────────────────────────────────────
-    _MAX_SIM_YEARS = {"oxygen": 3, "bravo": 4, "peacock": 3}
-    _max_yrs = _MAX_SIM_YEARS.get(net, 3)
-    _sim_yr  = ss.get("sim_year", 1)
-    _sim_ph  = ss.get("sim_phase", "setup")
-
-    dot_items = []
-    for y in range(1, _max_yrs + 1):
-        yr_results = (ss.get("year_results") or {}).get(y, {})
-        if y < _sim_yr or yr_results:
-            dot_bg  = "#66bb6a"
-            dot_txt = "✓"
-            txt_clr = "#0b0c10"
-        elif y == _sim_yr:
-            dot_bg  = brief["color"]
-            dot_txt = str(y)
-            txt_clr = "#ffffff"
-        else:
-            dot_bg  = "#252836"
-            dot_txt = str(y)
-            txt_clr = "#b0b5c4"
-        dot_items.append(
-            f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
-            f'<div style="width:30px;height:30px;border-radius:50%;background:{dot_bg};'
-            f'display:flex;align-items:center;justify-content:center;'
-            f'font-family:DM Mono,monospace;font-size:11px;font-weight:700;color:{txt_clr};">'
-            f'{dot_txt}</div>'
-            f'<div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;">Y{y}</div>'
-            f'</div>'
-        )
-    connector = '<div style="width:32px;height:2px;background:#252836;margin-bottom:12px;"></div>'
-    dots_html = connector.join(dot_items)
-    phase_label = "▶ Decision Phase" if _sim_ph == "setup" else "📊 Year Results"
-
-    st.markdown(f"""
-    <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
-         padding:12px 20px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
-             text-transform:uppercase;letter-spacing:.1em;">Simulation Progress</div>
-        <div style="font-family:DM Mono,monospace;font-size:11px;color:{brief['color']};">
-          Year {_sim_yr} of {_max_yrs} &nbsp;·&nbsp; {phase_label}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:0;">
-        {dots_html}
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
     st.divider()
 
     # ── Main Tabs ─────────────────────────────────────────────────────────────
@@ -501,11 +453,11 @@ else:
         "📖 Theory",
     ])
 
-    from pages.portfolio_v2 import render as render_portfolio
-    from pages.leaderboard  import render as render_leaderboard
+    from pages.simulation  import render as render_simulation
+    from pages.leaderboard import render as render_leaderboard
 
     with tabs[0]:
-        render_portfolio()
+        render_simulation()
 
     with tabs[1]:
         render_leaderboard()
