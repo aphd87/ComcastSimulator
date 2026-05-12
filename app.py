@@ -28,7 +28,7 @@ from utils.game_state import (
     get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS
 )
 from utils.models import annual_budget, cable_subs, distribution_revenue
-from utils.data   import BRAVO_SLATE, OXYGEN_SLATE
+from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
@@ -37,9 +37,10 @@ def init_state():
     defaults = {
         "team_name":       "",
         "registered":      False,
-        "active_network":  "bravo",
+        "active_network":  "oxygen",
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
         "oxygen_shows":    copy.deepcopy(OXYGEN_SLATE),
+        "peacock_shows":   copy.deepcopy(PEACOCK_SLATE),
         "year":            1,
         "mkt_budget":      5.0,
         "dev_budget":      3.0,
@@ -108,13 +109,13 @@ with st.sidebar:
         for net in NETWORK_ORDER:
             info     = NETWORK_INFO[net]
             status   = net_status.get(net, {})
-            locked   = status.get("locked", net != "bravo")
+            locked   = status.get("locked", net != "oxygen")
             attempts = status.get("attempts", 0)
             passed   = status.get("passed", False)
             off_sc   = status.get("official_score")
 
-            if net == "bravo":
-                locked = False   # Bravo always unlocked
+            if net == "oxygen":
+                locked = False   # Oxygen always unlocked (Level 1)
 
             lock_icon = "🔒" if locked else ("✅" if passed else ("⚠️" if attempts > 0 else "▶️"))
             active    = ss.active_network == net
@@ -146,7 +147,7 @@ with st.sidebar:
 
         # ── Simulation Controls ───────────────────────────────────────────────
         st.markdown('<div class="section-title">Simulation Year</div>', unsafe_allow_html=True)
-        max_year = 4 if ss.active_network == "bravo" else (8 if ss.active_network == "oxygen" else 10)
+        max_year = 4 if ss.active_network == "oxygen" else (7 if ss.active_network == "bravo" else 10)
         ss.year  = st.slider("Year", 1, max_year, ss.year, key="year_slider")
         st.markdown(
             f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;">'
@@ -162,9 +163,12 @@ with st.sidebar:
         base_budget = net_info["budget_base"] * (1.03 ** (ss.year - 1))
 
         from utils.models import portfolio_cost
-        shows = ss.bravo_shows[:]
-        if ss.active_network in ("oxygen", "peacock"):
-            shows += ss.oxygen_shows
+        _net = ss.active_network
+        shows = ss.oxygen_shows[:]
+        if _net in ("bravo", "peacock"):
+            shows += ss.bravo_shows
+        if _net == "peacock":
+            shows += ss.peacock_shows
         content_cost = portfolio_cost(shows, ss.year)
 
         ss.mkt_budget = st.slider("📣 Marketing ($M)", 0.0, 20.0, ss.mkt_budget, 0.5)
@@ -226,9 +230,9 @@ if not ss.registered:
     <b style="color:#e8eaf0;font-size:15px;">It's 2012. The linear TV era is ending.</b><br><br>
     Cable networks are facing their first existential threat. Subscribers are cutting the cord. 
     Netflix is spending aggressively. The iPad is two years old. You are the General Manager of 
-    <b style="color:#e8c547;">Bravo</b> — responsible for the P&L, the show slate, and the budget. 
-    Your job: maximize Operating Cash Flow while building IP that survives the transition to streaming. 
-    Prove yourself on Bravo, earn Oxygen, then decide whether to launch a streaming network.
+    <b style="color:#e8c547;">Oxygen</b> — responsible for the P&L, the show slate, and the budget.
+    Your job: maximize Operating Cash Flow while building IP that survives the transition to streaming.
+    Prove yourself on Oxygen, earn Bravo, then decide whether to launch Peacock.
     </div>
     """, unsafe_allow_html=True)
 

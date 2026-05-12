@@ -27,7 +27,7 @@ SCORE_WEIGHTS = {
     "mkt_efficiency":0.15,    # 15% — marketing ROI
 }
 
-NETWORK_ORDER = ["bravo", "oxygen", "peacock"]
+NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 def compute_score(
@@ -132,14 +132,15 @@ def get_attempt_count(team_name: str, network: str) -> int:
 def can_advance(team_name: str, current_network: str) -> bool:
     """
     Can advance if:
-    - Passed on any attempt (even retry), OR
-    - Used all 3 attempts (advancement as consolation)
+    - Passed on any attempt, OR
+    - Failed attempt 1 and completed at least one retry (attempt 2+)
+    Students must repeat a level once before graduating — no free pass on first fail.
     """
     attempts = get_team_attempts(team_name, current_network)
     if not attempts: return False
     passed_any = any(a["passed"] for a in attempts)
-    used_max   = len(attempts) >= MAX_ATTEMPTS
-    return passed_any or used_max
+    repeated   = len(attempts) >= 2   # must retry before advancing
+    return passed_any or repeated
 
 def get_network_leaderboard(network: str) -> list[dict]:
     """

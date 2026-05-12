@@ -1,6 +1,6 @@
 """
 Tab 6 — 10-Year Forecast
-Full portfolio simulation: Bravo → Oxygen → SVOD+
+Full portfolio simulation: Oxygen → Bravo → Peacock SVOD+
 """
 import streamlit as st
 import pandas as pd
@@ -13,9 +13,9 @@ from utils.charts import (
 )
 
 PHASE_COLORS = {
-    "Phase 1 — Bravo":             "#c0392b",
-    "Phase 2 — Bravo + Oxygen":    "#8e44ad",
-    "Phase 3 — Full Portfolio":    "#1a6bb5",
+    "Phase 1 — Oxygen":           "#8e44ad",
+    "Phase 2 — Oxygen + Bravo":   "#c0392b",
+    "Phase 3 — Full Portfolio":   "#1a6bb5",
 }
 
 
@@ -26,10 +26,10 @@ def render():
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
          border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8b90a0;">
-    💡 <b style="color:#e8eaf0;">10-Year Strategy:</b> Prove OCF on Bravo (Years 1–4) → 
-    earn the right to add Oxygen (Years 5–8) → launch SVOD+ (Years 8–10). 
-    Each phase is a performance threshold. Cord-cutting accelerates after Year 5. 
-    SVOD becomes the hedge against linear erosion.
+    💡 <b style="color:#e8eaf0;">10-Year Strategy:</b> Prove OCF on Oxygen (Years 1–3) →
+    earn the right to add Bravo (Years 4–7) → launch Peacock SVOD+ (Years 8–10).
+    Each phase is a performance threshold. Cord-cutting accelerates after Year 4.
+    Peacock becomes the hedge against linear erosion.
     </div>
     """, unsafe_allow_html=True)
 
@@ -40,48 +40,49 @@ def render():
                                        help="Base = 3%. Accelerate to stress-test.")
         budget_growth     = c2.slider("Budget Growth (%/yr)", 0.0, 6.0, 3.0, 0.5,
                                        help="Base = 3% per year.")
-        oxygen_year       = c3.selectbox("Oxygen Launch Year", [4,5,6,7], index=1,
-                                          help="When does the network earn Oxygen?")
-        svod_year         = c4.selectbox("SVOD+ Launch Year", [7,8,9,10], index=1,
-                                          help="When does SVOD+ launch?")
+        bravo_year        = c3.selectbox("Bravo Launch Year", [3,4,5,6], index=1,
+                                          help="When does the team earn Bravo?")
+        svod_year         = c4.selectbox("Peacock Launch Year", [7,8,9,10], index=1,
+                                          help="When does Peacock SVOD+ launch?")
 
     # Re-run simulation with custom params
+    from utils.models import (portfolio_ad_rev, portfolio_cost,
+                               REV_PER_RATING_POINT, SUB_RATE_PER_MONTH)
+    import numpy as np
+
     sim_rows = []
     for y in range(1, 11):
-        shows = ss.bravo_shows[:]
-        if y >= oxygen_year:
-            shows += ss.oxygen_shows
-        from utils.models import (portfolio_ad_rev, portfolio_cost,
-                                   REV_PER_RATING_POINT, SUB_RATE_PER_MONTH)
-        import numpy as np
+        shows = ss.oxygen_shows[:]
+        if y >= bravo_year:
+            shows += ss.bravo_shows
 
-        cord = (1 - cord_cut_override/100)**(y-1)
-        ad   = sum(s.rating * REV_PER_RATING_POINT * cord for s in shows) + mkt*0.015*sum(s.rating for s in shows)/max(len(shows),1)
+        cord   = (1 - cord_cut_override/100)**(y-1)
+        ad     = (sum(s.rating * REV_PER_RATING_POINT * cord for s in shows)
+                  + mkt * 0.015 * sum(s.rating for s in shows) / max(len(shows), 1))
         subs_m = 45 * cord
-        esc    = min(1+(0.05*(y-1)),1.25)
+        esc    = min(1 + (0.05*(y-1)), 1.25)
         dist   = subs_m * SUB_RATE_PER_MONTH * 12 / 1000 * esc
-        cost   = sum(s.total_cost(y) for s in shows)
-        budget = 220 * (1+budget_growth/100)**(y-1)
-        ga     = (ad+dist)*0.06
-        ocf    = ad+dist-cost-mkt-ga
+        cost   = sum(s.annual_amort_expense(y) for s in shows)
+        budget = 220 * (1 + budget_growth/100)**(y-1)
+        ga     = (ad + dist) * 0.06
+        ocf    = ad + dist - cost - mkt - ga
 
-        # SVOD contribution
         svod_rev = 0
         if y >= svod_year:
-            svod_rev = 0.3 * ad * (1 + (y-svod_year)*0.15)  # SVOD scales with time
+            svod_rev = 0.3 * ad * (1 + (y - svod_year) * 0.15)
 
         sim_rows.append({
             "Year":           y,
-            "Calendar Year":  2011+y,
+            "Calendar Year":  2011 + y,
             "Phase":          phase_label(y),
-            "Ad Revenue":     round(ad,2),
-            "SVOD Revenue":   round(svod_rev,2),
-            "Distribution":   round(dist,2),
-            "Total Revenue":  round(ad+dist+svod_rev,2),
-            "Content Cost":   round(cost,2),
-            "OCF":            round(ocf + svod_rev*0.3,2),
-            "Budget":         round(budget,2),
-            "Cable Subs (M)": round(subs_m,2),
+            "Ad Revenue":     round(ad, 2),
+            "SVOD Revenue":   round(svod_rev, 2),
+            "Distribution":   round(dist, 2),
+            "Total Revenue":  round(ad + dist + svod_rev, 2),
+            "Content Cost":   round(cost, 2),
+            "OCF":            round(ocf + svod_rev * 0.3, 2),
+            "Budget":         round(budget, 2),
+            "Cable Subs (M)": round(subs_m, 2),
             "Active Shows":   len(shows),
         })
 
@@ -117,16 +118,14 @@ def render():
                               marker=dict(size=6)))
     fig.add_trace(go.Scatter(x=df["Year"], y=df["OCF"], name="OCF",
                               mode="lines+markers", line=dict(color=ACCENT,width=3),
-                              marker=dict(size=8,color=ACCENT,
-                                          symbol=["circle"]*10)))
+                              marker=dict(size=8, color=ACCENT)))
 
-    # Phase bands
-    for ph_y, ph_label, ph_color in [
-        (oxygen_year-0.5, f"← Oxygen Y{oxygen_year}", OXY_C),
-        (svod_year-0.5,   f"← SVOD+ Y{svod_year}",   SVOD_C),
+    for ph_y, ph_label_txt, ph_color in [
+        (bravo_year-0.5, f"← Bravo Y{bravo_year}",   BRAVO_C),
+        (svod_year-0.5,  f"← Peacock Y{svod_year}", SVOD_C),
     ]:
         fig.add_vline(x=ph_y, line_dash="dash", line_color=ph_color, opacity=0.5,
-                      annotation_text=ph_label, annotation_font_color=ph_color,
+                      annotation_text=ph_label_txt, annotation_font_color=ph_color,
                       annotation_font_size=10)
 
     fig.update_layout(**base_layout("10-Year Simulation — $M", height=380), barmode="stack")
@@ -162,10 +161,9 @@ def render():
             x=df["Year"], y=df["Cable Subs (M)"], name="Cable Subs (M)",
             mode="lines+markers", line=dict(color=DANGER,width=2),
             fill="tozeroy", fillcolor="rgba(239,83,80,0.08)"))
-        # SVOD subs (hypothetical)
-        svod_subs = [max(0,(y-svod_year+1)*1.5) if y >= svod_year else 0 for y in range(1,11)]
+        svod_subs = [max(0, (y-svod_year+1)*1.5) if y >= svod_year else 0 for y in range(1,11)]
         fig_subs.add_trace(go.Scatter(
-            x=df["Year"], y=svod_subs, name="SVOD+ Subs (M)",
+            x=df["Year"], y=svod_subs, name="Peacock Subs (M)",
             mode="lines+markers", line=dict(color=SVOD_C,width=2),
             fill="tozeroy", fillcolor="rgba(26,107,181,0.08)"))
         fig_subs.update_layout(**base_layout("Subscriber Base (M)", height=280))
@@ -208,20 +206,19 @@ def render():
     cur_year = ss.get("year", 1)
 
     events = [
-        (1, "📺", "Bravo slate launched — 20 shows, $220M budget, 45M cable subs"),
-        (2, "🔄", "Year 2 renewals — cancel bottom-quartile ROI shows, redeploy budget"),
-        (3, "⚓", "Below Deck franchise expansion — international spinoffs greenlit"),
-        (4, "✅", f"OCF threshold met — board reviews expansion case for Oxygen (Yr {oxygen_year})"),
-        (oxygen_year, "🧬", f"Oxygen acquired — true crime slate, avg $300K/ep, 3yr amort"),
-        (oxygen_year+1, "📊", "Cross-network portfolio management begins — dual P&L"),
-        (svod_year-1, "📱", f"SVOD+ business case built — green light model shows streaming wins (Yr {svod_year})"),
-        (svod_year, "🎬", f"SVOD+ launched — first original greenlit for streaming-first release"),
-        (svod_year+1, "🔗", "Content windowing strategy: SVOD first → linear later"),
-        (10, "🚀", "Full portfolio: Bravo + Oxygen + SVOD+ — three P&Ls, one strategy"),
+        (1,              "🔮", "Oxygen slate launched — 20 shows, $95M budget, 45M cable subs"),
+        (2,              "🔄", "Year 2 renewals — cancel bottom-quartile ROI shows, redeploy budget"),
+        (3,              "✅", f"OCF threshold met — board reviews expansion case for Bravo (Yr {bravo_year})"),
+        (bravo_year,     "📺", f"Bravo acquired — reality slate, avg $750K/ep, 12-mo amortization"),
+        (bravo_year+1,   "📊", "Cross-network portfolio management begins — dual P&L (Oxygen + Bravo)"),
+        (svod_year-1,    "📱", f"Peacock business case built — green light model shows streaming wins (Yr {svod_year})"),
+        (svod_year,      "🦚", f"Peacock launched — first original greenlit for streaming-first release"),
+        (svod_year+1,    "🔗", "Content windowing strategy: Peacock first → linear later"),
+        (10,             "🚀", "Full portfolio: Oxygen + Bravo + Peacock — three P&Ls, one strategy"),
     ]
 
     for ev_year, icon, text in events:
-        cal = 2011 + ev_year
+        cal        = 2011 + ev_year
         is_past    = ev_year <= cur_year
         is_current = ev_year == cur_year
         opacity    = "1.0" if is_past else "0.4"

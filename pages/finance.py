@@ -22,9 +22,12 @@ def render():
     year = ss.get("year", 1)
     mkt  = ss.get("mkt_budget", 5.0)
 
-    shows = ss.bravo_shows[:]
-    if year >= 5:
-        shows += ss.oxygen_shows
+    net = ss.get("active_network", "oxygen")
+    shows = ss.oxygen_shows[:]
+    if net in ("bravo", "peacock"):
+        shows += ss.bravo_shows
+    if net == "peacock":
+        shows += ss.get("peacock_shows", [])
 
     ad_rev   = portfolio_ad_rev(shows, year, mkt)
     dist_rev = distribution_revenue(year)
@@ -165,13 +168,12 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
+    user_subs, user_rate, user_esc = BASE_SUBS_M, SUB_RATE_PER_MONTH, 5.0
     with st.expander("🎛️ Adjust Distribution Model", expanded=False):
         c1,c2,c3 = st.columns(3)
         user_subs = c1.number_input("Base Subscribers (M)", 10.0, 100.0, float(BASE_SUBS_M), step=1.0)
         user_rate = c2.number_input("Rate $/sub/month", 0.05, 2.0, float(SUB_RATE_PER_MONTH), step=0.05)
         user_esc  = c3.number_input("Escalation % (annual)", 0.0, 10.0, 5.0, step=0.5)
-    else:
-        user_subs, user_rate, user_esc = BASE_SUBS_M, SUB_RATE_PER_MONTH, 5.0
 
     dist_rows = []
     for y in range(1, 11):

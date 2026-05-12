@@ -67,15 +67,18 @@ def render():
     net_info= NETWORK_INFO[net]
     team    = ss.team_name
 
-    shows = ss.bravo_shows[:]
-    if net in ("oxygen", "peacock"):
-        shows += ss.oxygen_shows
+    shows = ss.oxygen_shows[:]
+    if net in ("bravo", "peacock"):
+        shows += ss.bravo_shows
+    if net == "peacock":
+        shows += ss.get("peacock_shows", [])
 
     kpis    = _live_kpis(shows, year, mkt, net)
     score_d = kpis["score_data"]
     attempts= get_attempt_count(team, net)
-    passed  = any(a for a in [get_official_score(team, net)] if a and a.get("passed"))
-    can_sub = attempts < MAX_ATTEMPTS and not passed
+    passed        = any(a for a in [get_official_score(team, net)] if a and a.get("passed"))
+    can_sub       = attempts < MAX_ATTEMPTS and not passed
+    advance_ready = can_advance(team, net) and not passed
 
     # ── Real-time KPI Row ─────────────────────────────────────────────────────
     st.markdown(
@@ -138,8 +141,37 @@ def render():
                     ss.submitted      = False
                     st.rerun()
 
+        elif advance_ready:
+            # Completed required retry — may advance even if not passing score
+            off_sc = (get_official_score(team, net) or {}).get("score", 0)
+            st.markdown(f"""
+            <div style="background:rgba(255,167,38,.1);border:1px solid rgba(255,167,38,.3);
+                 border-radius:8px;padding:16px;text-align:center;">
+              <div style="font-size:24px;">🔄</div>
+              <div style="font-family:DM Mono,monospace;font-size:13px;color:#ffb74d;">
+                Retry complete. You may advance to the next level.
+              </div>
+              <div style="font-size:11px;color:#8b90a0;margin-top:6px;">
+                Official score: {off_sc:.0f} pts — did not meet {threshold:.0f}% OCF target.
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if net != "peacock":
+                next_net = NETWORK_ORDER[NETWORK_ORDER.index(net) + 1]
+                next_info = NETWORK_INFO[next_net]
+                if st.button(f"→ Advance to {next_info['display_name']}", use_container_width=True):
+                    ss.active_network = next_net
+                    ss.submitted = False
+                    st.rerun()
+            if can_sub:
+                st.markdown(f"""
+                <div style="font-size:11px;color:#555a6e;margin-top:8px;text-align:center;">
+                  Attempt {attempts+1} of {MAX_ATTEMPTS} still available (practice only).
+                </div>
+                """, unsafe_allow_html=True)
+
         elif not can_sub:
-            # All attempts used
+            # All 3 attempts used — safety net (shouldn't normally reach here with new logic)
             st.markdown(f"""
             <div style="background:rgba(255,167,38,.1);border:1px solid rgba(255,167,38,.3);
                  border-radius:8px;padding:16px;text-align:center;">
@@ -163,9 +195,17 @@ def render():
                 st.markdown("""
                 <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;
                      padding:12px;font-size:12px;color:#8b90a0;margin-bottom:10px;">
-                ⚠️ <b style="color:#e8eaf0;">Your FIRST submission is your official score</b> 
-                for the leaderboard. You may retry up to 2 more times, but only your 
+                ⚠️ <b style="color:#e8eaf0;">Your FIRST submission is your official score</b>
+                for the leaderboard. You may retry up to 2 more times, but only your
                 first attempt counts for ranking.
+                </div>
+                """, unsafe_allow_html=True)
+            elif attempts == 1:
+                st.markdown(f"""
+                <div style="background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.3);
+                     border-radius:6px;padding:10px;font-size:12px;color:#ef9a9a;margin-bottom:10px;">
+                ❌ Attempt 1 did not pass. <b style="color:#e8eaf0;">Complete this retry before advancing.</b>
+                After retrying, you may move to the next level regardless of score.
                 </div>
                 """, unsafe_allow_html=True)
             else:
@@ -323,7 +363,9 @@ def render():
 
     # ── Show Editor ────────────────────────────────────────────────────────────
     with st.expander("✏️ Show Editor — Adjust Parameters (changes update score live)", expanded=False):
-        ed_shows = ss.bravo_shows if net == "bravo" else ss.oxygen_shows
+        ed_shows = (ss.oxygen_shows if net == "oxygen"
+                    else ss.bravo_shows if net == "bravo"
+                    else ss.get("peacock_shows", ss.oxygen_shows))
         ed_sel   = st.selectbox("Select Show", [s.name for s in ed_shows])
         ed_show  = next(s for s in ed_shows if s.name == ed_sel)
         c1,c2,c3,c4 = st.columns(4)

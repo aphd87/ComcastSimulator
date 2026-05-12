@@ -15,12 +15,14 @@ CORD_CUT_RATE        = 0.03       # Annual subscriber erosion
 DISTRIB_ESC_RATE     = 0.05       # Annual affiliate fee escalation (caps Y5)
 CONTENT_COST_ESC     = 0.05       # Per-show renewal escalation
 BUDGET_GROWTH_RATE   = 0.03       # Annual total budget growth
-BASE_BUDGET          = 220.0      # $M year-1 budget
+BASE_BUDGET          = 220.0      # $M year-1 budget (Bravo base; Oxygen uses network_info)
 MKT_ROI_PER_M        = 0.015      # Rating lift per $1M marketing
 SVOD_SUB_LTV_MO      = 8.0        # SVOD ARPU $/month
 SVOD_MARGIN          = 0.15       # SVOD contribution margin
 AMORT_MONTHS_LINEAR  = 12
 AMORT_MONTHS_SVOD    = 36
+
+MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
 # ── Show dataclass ────────────────────────────────────────────────────────────
 @dataclass
@@ -34,16 +36,20 @@ class Show:
     ip_score: int             # 0-100 franchise value score
     air_month: int            # Month premiere airs (1-12)
     network: str = "Bravo"
-    status: str = "Active"    # Active / Cancelled / Development
+    status: str = "Active"
+    amort_months: int = 12    # 12 for linear (Bravo), 36 for Oxygen/Peacock
 
-    # Derived — computed at runtime
     def total_cost(self, year: int = 1) -> float:
-        """Amortized season cost in $M, with 5% annual escalation."""
+        """Full production cost for the season in $M, with 5% annual escalation."""
         esc = (1 + CONTENT_COST_ESC) ** (year - 1)
         return self.ep_cost_k * self.episodes / 1000 * esc
 
+    def annual_amort_expense(self, year: int = 1) -> float:
+        """Annual P&L expense: production cost spread over the amortization period."""
+        return self.total_cost(year) * 12 / self.amort_months
+
     def monthly_amort(self, year: int = 1) -> float:
-        return self.total_cost(year) / AMORT_MONTHS_LINEAR
+        return self.total_cost(year) / self.amort_months
 
     def ad_revenue(self, year: int = 1, mkt_boost_m: float = 0.0) -> float:
         """Ad revenue in $M for a season."""
@@ -52,15 +58,15 @@ class Show:
         return self.rating * REV_PER_RATING_POINT * mkt_lift * cord_decay
 
     def ocf(self, year: int = 1, mkt_boost_m: float = 0.0) -> float:
-        return self.ad_revenue(year, mkt_boost_m) - self.total_cost(year)
+        return self.ad_revenue(year, mkt_boost_m) - self.annual_amort_expense(year)
 
     def roi(self, year: int = 1, mkt_boost_m: float = 0.0) -> float:
-        cost = self.total_cost(year)
+        cost = self.annual_amort_expense(year)
         return (self.ocf(year, mkt_boost_m) / cost * 100) if cost else 0.0
 
     def renewal_cost(self, year: int = 1) -> float:
-        """Cost if renewed for the following year."""
-        return self.total_cost(year + 1)
+        """Annual amort expense if renewed for the following year."""
+        return self.annual_amort_expense(year + 1)
 
     def projected_rating(self, year: int = 1) -> float:
         """IP matures over time — ratings drift based on ip_score."""
@@ -73,13 +79,9 @@ class Show:
         return [(air_month - 1 + i) % 12 for i in range(seasons_months)]
 
     def premiere_day_analysis(self, launch_day: int, ad_rev_m: float) -> dict:
-        """
-        Compare Mar 1 vs Mar 30 cash position.
-        launch_day: 1 or 30
-        """
-        monthly_cost = self.monthly_amort()
-        days_in_march = 31
-        revenue_days  = days_in_march - launch_day + 1
+        monthly_cost  = self.monthly_amort()
+        days_in_month = 31
+        revenue_days  = days_in_month - launch_day + 1
         daily_rev     = ad_rev_m / 365
         march_rev     = daily_rev * revenue_days
         net           = march_rev - monthly_cost
@@ -94,7 +96,7 @@ class Show:
 
 # ── Portfolio-level helpers ───────────────────────────────────────────────────
 def portfolio_cost(shows: list[Show], year: int) -> float:
-    return sum(s.total_cost(year) for s in shows)
+    return sum(s.annual_amort_expense(year) for s in shows)
 
 def portfolio_ad_rev(shows: list[Show], year: int, mkt_total_m: float) -> float:
     per_show = mkt_total_m / max(len(shows), 1)
@@ -108,19 +110,19 @@ def cable_subs(year: int) -> float:
 
 def distribution_revenue(year: int) -> float:
     """Distribution (affiliate) revenue in $M. subs in millions * $/mo * 12 months."""
-    subs   = cable_subs(year)
-    esc    = min(1 + DISTRIB_ESC_RATE * (year - 1), 1.25)
-    return subs * SUB_RATE_PER_MONTH * 12 * esc  # $M directly
+    subs = cable_subs(year)
+    esc  = min(1 + DISTRIB_ESC_RATE * (year - 1), 1.25)
+    return subs * SUB_RATE_PER_MONTH * 12 * esc
 
 def portfolio_ocf(shows: list[Show], year: int, mkt_m: float, ga_pct: float = 0.06) -> float:
-    rev     = portfolio_ad_rev(shows, year, mkt_m) + distribution_revenue(year)
-    cost    = portfolio_cost(shows, year)
-    ga      = rev * ga_pct
+    rev  = portfolio_ad_rev(shows, year, mkt_m) + distribution_revenue(year)
+    cost = portfolio_cost(shows, year)
+    ga   = rev * ga_pct
     return rev - cost - mkt_m - ga
 
 def phase_label(year: int) -> str:
-    if year <= 4:  return "Phase 1 — Bravo"
-    if year <= 8:  return "Phase 2 — Bravo + Oxygen"
+    if year <= 3:  return "Phase 1 — Oxygen"
+    if year <= 7:  return "Phase 2 — Oxygen + Bravo"
     return "Phase 3 — Full Portfolio"
 
 def renewal_decision(show: Show, year: int, mkt_boost: float) -> str:
@@ -168,11 +170,12 @@ def ltv_curve(linear: dict, svod: dict, months: int = 36) -> pd.DataFrame:
 
 
 # ── 10-year simulation ────────────────────────────────────────────────────────
-def ten_year_sim(bravo: list[Show], oxygen: list[Show],
+def ten_year_sim(oxygen: list[Show], bravo: list[Show],
                  mkt_m: float, ga_pct: float = 0.06) -> pd.DataFrame:
+    """Oxygen launches Y1; Bravo added Y4; full portfolio Y8+."""
     rows = []
     for y in range(1, 11):
-        shows = bravo + (oxygen if y >= 5 else [])
+        shows = oxygen[:] + (bravo if y >= 4 else [])
         ad    = portfolio_ad_rev(shows, y, mkt_m)
         dist  = distribution_revenue(y)
         cost  = portfolio_cost(shows, y)

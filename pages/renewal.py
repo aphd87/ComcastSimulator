@@ -17,9 +17,12 @@ def render():
     year = ss.get("year", 1)
     mkt  = ss.get("mkt_budget", 5.0)
 
-    shows = ss.bravo_shows[:]
-    if year >= 5:
-        shows += ss.oxygen_shows
+    net = ss.get("active_network", "oxygen")
+    shows = ss.oxygen_shows[:]
+    if net in ("bravo", "peacock"):
+        shows += ss.bravo_shows
+    if net == "peacock":
+        shows += ss.get("peacock_shows", [])
 
     next_year    = year + 1
     budget_now   = annual_budget(year)
