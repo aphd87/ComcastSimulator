@@ -177,8 +177,8 @@ def render():
     styled = (
         display_df.drop(columns=["_id"] if "_id" in display_df else [])
         .style
-        .applymap(style_dec,  subset=["Decision"])
-        .applymap(style_ocf,  subset=["Proj OCF"])
+        .map(style_dec,  subset=["Decision"])
+        .map(style_ocf,  subset=["Proj OCF"])
         .format({
             "Curr Cost":"${:.2f}M","Renew Cost":"${:.2f}M","Δ Cost":"${:.2f}M",
             "Proj Rating":"{:.2f}","Proj Rev":"${:.2f}M","Proj OCF":"${:.2f}M",

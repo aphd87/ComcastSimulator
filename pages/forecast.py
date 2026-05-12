@@ -183,7 +183,7 @@ def render():
 
     styled_df = (
         df.style
-        .applymap(color_ocf, subset=["OCF"])
+        .map(color_ocf, subset=["OCF"])
         .format({
             "Ad Revenue":"${:.1f}M","SVOD Revenue":"${:.1f}M",
             "Distribution":"${:.1f}M","Total Revenue":"${:.1f}M",

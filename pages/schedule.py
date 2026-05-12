@@ -201,7 +201,7 @@ def render():
         st.dataframe(bridge_df.style.format({
             "Ad Revenue":"${:.2f}M","Distribution":"${:.2f}M",
             "Content Cost":"${:.2f}M","Net Cash Flow":"${:.2f}M"
-        }).applymap(lambda v: "color:#66bb6a;" if v >= 0 else "color:#ef5350;",
+        }).map(lambda v: "color:#66bb6a;" if v >= 0 else "color:#ef5350;",
                     subset=["Net Cash Flow"]), use_container_width=True)
 
     st.divider()

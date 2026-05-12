@@ -191,7 +191,7 @@ def render():
         except: return ""
 
     st.dataframe(
-        sens_df.style.applymap(color_cells).format("{:.2f}"),
+        sens_df.style.map(color_cells).format("{:.2f}"),
         use_container_width=True
     )
     st.caption("Rows = episode cost. Columns = projected 18-49 rating. Cell = Linear OCF in $M.")

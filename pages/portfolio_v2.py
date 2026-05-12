@@ -330,8 +330,8 @@ def render():
 
     styled = (
         df.style
-        .applymap(lambda v: "color:#81c784;" if "Cow" in str(v) else ("color:#ffb74d;" if "Renew" in str(v) else "color:#ef9a9a;"), subset=["Status"])
-        .applymap(lambda v: "color:#81c784;" if v >= 0 else "color:#ef9a9a;", subset=["OCF $M"])
+        .map(lambda v: "color:#81c784;" if "Cow" in str(v) else ("color:#ffb74d;" if "Renew" in str(v) else "color:#ef9a9a;"), subset=["Status"])
+        .map(lambda v: "color:#81c784;" if v >= 0 else "color:#ef9a9a;", subset=["OCF $M"])
         .format({"Rating":"{:.2f}","Ad Rev $M":"${:.2f}M","Cost $M":"${:.2f}M","OCF $M":"${:.2f}M","ROI %":"{:.1f}%"})
         .set_properties(**{"font-family":"DM Mono,monospace","font-size":"11px"})
     )
