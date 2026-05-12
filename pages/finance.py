@@ -121,6 +121,12 @@ def render():
 
     # ── Monthly P&L ───────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Revenue & Cost Trend</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    Ad revenue follows a seasonal curve — summer dip, fall and spring peaks.
+    The OCF bars (right axis) turn red in months where content cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
+    </div>
+    """, unsafe_allow_html=True)
 
     monthly_ad   = [ad_rev/12*(0.8+0.4*np.sin(i*0.5)) for i in range(12)]
     monthly_dist = [dist_rev/12]*12
@@ -206,6 +212,12 @@ def render():
     # ── Revenue per Rating Point ──────────────────────────────────────────────
     st.divider()
     st.markdown('<div class="section-title">Revenue per Rating Point — Show Benchmarks</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    Higher revenue per rating point = stronger ad pricing power for that show.
+    Shows where cost-per-point exceeds revenue-per-point are destroying value — flag these for cancellation in the Renewal tab.
+    </div>
+    """, unsafe_allow_html=True)
     rpp_rows = []
     per = mkt / max(len(shows),1)
     for s in sorted(shows, key=lambda x: -x.rating)[:10]:

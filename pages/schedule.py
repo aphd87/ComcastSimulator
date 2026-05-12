@@ -139,6 +139,12 @@ def render():
 
     # ── Section 2: Monthly Amortization Grid ─────────────────────────────────
     st.markdown('<div class="section-title">Monthly Amortization Grid — All Active Shows</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    Red cells = months with active amortization bills. Shows premiering in the same quarter stack costs —
+    a deep-red column means your cash cows must bridge a large up-front gap before ad revenue catches up.
+    </div>
+    """, unsafe_allow_html=True)
 
     grid_shows = sorted(shows, key=lambda s: -s.total_cost(year))[:12]
     amort_rows = []
@@ -169,6 +175,12 @@ def render():
 
     # ── Monthly Cash Bridge ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Cash Flow Bridge</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    Green bars = revenue in; red bars = content cost out; gold line = net monthly cash flow.
+    Months where the line dips below zero are squeeze points — your reserve must cover that shortfall or you risk a cash crisis.
+    </div>
+    """, unsafe_allow_html=True)
 
     monthly_rev  = [portfolio_ad_rev(shows,year,mkt)/12 * (0.8+0.4*np.sin(i*0.5)) for i in range(12)]
     monthly_dist = [distribution_revenue(year)/12] * 12

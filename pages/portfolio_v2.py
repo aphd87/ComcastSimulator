@@ -3,6 +3,7 @@ Portfolio tab v2 — real-time OCF updates + Submit for Score button.
 """
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 
@@ -22,6 +23,45 @@ from utils.charts import (
 
 # re-import hhi correctly
 from utils.game_state import hhi_from_genres
+
+MAX_SIM_YEARS = {"oxygen": 3, "bravo": 4, "peacock": 3}
+
+
+def _run_year(ss, net, shows, year, mkt, sim_yr):
+    """Apply seeded market variance and store year results — does not modify show objects."""
+    seed = (abs(hash(ss.team_name)) + sim_yr * 1337) % (2 ** 31)
+    rng  = np.random.default_rng(seed)
+
+    show_results = []
+    for s in shows:
+        v   = float(rng.uniform(0.93, 1.08))
+        per = mkt / max(len(shows), 1)
+        show_results.append({
+            "name":        s.name,
+            "network":     s.network,
+            "rating_base": s.rating,
+            "rating_adj":  round(s.rating * v, 2),
+            "variance":    round(v, 3),
+            "revenue":     round(s.ad_revenue(year, per) * v, 2),
+        })
+
+    from utils.models import portfolio_cost, portfolio_ad_rev, distribution_revenue
+    total_adj_rev = sum(r["revenue"] for r in show_results) + distribution_revenue(year)
+    cost          = portfolio_cost(shows, year)
+    ga            = total_adj_rev * 0.06
+    ocf           = total_adj_rev - cost - mkt - ga
+    margin        = (ocf / total_adj_rev * 100) if total_adj_rev > 0 else 0
+
+    if "year_results" not in ss or ss.year_results is None:
+        ss.year_results = {}
+    ss.year_results[sim_yr] = {
+        "revenue": round(total_adj_rev, 2),
+        "cost":    round(cost, 2),
+        "ocf":     round(ocf, 2),
+        "margin":  round(margin, 1),
+        "shows":   show_results,
+    }
+    ss.sim_phase = "results"
 
 
 def _live_kpis(shows, year, mkt, network):
@@ -79,6 +119,104 @@ def render():
     passed        = any(a for a in [get_official_score(team, net)] if a and a.get("passed"))
     can_sub       = attempts < MAX_ATTEMPTS and not passed
     advance_ready = can_advance(team, net) and not passed
+
+    # ── Year Simulation Panel ─────────────────────────────────────────────────
+    sim_yr   = ss.get("sim_year", 1)
+    sim_ph   = ss.get("sim_phase", "setup")
+    max_yrs  = MAX_SIM_YEARS.get(net, 3)
+
+    if sim_ph == "setup":
+        st.markdown(f"""
+        <div style="background:rgba(232,197,71,.05);border:1px solid rgba(232,197,71,.25);
+             border-radius:8px;padding:14px 18px;margin-bottom:14px;">
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">
+            Year {sim_yr} of {max_yrs} — Decision Phase
+          </div>
+          <div style="font-size:12px;color:#8b90a0;line-height:1.7;">
+            Adjust your show slate, budget sliders, and renewal decisions. When ready,
+            click <b style="color:#e8eaf0;">Run Year {sim_yr}</b> to see how the market responds —
+            ratings will shift ±7% based on market conditions.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        run_col, _ = st.columns([1, 2])
+        with run_col:
+            if st.button(f"▶  Run Year {sim_yr}  ({2011 + sim_yr})",
+                         use_container_width=True, type="primary"):
+                _run_year(ss, net, shows, year, mkt, sim_yr)
+                st.rerun()
+
+    else:
+        # Results phase — show year outcome banner
+        result  = (ss.get("year_results") or {}).get(sim_yr, {})
+        ocf_ok  = result.get("ocf", 0) >= 0
+        ocf_c   = "#66bb6a" if ocf_ok else "#ef5350"
+        margin  = result.get("margin", 0)
+
+        st.markdown(f"""
+        <div style="background:rgba({'102,187,106' if ocf_ok else '239,83,80'},.07);
+             border:1px solid rgba({'102,187,106' if ocf_ok else '239,83,80'},.3);
+             border-radius:8px;padding:14px 18px;margin-bottom:14px;">
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">
+            Year {sim_yr} Results · {2011 + sim_yr}
+          </div>
+          <div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:10px;">
+            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Revenue</div>
+                 <div style="font-size:20px;font-family:DM Serif Display,serif;color:#e8eaf0;">${result.get('revenue',0):.1f}M</div></div>
+            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Cost</div>
+                 <div style="font-size:20px;font-family:DM Serif Display,serif;color:#ffa726;">${result.get('cost',0):.1f}M</div></div>
+            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">OCF</div>
+                 <div style="font-size:20px;font-family:DM Serif Display,serif;color:{ocf_c};">${result.get('ocf',0):+.1f}M</div></div>
+            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Margin</div>
+                 <div style="font-size:20px;font-family:DM Serif Display,serif;color:{ocf_c};">{margin:.1f}%</div></div>
+          </div>
+          <div style="font-size:11px;color:#8b90a0;">
+            Ratings shifted with market variance (±7%). Submit your score to lock this year in, or advance to the next year.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Show movers — biggest rating shifts
+        show_res = result.get("shows", [])
+        if show_res:
+            movers = sorted(show_res, key=lambda x: abs(x["variance"] - 1.0), reverse=True)[:4]
+            mover_html = "".join([
+                f'<span style="font-size:10px;font-family:DM Mono,monospace;'
+                f'color:{"#66bb6a" if m["variance"] >= 1.0 else "#ef5350"};">'
+                f'{m["name"][:14]}: {m["rating_base"]:.1f}→{m["rating_adj"]:.1f}'
+                f'</span>'
+                for m in movers
+            ])
+            st.markdown(
+                f'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">'
+                f'<span style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Rating shifts:</span>'
+                f'{mover_html}</div>',
+                unsafe_allow_html=True
+            )
+
+        adv_col, reset_col = st.columns([1, 1])
+        with adv_col:
+            if sim_yr < max_yrs:
+                if st.button(f"→ Advance to Year {sim_yr + 1}", use_container_width=True):
+                    ss.sim_year  = sim_yr + 1
+                    ss.sim_phase = "setup"
+                    ss.year      = sim_yr + 1
+                    st.rerun()
+            else:
+                st.markdown(
+                    '<div style="font-size:12px;color:#66bb6a;font-family:DM Mono,monospace;padding:8px 0;">'
+                    '✅ Final year complete — submit your score below.</div>',
+                    unsafe_allow_html=True
+                )
+        with reset_col:
+            if st.button("↺ Re-run Year (adjust decisions)", use_container_width=True):
+                ss.sim_phase = "setup"
+                st.rerun()
+
+    st.divider()
 
     # ── Real-time KPI Row ─────────────────────────────────────────────────────
     st.markdown(
@@ -370,6 +508,12 @@ def render():
     st.dataframe(styled, use_container_width=True, height=380)
 
     # ── Portfolio charts ──────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    <b style="color:#e8eaf0;">Genre Mix (left):</b> Concentration in one genre pushes HHI above 0.5 — a penalty in your diversity score. Aim for 4+ genres at roughly equal cost weight.
+    &nbsp;&nbsp;<b style="color:#e8eaf0;">Rating vs. ROI Map (right):</b> Bubble size = season cost. Upper-right quadrant = cash cows to protect; lower-left = cancel candidates.
+    </div>
+    """, unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
