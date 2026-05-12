@@ -23,11 +23,11 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 [data-testid="stMetric"] {
     background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px 16px !important;
 }
-[data-testid="stMetricLabel"] { color:#8b90a0 !important;font-size:11px !important;text-transform:uppercase;letter-spacing:.08em; }
+[data-testid="stMetricLabel"] { color:#e0e2ea !important;font-size:11px !important;text-transform:uppercase;letter-spacing:.08em; }
 [data-testid="stMetricValue"] { color:#e8eaf0 !important;font-family:'DM Serif Display',serif !important; }
 
 [data-testid="stTabs"] button {
-    color:#8b90a0 !important;font-family:'DM Mono',monospace !important;font-size:12px !important;
+    color:#e0e2ea !important;font-family:'DM Mono',monospace !important;font-size:12px !important;
     border-bottom:2px solid transparent !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
@@ -35,7 +35,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 }
 
 .stDataFrame { border:1px solid #252836 !important;border-radius:6px; }
-.stDataFrame thead th { background:#1a1d26 !important;color:#8b90a0 !important;
+.stDataFrame thead th { background:#1a1d26 !important;color:#e0e2ea !important;
     font-family:'DM Mono',monospace;font-size:11px; }
 
 [data-testid="stSlider"] > div > div { background:#252836 !important; }
@@ -77,7 +77,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     font-size:36px;letter-spacing:.12em;
     font-weight:700;
 }
-.net-tagline { font-family:'DM Mono',monospace;font-size:11px;color:#8b90a0;margin-top:2px; }
+.net-tagline { font-family:'DM Mono',monospace;font-size:11px;color:#e0e2ea;margin-top:2px; }
 
 /* Badge pills */
 .badge { display:inline-block;padding:2px 8px;border-radius:4px;
@@ -86,12 +86,12 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .badge-yellow { background:rgba(255,167,38,.15);color:#ffb74d;border:1px solid rgba(255,167,38,.3); }
 .badge-red    { background:rgba(239,83,80,.15);color:#ef9a9a;border:1px solid rgba(239,83,80,.3); }
 .badge-blue   { background:rgba(79,195,247,.15);color:#81d4fa;border:1px solid rgba(79,195,247,.3); }
-.badge-gray   { background:rgba(139,144,160,.15);color:#8b90a0;border:1px solid rgba(139,144,160,.3); }
+.badge-gray   { background:rgba(139,144,160,.15);color:#e0e2ea;border:1px solid rgba(139,144,160,.3); }
 .badge-gold   { background:rgba(232,197,71,.15);color:#e8c547;border:1px solid rgba(232,197,71,.3); }
 
 .section-title {
     font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;
-    letter-spacing:.12em;color:#555a6e;margin-bottom:8px;
+    letter-spacing:.12em;color:#b0b5c4;margin-bottom:8px;
     padding-bottom:6px;border-bottom:1px solid #252836;
 }
 .phase-banner { padding:8px 16px;border-radius:6px;font-family:'DM Mono',monospace;font-size:12px;margin-bottom:12px; }
@@ -125,7 +125,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .theory-icon { font-size:24px;margin-bottom:6px; }
 .theory-title { font-family:'DM Mono',monospace;font-size:11px;font-weight:600;
     color:#e8c547;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px; }
-.theory-body { font-size:12px;color:#8b90a0;line-height:1.6; }
+.theory-body { font-size:12px;color:#e0e2ea;line-height:1.6; }
 
 /* Real-time feedback pulse */
 @keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:.6} }

@@ -129,11 +129,11 @@ def render():
         st.markdown(f"""
         <div style="background:rgba(232,197,71,.05);border:1px solid rgba(232,197,71,.25);
              border-radius:8px;padding:14px 18px;margin-bottom:14px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">
             Year {sim_yr} of {max_yrs} — Decision Phase
           </div>
-          <div style="font-size:12px;color:#8b90a0;line-height:1.7;">
+          <div style="font-size:12px;color:#e0e2ea;line-height:1.7;">
             Adjust your show slate, budget sliders, and renewal decisions. When ready,
             click <b style="color:#e8eaf0;">Run Year {sim_yr}</b> to see how the market responds —
             ratings will shift ±7% based on market conditions.
@@ -159,21 +159,21 @@ def render():
         <div style="background:rgba({'102,187,106' if ocf_ok else '239,83,80'},.07);
              border:1px solid rgba({'102,187,106' if ocf_ok else '239,83,80'},.3);
              border-radius:8px;padding:14px 18px;margin-bottom:14px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">
             Year {sim_yr} Results · {2011 + sim_yr}
           </div>
           <div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:10px;">
-            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Revenue</div>
+            <div><div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">Revenue</div>
                  <div style="font-size:20px;font-family:DM Serif Display,serif;color:#e8eaf0;">${result.get('revenue',0):.1f}M</div></div>
-            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Cost</div>
+            <div><div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">Cost</div>
                  <div style="font-size:20px;font-family:DM Serif Display,serif;color:#ffa726;">${result.get('cost',0):.1f}M</div></div>
-            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">OCF</div>
+            <div><div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">OCF</div>
                  <div style="font-size:20px;font-family:DM Serif Display,serif;color:{ocf_c};">${result.get('ocf',0):+.1f}M</div></div>
-            <div><div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Margin</div>
+            <div><div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">Margin</div>
                  <div style="font-size:20px;font-family:DM Serif Display,serif;color:{ocf_c};">{margin:.1f}%</div></div>
           </div>
-          <div style="font-size:11px;color:#8b90a0;">
+          <div style="font-size:11px;color:#e0e2ea;">
             Ratings shifted with market variance (±7%). Submit your score to lock this year in, or advance to the next year.
           </div>
         </div>
@@ -192,7 +192,7 @@ def render():
             ])
             st.markdown(
                 f'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">'
-                f'<span style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">Rating shifts:</span>'
+                f'<span style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">Rating shifts:</span>'
                 f'{mover_html}</div>',
                 unsafe_allow_html=True
             )
@@ -220,7 +220,7 @@ def render():
 
     # ── Real-time KPI Row ─────────────────────────────────────────────────────
     st.markdown(
-        f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;'
+        f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;'
         f'margin-bottom:8px;letter-spacing:.1em;">LIVE · Year {year} · {2011+year}</div>',
         unsafe_allow_html=True
     )
@@ -242,7 +242,7 @@ def render():
     bar_color = "#66bb6a" if kpis["margin"] >= threshold else ("#ffa726" if kpis["margin"] >= 0 else "#ef5350")
     st.markdown(f"""
     <div style="margin:8px 0 4px;">
-      <div style="display:flex;justify-content:space-between;font-family:DM Mono,monospace;font-size:10px;color:#555a6e;margin-bottom:4px;">
+      <div style="display:flex;justify-content:space-between;font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;margin-bottom:4px;">
         <span>OCF Margin</span>
         <span style="color:{bar_color};">{kpis['margin']:.1f}% / {threshold:.0f}% target</span>
       </div>
@@ -266,7 +266,7 @@ def render():
                  border-radius:8px;padding:16px;text-align:center;">
               <div style="font-size:28px;margin-bottom:6px;">✅</div>
               <div style="font-family:DM Serif Display,serif;font-size:18px;color:#66bb6a;">Level Passed!</div>
-              <div style="font-family:DM Mono,monospace;font-size:13px;color:#8b90a0;margin-top:4px;">
+              <div style="font-family:DM Mono,monospace;font-size:13px;color:#e0e2ea;margin-top:4px;">
                 {net_info['display_name']} complete. Check Leaderboard tab.
               </div>
             </div>
@@ -289,7 +289,7 @@ def render():
               <div style="font-family:DM Mono,monospace;font-size:13px;color:#ffb74d;">
                 Retry complete. You may advance to the next level.
               </div>
-              <div style="font-size:11px;color:#8b90a0;margin-top:6px;">
+              <div style="font-size:11px;color:#e0e2ea;margin-top:6px;">
                 Official score: {off_sc:.0f} pts — did not meet {threshold:.0f}% OCF target.
               </div>
             </div>
@@ -303,7 +303,7 @@ def render():
                     st.rerun()
             if can_sub:
                 st.markdown(f"""
-                <div style="font-size:11px;color:#555a6e;margin-top:8px;text-align:center;">
+                <div style="font-size:11px;color:#b0b5c4;margin-top:8px;text-align:center;">
                   Attempt {attempts+1} of {MAX_ATTEMPTS} still available (practice only).
                 </div>
                 """, unsafe_allow_html=True)
@@ -317,7 +317,7 @@ def render():
               <div style="font-family:DM Mono,monospace;font-size:13px;color:#ffb74d;">
                 All {MAX_ATTEMPTS} attempts used.
               </div>
-              <div style="font-size:11px;color:#8b90a0;margin-top:6px;">
+              <div style="font-size:11px;color:#e0e2ea;margin-top:6px;">
                 Official score: {(get_official_score(team,net) or {}).get('score',0):.0f} pts
               </div>
             </div>
@@ -332,7 +332,7 @@ def render():
             if attempts == 0:
                 st.markdown("""
                 <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;
-                     padding:12px;font-size:12px;color:#8b90a0;margin-bottom:10px;">
+                     padding:12px;font-size:12px;color:#e0e2ea;margin-bottom:10px;">
                 ⚠️ <b style="color:#e8eaf0;">Your FIRST submission is your official score</b>
                 for the leaderboard. You may retry up to 2 more times, but only your
                 first attempt counts for ranking.
@@ -355,7 +355,7 @@ def render():
                 """, unsafe_allow_html=True)
 
             st.markdown(
-                f'<div style="font-size:12px;color:#8b90a0;margin-bottom:8px;">'
+                f'<div style="font-size:12px;color:#e0e2ea;margin-bottom:8px;">'
                 f'Target: ≥{threshold:.0f}% OCF margin to pass {net_info["display_name"]}.<br>'
                 f'Current: <b style="color:{margin_color};">{kpis["margin"]:.1f}%</b></div>',
                 unsafe_allow_html=True
@@ -398,7 +398,7 @@ def render():
               <div style="font-family:DM Mono,monospace;font-size:24px;color:{result_color};margin:8px 0;">
                 {e['score']:.0f} pts
               </div>
-              {'<div style="font-size:11px;color:#8b90a0;">Official score locked. See Leaderboard tab.</div>' if e["attempt"]==1 else ""}
+              {'<div style="font-size:11px;color:#e0e2ea;">Official score locked. See Leaderboard tab.</div>' if e["attempt"]==1 else ""}
             </div>
             """, unsafe_allow_html=True)
 
@@ -417,7 +417,7 @@ def render():
 
                 if weak:
                     st.markdown(
-                        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;'
+                        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;'
                         'text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px;">Where to improve</div>',
                         unsafe_allow_html=True
                     )
@@ -428,7 +428,7 @@ def render():
                             f'border-radius:4px;padding:8px 12px;margin-bottom:5px;">'
                             f'<div style="font-size:11px;color:#ef9a9a;font-family:DM Mono,monospace;">'
                             f'{label} — {score_val:.0f}/100</div>'
-                            f'<div style="font-size:11px;color:#8b90a0;margin-top:2px;">{hint}</div>'
+                            f'<div style="font-size:11px;color:#e0e2ea;margin-top:2px;">{hint}</div>'
                             f'</div>',
                             unsafe_allow_html=True
                         )
@@ -448,7 +448,7 @@ def render():
             st.markdown(f"""
             <div style="margin-bottom:10px;">
               <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
-                <span style="color:#8b90a0;">{label} <span style="color:#555a6e;">({pct_label})</span></span>
+                <span style="color:#e0e2ea;">{label} <span style="color:#b0b5c4;">({pct_label})</span></span>
                 <span style="font-family:DM Mono,monospace;color:{bar_c};">{comp_score:.0f}/100 → {weighted:.1f}pts</span>
               </div>
               <div style="height:5px;background:#252836;border-radius:3px;overflow:hidden;">
@@ -461,9 +461,9 @@ def render():
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
              padding:12px;text-align:center;margin-top:8px;">
-          <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;margin-bottom:4px;">TOTAL SCORE</div>
+          <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:4px;">TOTAL SCORE</div>
           <div style="font-family:DM Serif Display,serif;font-size:36px;color:{total_c};">{score_d['total']:.0f}</div>
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;">/ 100 points</div>
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;">/ 100 points</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -509,7 +509,7 @@ def render():
 
     # ── Portfolio charts ──────────────────────────────────────────────────────
     st.markdown("""
-    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    <div style="font-size:12px;color:#e0e2ea;margin-bottom:10px;">
     <b style="color:#e8eaf0;">Genre Mix (left):</b> Concentration in one genre pushes HHI above 0.5 — a penalty in your diversity score. Aim for 4+ genres at roughly equal cost weight.
     &nbsp;&nbsp;<b style="color:#e8eaf0;">Rating vs. ROI Map (right):</b> Bubble size = season cost. Upper-right quadrant = cash cows to protect; lower-left = cancel candidates.
     </div>

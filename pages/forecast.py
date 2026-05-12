@@ -25,7 +25,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8b90a0;">
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">10-Year Strategy:</b> Prove OCF on Oxygen (Years 1–3) →
     earn the right to add Bravo (Years 4–7) → launch Peacock SVOD+ (Years 8–10).
     Each phase is a performance threshold. Cord-cutting accelerates after Year 4.
@@ -227,8 +227,8 @@ def render():
         <div style="display:flex;gap:12px;padding:8px 12px;margin-bottom:4px;
              background:#1a1d26;border-radius:6px;{border}opacity:{opacity};">
           <span style="font-size:16px;min-width:24px;">{icon}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:10px;color:#555a6e;
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:#b0b5c4;
                 min-width:60px;padding-top:2px;">Y{ev_year} · {cal}</span>
-          <span style="font-size:12px;color:{'#e8eaf0' if is_past else '#555a6e'};">{text}</span>
+          <span style="font-size:12px;color:{'#e8eaf0' if is_past else '#b0b5c4'};">{text}</span>
         </div>
         """, unsafe_allow_html=True)

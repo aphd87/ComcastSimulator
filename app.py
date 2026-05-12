@@ -64,7 +64,7 @@ with st.sidebar:
     st.markdown(
         '<div style="font-family:DM Serif Display,serif;font-size:24px;'
         'color:#e8c547;margin-bottom:2px;">CableOS</div>'
-        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;'
+        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;'
         'margin-bottom:20px;letter-spacing:.1em;">NETWORK PORTFOLIO SIMULATOR · 2012</div>',
         unsafe_allow_html=True
     )
@@ -75,7 +75,7 @@ with st.sidebar:
 
     if not ss.registered:
         st.markdown(
-            '<div style="font-size:11px;color:#8b90a0;margin-bottom:8px;">'
+            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
             '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
             unsafe_allow_html=True
         )
@@ -92,7 +92,7 @@ with st.sidebar:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
-            f'<div style="font-size:10px;color:#555a6e;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
+            f'<div style="font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
             f'<div style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</div>'
             f'</div>',
             unsafe_allow_html=True
@@ -157,7 +157,7 @@ with st.sidebar:
         max_year = 4 if ss.active_network == "oxygen" else (7 if ss.active_network == "bravo" else 10)
         ss.year  = st.slider("Year", 1, max_year, ss.year, key="year_slider")
         st.markdown(
-            f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;">'
+            f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;">'
             f'Calendar year: {2011+ss.year}</div>', unsafe_allow_html=True
         )
 
@@ -189,11 +189,11 @@ with st.sidebar:
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px;margin-top:6px;">
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
-            <span style="color:#8b90a0;">Total Budget</span>
+            <span style="color:#e0e2ea;">Total Budget</span>
             <span style="font-family:DM Mono,monospace;">${base_budget:.1f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
-            <span style="color:#8b90a0;">Content Cost</span>
+            <span style="color:#e0e2ea;">Content Cost</span>
             <span style="font-family:DM Mono,monospace;color:#ef5350;">-${content_cost:.1f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;
@@ -228,13 +228,13 @@ with st.sidebar:
                 f'<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #1a1d26;">'
                 f'<span style="font-size:13px;">{icon}</span>'
                 f'<div><div style="font-size:11px;color:#e8eaf0;font-family:DM Mono,monospace;">{tab}</div>'
-                f'<div style="font-size:10px;color:#555a6e;">{desc}</div></div></div>',
+                f'<div style="font-size:10px;color:#b0b5c4;">{desc}</div></div></div>',
                 unsafe_allow_html=True
             )
 
     st.divider()
     st.markdown(
-        '<div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;line-height:1.6;">'
+        '<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;line-height:1.6;">'
         'FERPA: No PII collected.<br>Team names are pseudonyms only.<br>'
         'Scores stored locally in leaderboard.json</div>',
         unsafe_allow_html=True
@@ -246,7 +246,7 @@ if not ss.registered:
     st.markdown(
         '<h1 style="text-align:center;margin-bottom:4px;">CableOS</h1>'
         '<div style="text-align:center;font-family:DM Mono,monospace;font-size:13px;'
-        'color:#8b90a0;margin-bottom:32px;">Cable Network Portfolio Simulator · 2012</div>',
+        'color:#e0e2ea;margin-bottom:32px;">Cable Network Portfolio Simulator · 2012</div>',
         unsafe_allow_html=True
     )
 
@@ -254,7 +254,7 @@ if not ss.registered:
     st.markdown('<div class="section-title">Strategic Foundation — Business Theory</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#8b90a0;line-height:1.7;">
+         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#e0e2ea;line-height:1.7;">
     <b style="color:#e8eaf0;font-size:15px;">It's 2012. The linear TV era is ending.</b><br><br>
     Cable networks are facing their first existential threat. Subscribers are cutting the cord. 
     Netflix is spending aggressively. The iPad is two years old. You are the General Manager of 
@@ -292,7 +292,7 @@ if not ss.registered:
 
     st.divider()
     st.markdown(
-        '<div style="text-align:center;font-size:13px;color:#8b90a0;padding:20px;">'
+        '<div style="text-align:center;font-size:13px;color:#e0e2ea;padding:20px;">'
         '← Register your team in the sidebar to begin.</div>',
         unsafe_allow_html=True
     )
@@ -324,26 +324,26 @@ else:
               <span class="badge badge-gray">{net_info['hq']}</span>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
-              <div style="font-size:11px;color:#8b90a0;">{net_info['demographics']}</div>
+              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
+              <div style="font-size:11px;color:#e0e2ea;">{net_info['demographics']}</div>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
-              <div style="font-size:11px;color:#8b90a0;">{net_info['avg_ep_cost']}</div>
+              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
+              <div style="font-size:11px;color:#e0e2ea;">{net_info['avg_ep_cost']}</div>
             </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
 
         # Attempt status
-        att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#8b90a0")
+        att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#e0e2ea")
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px 14px;">
-          <div style="font-size:10px;color:#555a6e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
+          <div style="font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
           <div style="font-size:13px;color:{att_color};font-family:DM Mono,monospace;">
             {'✅ PASSED' if passed else f'Attempt {attempts+1} of {MAX_ATTEMPTS}' if can_sub else '🔒 All attempts used'}
           </div>
-          {'<div style="font-size:11px;color:#8b90a0;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
+          {'<div style="font-size:11px;color:#e0e2ea;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
           {'<div style="font-size:11px;color:#ffa726;margin-top:4px;">⚠️ Retries are practice only — first score counts.</div>' if attempts > 0 and not passed else ''}
         </div>
         """, unsafe_allow_html=True)
@@ -351,12 +351,12 @@ else:
     with hcol2:
         st.markdown(f"""
         <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
-          <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;
+          <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Network Biography</div>
           <div style="font-size:13px;color:#c8cad4;line-height:1.75;">{net_info['bio']}</div>
           <div style="margin-top:12px;">
-            <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
-            <div style="font-size:12px;color:#8b90a0;">{net_info['hit_shows']}</div>
+            <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
+            <div style="font-size:12px;color:#e0e2ea;">{net_info['hit_shows']}</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -419,7 +419,7 @@ else:
     brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
     steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:12px;">'
-        f'<span style="color:#555a6e;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#b0b5c4;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
         f'<span style="color:#c8cad4;">{s}</span></div>'
         for i, s in enumerate(brief["steps"])
     )
@@ -428,13 +428,13 @@ else:
          border-radius:8px;padding:16px 20px;margin-bottom:16px;">
       <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:2;min-width:260px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
           <div style="font-size:12px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
-          <div style="font-size:12px;color:#8b90a0;line-height:1.7;">{brief['mission']}</div>
+          <div style="font-size:12px;color:#e0e2ea;line-height:1.7;">{brief['mission']}</div>
         </div>
         <div style="flex:1;min-width:220px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
           {steps_html}
         </div>
@@ -462,14 +462,14 @@ else:
         else:
             dot_bg  = "#252836"
             dot_txt = str(y)
-            txt_clr = "#555a6e"
+            txt_clr = "#b0b5c4"
         dot_items.append(
             f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
             f'<div style="width:30px;height:30px;border-radius:50%;background:{dot_bg};'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:11px;font-weight:700;color:{txt_clr};">'
             f'{dot_txt}</div>'
-            f'<div style="font-size:9px;color:#555a6e;font-family:DM Mono,monospace;">Y{y}</div>'
+            f'<div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;">Y{y}</div>'
             f'</div>'
         )
     connector = '<div style="width:32px;height:2px;background:#252836;margin-bottom:12px;"></div>'
@@ -480,7 +480,7 @@ else:
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
          padding:12px 20px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+        <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
              text-transform:uppercase;letter-spacing:.1em;">Simulation Progress</div>
         <div style="font-family:DM Mono,monospace;font-size:11px;color:{brief['color']};">
           Year {_sim_yr} of {_max_yrs} &nbsp;·&nbsp; {phase_label}

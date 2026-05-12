@@ -31,7 +31,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8b90a0;">
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">Renewal Economics:</b> Each renewed show costs 5% more next year. 
     Your budget grows only 3%. Cancel low-ROI shows to free capacity for new IP or marketing.
     The IP Value score captures long-term franchise potential — sometimes a show worth renewing 
@@ -96,7 +96,7 @@ def render():
 
     # Inline decision editor
     with st.expander("🎛️ Override Renewal Decisions", expanded=True):
-        st.markdown('<span style="font-size:11px;color:#8b90a0;">Change any show\'s decision. The budget impact recalculates live below.</span>', unsafe_allow_html=True)
+        st.markdown('<span style="font-size:11px;color:#e0e2ea;">Change any show\'s decision. The budget impact recalculates live below.</span>', unsafe_allow_html=True)
 
         nc = 4
         chunks = [rows[i:i+nc] for i in range(0,len(rows),nc)]
@@ -198,7 +198,7 @@ def render():
     # ── IP Value vs. OCF Scatter ──────────────────────────────────────────────
     st.divider()
     st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:11px;color:#8b90a0;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:11px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
 
     import plotly.express as px
     scatter_data = pd.DataFrame([{

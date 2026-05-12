@@ -24,7 +24,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#8b90a0;">
+         border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
     🏆 <b style="color:#e8eaf0;">Official Leaderboard:</b> Rankings use your <b>first attempt only</b>.  
     Retries are practice — they don't change your leaderboard position.  
     FERPA: Only team names (student-chosen pseudonyms) are stored — no student IDs or names.
@@ -45,7 +45,7 @@ def render():
 
         with cols[i]:
             border_c = info["color"] if pas else ("#252836")
-            score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#555a6e")
+            score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#b0b5c4")
             st.markdown(f"""
             <div style="background:#1a1d26;border:2px solid {border_c};border-radius:10px;
                  padding:16px;text-align:center;">
@@ -54,7 +54,7 @@ def render():
                    color:{info['color2']};">{info['display_name']}</div>
               <div style="font-family:DM Serif Display,serif;font-size:28px;
                    color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
-              <div style="font-size:10px;font-family:DM Mono,monospace;color:#555a6e;">
+              <div style="font-size:10px;font-family:DM Mono,monospace;color:#b0b5c4;">
                 {'OFFICIAL SCORE' if off else 'NOT SUBMITTED'}
               </div>
               <div style="margin-top:8px;">
@@ -77,7 +77,7 @@ def render():
 
             if not board:
                 st.markdown(f"""
-                <div style="text-align:center;padding:40px;color:#555a6e;
+                <div style="text-align:center;padding:40px;color:#b0b5c4;
                      font-family:DM Mono,monospace;font-size:12px;">
                   No submissions yet for {info['display_name']}.
                 </div>
@@ -103,8 +103,8 @@ def render():
                       <div style="font-family:DM Serif Display,serif;font-size:32px;color:{mc};">
                         {entry['score']:.0f}
                       </div>
-                      <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">pts</div>
-                      <div style="margin-top:8px;font-size:11px;color:#8b90a0;">{passes} · {ts}</div>
+                      <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">pts</div>
+                      <div style="margin-top:8px;font-size:11px;color:#e0e2ea;">{passes} · {ts}</div>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -147,13 +147,13 @@ def render():
                       <div style="font-family:DM Serif Display,serif;font-size:20px;color:{bar_c};">
                         {entry['score']:.0f}
                       </div>
-                      <div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;">
+                      <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">
                         {passes} · {ts}
                       </div>
                     </div>
                   </div>
                   {'<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;">' +
-                   ''.join([f'<span style="font-size:10px;font-family:DM Mono,monospace;color:#555a6e;">{k}: {v:.0f}</span>'
+                   ''.join([f'<span style="font-size:10px;font-family:DM Mono,monospace;color:#b0b5c4;">{k}: {v:.0f}</span>'
                             for k,v in details.items() if k not in ("total","passed")]) +
                    '</div>' if details else ''}
                 </div>
@@ -212,4 +212,4 @@ def render():
             help="FERPA: Contains team names only — no student PII."
         )
     else:
-        st.markdown('<div style="color:#555a6e;font-family:DM Mono,monospace;font-size:12px;">No submissions recorded yet.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#b0b5c4;font-family:DM Mono,monospace;font-size:12px;">No submissions recorded yet.</div>', unsafe_allow_html=True)

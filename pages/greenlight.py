@@ -15,7 +15,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#8b90a0;">
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">The Core Decision:</b> Do you put this show on Bravo (linear) or SVOD+?  
     In 2012, linear wins on immediate cash — faster ad revenue, no subscriber acquisition cost.  
     By Year 7+, SVOD subscription LTV starts to outpace a declining ad market. Build the P&L for both.
@@ -66,7 +66,7 @@ def render():
         rows = "".join([
             f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
             f'border-bottom:1px solid rgba(37,40,54,.5);font-size:12px;">'
-            f'<span style="color:#8b90a0;">{k}</span>'
+            f'<span style="color:#e0e2ea;">{k}</span>'
             f'<span style="font-family:DM Mono,monospace;color:{vc};">{v}</span></div>'
             for k,v,vc in data
         ])
@@ -166,7 +166,7 @@ def render():
 
     # ── Sensitivity Table ──────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Sensitivity Analysis — Rating vs. Episode Cost</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:11px;color:#8b90a0;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:11px;color:#e0e2ea;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
 
     rating_range = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
     cost_range   = [300, 500, 750, 1000, 1500, 2000]

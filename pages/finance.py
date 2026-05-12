@@ -84,7 +84,7 @@ def render():
                  padding:5px 0;border-bottom:1px solid rgba(37,40,54,.5);">
               <span style="font-size:{size};{bold}color:#e8eaf0;">{label}</span>
               <div style="display:flex;gap:20px;align-items:center;">
-                <span style="font-size:10px;color:#555a6e;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
+                <span style="font-size:10px;color:#b0b5c4;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
                 <span style="font-family:'DM Mono',monospace;{bold}font-size:{size};color:{color};">{sign}${abs(val):.1f}M</span>
               </div>
             </div>
@@ -122,7 +122,7 @@ def render():
     # ── Monthly P&L ───────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Revenue & Cost Trend</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    <div style="font-size:12px;color:#e0e2ea;margin-bottom:10px;">
     Ad revenue follows a seasonal curve — summer dip, fall and spring peaks.
     The OCF bars (right axis) turn red in months where content cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
     </div>
@@ -167,7 +167,7 @@ def render():
     # ── Distribution Revenue Model ────────────────────────────────────────────
     st.markdown('<div class="section-title">Distribution Revenue Calculator</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:12px;color:#8b90a0;margin-bottom:12px;">
+    <div style="font-size:12px;color:#e0e2ea;margin-bottom:12px;">
     Distribution (affiliate) revenue = subscribers × monthly fee × 12 months. 
     Bravo commands a premium affiliate fee; this compounds with a 5% annual escalation clause 
     (capped at Year 5) even as cable subscribers erode at 3%/year.
@@ -213,7 +213,7 @@ def render():
     st.divider()
     st.markdown('<div class="section-title">Revenue per Rating Point — Show Benchmarks</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:12px;color:#8b90a0;margin-bottom:10px;">
+    <div style="font-size:12px;color:#e0e2ea;margin-bottom:10px;">
     Higher revenue per rating point = stronger ad pricing power for that show.
     Shows where cost-per-point exceeds revenue-per-point are destroying value — flag these for cancellation in the Renewal tab.
     </div>

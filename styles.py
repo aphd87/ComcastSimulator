@@ -48,7 +48,7 @@ h6 { font-family:'DM Sans',sans-serif !important;    color:#111111 !important; f
     padding: 16px 18px !important;
 }
 [data-testid="stMetricLabel"] {
-    color: #555a6e !important;
+    color: #b0b5c4 !important;
     font-size: 12px !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
@@ -59,11 +59,11 @@ h6 { font-family:'DM Sans',sans-serif !important;    color:#111111 !important; f
     font-family: 'DM Serif Display', serif !important;
     font-size: 28px !important;
 }
-[data-testid="stMetricDelta"] { color: #555a6e !important; font-size: 13px !important; }
+[data-testid="stMetricDelta"] { color: #b0b5c4 !important; font-size: 13px !important; }
 
 /* ── Tabs ── */
 [data-testid="stTabs"] button {
-    color: #555a6e !important;
+    color: #b0b5c4 !important;
     font-family: 'DM Mono', monospace !important;
     font-size: 13px !important;
     font-weight: 500 !important;
@@ -81,7 +81,7 @@ h6 { font-family:'DM Sans',sans-serif !important;    color:#111111 !important; f
 /* ── Dataframes ── */
 [data-testid="stDataFrame"] { border:1px solid #e0e2e8 !important; border-radius:6px !important; }
 .stDataFrame thead th {
-    background: #f4f5f7 !important; color: #555a6e !important;
+    background: #f4f5f7 !important; color: #b0b5c4 !important;
     font-family: 'DM Mono', monospace !important; font-size: 12px !important; font-weight: 700 !important;
 }
 .stDataFrame tbody td { color: #111111 !important; font-size: 13px !important; font-family: 'DM Mono', monospace !important; }
@@ -134,7 +134,7 @@ h6 { font-family:'DM Sans',sans-serif !important;    color:#111111 !important; f
 .submit-btn button:hover { background: rgba(192,57,43,.16) !important; }
 
 /* ── Caption / Download ── */
-[data-testid="stCaptionContainer"] p { color: #555a6e !important; font-size: 13px !important; }
+[data-testid="stCaptionContainer"] p { color: #b0b5c4 !important; font-size: 13px !important; }
 [data-testid="stDownloadButton"] button { background: #ffffff !important; color: #111111 !important; border: 1px solid #c8ccd8 !important; font-size: 13px !important; }
 
 /* ── Divider ── */
@@ -147,7 +147,7 @@ hr { border-color: #e0e2e8 !important; }
     border: 1px solid #e0e2e8; background: #f4f5f7;
 }
 .net-logo-text { font-family: 'DM Serif Display', serif; font-size: 40px; letter-spacing: .12em; font-weight: 700; }
-.net-tagline   { font-family: 'DM Mono', monospace; font-size: 13px; color: #555a6e; margin-top: 4px; }
+.net-tagline   { font-family: 'DM Mono', monospace; font-size: 13px; color: #b0b5c4; margin-top: 4px; }
 
 /* ── Badges ── */
 .badge { display:inline-block; padding:3px 9px; border-radius:4px; font-family:'DM Mono',monospace; font-size:12px; font-weight:600; }
@@ -155,13 +155,13 @@ hr { border-color: #e0e2e8 !important; }
 .badge-yellow { background:#fff8e1; color:#e65100; border:1px solid #ffcc02; }
 .badge-red    { background:#ffebee; color:#c62828; border:1px solid #ef9a9a; }
 .badge-blue   { background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }
-.badge-gray   { background:#f4f5f7; color:#555a6e; border:1px solid #c8ccd8; }
+.badge-gray   { background:#f4f5f7; color:#b0b5c4; border:1px solid #c8ccd8; }
 .badge-gold   { background:#fff8e1; color:#c0392b; border:1px solid #ffcc02; }
 
 /* ── Section titles ── */
 .section-title {
     font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase;
-    letter-spacing: .12em; color: #555a6e; margin-bottom: 10px;
+    letter-spacing: .12em; color: #b0b5c4; margin-bottom: 10px;
     padding-bottom: 6px; border-bottom: 2px solid #e0e2e8;
 }
 
