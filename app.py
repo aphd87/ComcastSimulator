@@ -205,6 +205,27 @@ with st.sidebar:
             st.info(f"${remaining:.0f}M unallocated. Add marketing or new shows.")
 
     st.divider()
+
+    # ── Quick checklist ───────────────────────────────────────────────────────
+    if ss.registered:
+        st.markdown('<div class="section-title">Quick Checklist</div>', unsafe_allow_html=True)
+        checklist = [
+            ("📊", "Portfolio",  "Review show slate — find cash cows & dogs"),
+            ("🔄", "Renewal",    "Cancel low-ROI shows, free up budget"),
+            ("📣", "Sidebar",    "Tune marketing & reserve sliders"),
+            ("💰", "P&L",        "Confirm revenue covers costs"),
+            ("🎯", "Portfolio",  "Submit your score"),
+        ]
+        for icon, tab, desc in checklist:
+            st.markdown(
+                f'<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #1a1d26;">'
+                f'<span style="font-size:13px;">{icon}</span>'
+                f'<div><div style="font-size:11px;color:#e8eaf0;font-family:DM Mono,monospace;">{tab}</div>'
+                f'<div style="font-size:10px;color:#555a6e;">{desc}</div></div></div>',
+                unsafe_allow_html=True
+            )
+
+    st.divider()
     st.markdown(
         '<div style="font-size:10px;color:#555a6e;font-family:DM Mono,monospace;line-height:1.6;">'
         'FERPA: No PII collected.<br>Team names are pseudonyms only.<br>'
@@ -332,6 +353,87 @@ else:
           </div>
         </div>
         """, unsafe_allow_html=True)
+
+    # ── Level Brief ──────────────────────────────────────────────────────────
+    LEVEL_BRIEFS = {
+        "oxygen": {
+            "color": "#8e44ad",
+            "objective": "Level 1 — Your first assignment.",
+            "mission": (
+                "You run Oxygen: 20 true crime & reality shows, $95M budget. "
+                "Content uses a <b style='color:#e8eaf0;'>3-year amortization curve</b> — "
+                "your annual expense is 1/3 of production cost, giving you more breathing room than Bravo. "
+                "Hit a <b style='color:#e8eaf0;'>12% OCF margin</b> to pass."
+            ),
+            "steps": [
+                "📊 <b>Portfolio</b> — review your slate, spot cash cows vs. dogs",
+                "🔄 <b>Renewal</b> — cancel low-ROI shows to free budget",
+                "📣 <b>Sidebar</b> — adjust marketing and reserve allocation",
+                "💰 <b>P&L</b> — confirm your income statement looks healthy",
+                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+            ],
+        },
+        "bravo": {
+            "color": "#c0392b",
+            "objective": "Level 2 — You've earned Bravo.",
+            "mission": (
+                "You now run both Oxygen and Bravo: 40 shows, ~$315M combined budget. "
+                "Bravo uses a <b style='color:#e8eaf0;'>12-month amortization</b> — costs hit harder each year. "
+                "Real Housewives and Top Chef are your cash cows. "
+                "Hit a <b style='color:#e8eaf0;'>15% OCF margin</b> to pass."
+            ),
+            "steps": [
+                "📊 <b>Portfolio</b> — separate Oxygen shows from Bravo, protect cash cows",
+                "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
+                "🎬 <b>Green Light</b> — decide which new shows go linear vs. SVOD",
+                "💰 <b>P&L</b> — watch the dual-network cost structure",
+                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+            ],
+        },
+        "peacock": {
+            "color": "#1a6bb5",
+            "objective": "Level 3 — Launch Peacock.",
+            "mission": (
+                "Add SVOD to your portfolio. Peacock content uses "
+                "<b style='color:#e8eaf0;'>36-month amortization</b> and earns subscription LTV instead of ad revenue. "
+                "Linear revenue will keep eroding — Peacock is your hedge. "
+                "Hit a <b style='color:#e8eaf0;'>10% OCF margin</b> across all three networks to pass."
+            ),
+            "steps": [
+                "🎬 <b>Green Light</b> — build the linear vs. Peacock P&L for each new show",
+                "📈 <b>Forecast</b> — model the SVOD crossover year",
+                "🔄 <b>Renewal</b> — decide which linear shows to wind down",
+                "💰 <b>P&L</b> — track the cannibalization impact on Bravo & Oxygen",
+                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+            ],
+        },
+    }
+
+    brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
+    steps_html = "".join(
+        f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:12px;">'
+        f'<span style="color:#555a6e;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#c8cad4;">{s}</span></div>'
+        for i, s in enumerate(brief["steps"])
+    )
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid {brief['color']};
+         border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:2;min-width:260px;">
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
+          <div style="font-size:12px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
+          <div style="font-size:12px;color:#8b90a0;line-height:1.7;">{brief['mission']}</div>
+        </div>
+        <div style="flex:1;min-width:220px;">
+          <div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
+          {steps_html}
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 

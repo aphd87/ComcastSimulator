@@ -245,12 +245,14 @@ def render():
 
         # Post-submit feedback
         if ss.submitted and ss.last_score:
-            e = ss.last_score
-            result_color = "#66bb6a" if e["passed"] else "#ef5350"
-            result_text  = "PASSED ✅" if e["passed"] else "DID NOT PASS ❌"
+            e            = ss.last_score
+            passed_sub   = e["passed"]
+            result_color = "#66bb6a" if passed_sub else "#ef5350"
+            result_text  = "PASSED ✅" if passed_sub else "DID NOT PASS ❌"
+
             st.markdown(f"""
-            <div style="background:rgba({'102,187,106' if e['passed'] else '239,83,80'},.1);
-                 border:1px solid rgba({'102,187,106' if e['passed'] else '239,83,80'},.3);
+            <div style="background:rgba({'102,187,106' if passed_sub else '239,83,80'},.1);
+                 border:1px solid rgba({'102,187,106' if passed_sub else '239,83,80'},.3);
                  border-radius:8px;padding:14px;margin-top:10px;text-align:center;">
               <div style="font-family:DM Serif Display,serif;font-size:20px;color:{result_color};">
                 {result_text}
@@ -258,10 +260,40 @@ def render():
               <div style="font-family:DM Mono,monospace;font-size:24px;color:{result_color};margin:8px 0;">
                 {e['score']:.0f} pts
               </div>
-              {'<div style="font-size:11px;color:#8b90a0;">Official score locked. See Leaderboard tab.</div>' if e['attempt']==1 else ''}
-              {'<div style="font-size:11px;color:#8b90a0;">OCF margin: '+f"{kpis['margin']:.1f}% vs {threshold:.0f}% target</div>" if not e['passed'] else ''}
+              {'<div style="font-size:11px;color:#8b90a0;">Official score locked. See Leaderboard tab.</div>' if e["attempt"]==1 else ""}
             </div>
             """, unsafe_allow_html=True)
+
+            if not passed_sub:
+                details = e.get("details", {})
+                HINTS = {
+                    "ocf_margin":    ("OCF Margin (35%)",    "Cancel low-ROI shows and reduce reserve to improve margin."),
+                    "roi":           ("Portfolio ROI (25%)", "Cut shows with negative ROI — even Watch-listed ones hurt."),
+                    "diversity":     ("Genre Diversity (15%)","Add a non-True Crime show to lower your HHI score."),
+                    "renewal":       ("Renewal Quality (10%)","Renew only ROI-positive shows; cancel the rest."),
+                    "marketing":     ("Mkt Efficiency (15%)", "Lower marketing spend if ad revenue lift isn't worth it."),
+                }
+                weak = [(k, v) for k, v in details.items()
+                        if k in HINTS and isinstance(v, (int, float)) and v < 60]
+                weak.sort(key=lambda x: x[1])
+
+                if weak:
+                    st.markdown(
+                        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#555a6e;'
+                        'text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px;">Where to improve</div>',
+                        unsafe_allow_html=True
+                    )
+                    for k, score_val in weak[:3]:
+                        label, hint = HINTS[k]
+                        st.markdown(
+                            f'<div style="background:#12141a;border-left:2px solid #ef5350;'
+                            f'border-radius:4px;padding:8px 12px;margin-bottom:5px;">'
+                            f'<div style="font-size:11px;color:#ef9a9a;font-family:DM Mono,monospace;">'
+                            f'{label} — {score_val:.0f}/100</div>'
+                            f'<div style="font-size:11px;color:#8b90a0;margin-top:2px;">{hint}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
 
     with score_col:
         st.markdown('<div class="section-title">Live Score Breakdown</div>', unsafe_allow_html=True)
