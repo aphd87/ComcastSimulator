@@ -57,8 +57,6 @@ def init_state():
         "peacock_shows":   copy.deepcopy(PEACOCK_SLATE),
         "year":            1,
         "mkt_budget":      5.0,
-        "dev_budget":      3.0,
-        "res_budget":      1.0,
         "renewal_decisions": {},
         "last_score":      None,
         "submitted":       False,
@@ -168,18 +166,13 @@ with st.sidebar:
 
         st.divider()
 
-        # ── Simulation Controls ───────────────────────────────────────────────
-        st.markdown('<div class="section-title">Simulation Year</div>', unsafe_allow_html=True)
-        max_year = 4 if ss.active_network == "oxygen" else (7 if ss.active_network == "bravo" else 10)
-        ss.year  = st.slider("Year", 1, max_year, ss.year, key="year_slider")
-        st.markdown(
-            f'<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;">'
-            f'Calendar year: {2011+ss.year}</div>', unsafe_allow_html=True
-        )
-
-        st.divider()
-
         # ── Budget Controls ───────────────────────────────────────────────────
+        # Simulation Year removed 2026-07-22 — a first attempt always plays
+        # Year 1, matching the "Level 1, your first assignment" narrative and
+        # how the quarterly engine actually works (one attempt = one year).
+        # ss.year stays fixed at its init_state() default (1) and is still
+        # used internally by the cost/revenue math below and in
+        # pages/simulation.py — only the ability to change it was removed.
         st.markdown('<div class="section-title">Budget Allocation ($M)</div>', unsafe_allow_html=True)
 
         net_info = NETWORK_INFO[ss.active_network]
@@ -194,11 +187,14 @@ with st.sidebar:
             shows += ss.peacock_shows
         content_cost = portfolio_cost(shows, ss.year)
 
+        # Development/Reserve sliders removed 2026-07-22 — dead controls,
+        # never read by pages/simulation.py's actual scoring engine (only
+        # this sidebar's own cosmetic "Remaining" display used them). Only
+        # Marketing feeds real gameplay (synced live with simulation.py's
+        # Decision 1 quarterly marketing slider).
         ss.mkt_budget = st.slider("📣 Marketing ($M)", 0.0, 20.0, ss.mkt_budget, 0.5)
-        ss.dev_budget = st.slider("🎬 Development ($M)", 0.0, 15.0, ss.dev_budget, 0.5)
-        ss.res_budget = st.slider("🏦 Reserve ($M)", 0.0, 10.0, ss.res_budget, 0.5)
 
-        allocated = content_cost + ss.mkt_budget + ss.dev_budget + ss.res_budget
+        allocated = content_cost + ss.mkt_budget
         remaining = base_budget - allocated
         rem_color = "#66bb6a" if remaining >= 0 else "#ef5350"
 
@@ -223,31 +219,16 @@ with st.sidebar:
         if remaining < -5:
             st.error("⚠️ Significantly over budget!")
         elif remaining < 0:
-            st.warning("Over budget — reduce marketing or development.")
+            st.warning("Over budget — reduce marketing spend.")
         elif remaining > 30:
             st.info(f"${remaining:.0f}M unallocated. Add marketing or new shows.")
 
-    st.divider()
-
-    # ── Quick checklist ───────────────────────────────────────────────────────
-    if ss.registered:
-        st.markdown('<div class="section-title">Quick Checklist</div>', unsafe_allow_html=True)
-        checklist = [
-            ("📊", "Portfolio",  "Review show slate — find cash cows & dogs"),
-            ("🔄", "Renewal",    "Cancel low-ROI shows, free up budget"),
-            ("📣", "Sidebar",    "Tune marketing & reserve sliders"),
-            ("💰", "P&L",        "Confirm revenue covers costs"),
-            ("🎯", "Portfolio",  "Submit your score"),
-        ]
-        for icon, tab, desc in checklist:
-            st.markdown(
-                f'<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #1a1d26;">'
-                f'<span style="font-size:13px;">{icon}</span>'
-                f'<div><div style="font-size:11px;color:#e8eaf0;font-family:DM Mono,monospace;">{tab}</div>'
-                f'<div style="font-size:10px;color:#b0b5c4;">{desc}</div></div></div>',
-                unsafe_allow_html=True
-            )
-
+    # Quick Checklist removed 2026-07-22 — it referenced tab names
+    # ("Portfolio", "Renewal", "P&L") from before the 7-tabs-to-3 redesign
+    # and no longer matched the actual UI; also purely duplicated the
+    # per-network "Suggested Order of Play" already shown prominently in
+    # the main content's Mission Brief, which is dynamic per network where
+    # this was static.
     st.divider()
     st.markdown(
         '<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;line-height:1.6;">'
