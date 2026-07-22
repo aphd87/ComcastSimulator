@@ -2,6 +2,8 @@
 CableOS — Financial engine & data model
 All monetary values in $M unless noted.
 """
+from __future__ import annotations   # list[...]/dict[...] type hints below need Python
+                                       # 3.9+ without this — see utils/game_state.py
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field

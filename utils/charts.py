@@ -1,6 +1,8 @@
 """
 Shared Plotly theme and chart helpers — matches the dark CableOS aesthetic.
 """
+from __future__ import annotations   # list[...]/dict[...] type hints below need Python
+                                       # 3.9+ without this — see utils/game_state.py
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd

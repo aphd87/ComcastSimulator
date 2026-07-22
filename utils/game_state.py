@@ -4,6 +4,9 @@ FERPA-safe: no student names stored, only team names (student-chosen pseudonyms)
 Leaderboard tracks: team_name, network_level, attempt_number, score, timestamp.
 First attempt score is locked as the official score — subsequent attempts are practice only.
 """
+from __future__ import annotations   # list[...]/dict[...]/tuple[...] type hints below
+                                       # need Python 3.9+ without this; Streamlit Cloud's
+                                       # runtime may be older than what's tested locally.
 import json
 import os
 import time
