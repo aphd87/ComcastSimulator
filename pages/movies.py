@@ -144,6 +144,18 @@ def _greenlight(ss):
                           help="Lifts opening awareness, moderately — doesn't compound with P&A.")
         screens = c4.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
 
+        capital = budget + pa
+        realistic_max_screens = capital * 18   # rough real-world benchmark: a wide-release
+                                                # distribution deal scales screen count with
+                                                # studio confidence/spend, not the other way around
+        if screens > realistic_max_screens:
+            st.warning(
+                f"⚠ {screens:,.0f} screens is a wide-release scale commitment for "
+                f"${capital:.0f}M in total capital — real distribution deals don't hand a "
+                f"small-budget film that many screens. The math will still run, but this "
+                f"combination isn't realistic; consider more capital or fewer screens."
+            )
+
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
                  release_strategy=d.get("release_strategy", "wide_theatrical"))
     ss.movie_draft = draft
@@ -228,12 +240,12 @@ def _release(ss):
     with nav2:
         if st.button("▶  Lock Strategy  →  See Results", type="primary", use_container_width=True):
             project = _current_project(ss)
-            multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle)
+            multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre)
             outcome = {
                 "cycle":            ss.movie_cycle,
                 "project_kwargs":   dict(project.__dict__),
                 "multiplier":       multiplier,
-                "scenario_label":   nearest_scenario_label(multiplier),
+                "scenario_label":   nearest_scenario_label(multiplier, project.genre),
                 "npv":              project.npv(multiplier),
                 "irr":              project.irr(multiplier),
                 "total_revenue":    project.total_revenue(multiplier),

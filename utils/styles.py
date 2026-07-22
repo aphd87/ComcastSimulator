@@ -12,12 +12,15 @@ Shared CSS injected into every page.
 # New pages/components should reach for Tailwind classes first; existing
 # inline-styled HTML doesn't need a forced migration.
 #
-# Must be injected via st.components.v1.html(TAILWIND_INJECT, height=0), not
+# Must be injected via st.iframe(TAILWIND_INJECT, height=1), not
 # st.markdown(..., unsafe_allow_html=True) — script tags set through
 # innerHTML (which is what st.markdown does under the hood) never execute in
-# any browser, Streamlit or not. components.v1.html renders in its own
-# sandboxed iframe, so this reaches out via window.parent.document to attach
-# the script to the *actual* app page instead of the throwaway iframe.
+# any browser, Streamlit or not. (st.components.v1.html used to be the way
+# to do this, but Streamlit deprecated it in favor of st.iframe, removed
+# after 2026-06-01 — st.iframe auto-detects a raw HTML string the same way.)
+# Either way this renders in its own sandboxed iframe, so the script reaches
+# out via window.parent.document to attach itself to the *actual* app page
+# instead of the throwaway iframe.
 TAILWIND_INJECT = """
 <script>
 (function() {

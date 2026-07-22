@@ -58,7 +58,35 @@ RELEASE_STRATEGIES = ["wide_theatrical", "platform", "day_and_date"]
 # -> total domestic run) — this is deliberately where quality/word-of-mouth
 # risk lives, not the opening weekend itself. Marketing buys an opening;
 # it can't buy legs. See DESIGN_NOTES.md "Variance is graded, not hidden."
+# This is the *baseline* spread — actual per-genre bounds are computed by
+# genre_scenario_multipliers() below, since variance itself is genre-
+# dependent (a horror movie can wildly over/underperform its budget in a
+# way a franchise tentpole rarely does; an awards drama's audience is
+# narrower but more predictable). Kept as a public constant since tests and
+# UI code reference the un-adjusted baseline directly.
 SCENARIO_MULTIPLIERS = {"bear": 1.8, "base": 2.8, "bull": 4.2}
+
+# Widens (>1.0) or narrows (<1.0) the bear/bull distance from base, per
+# genre — applied symmetrically around the shared base case so "base" stays
+# comparable across genres and only the *risk band* changes. Horror is the
+# textbook high-variance genre (huge outperformers on tiny budgets, but also
+# routine flops); awards/prestige dramas have a narrower, more predictable
+# specialty-audience range.
+GENRE_VARIANCE_SPREAD = {
+    "Horror": 1.6, "Comedy": 1.3, "Sci-Fi/Fantasy": 1.1, "Action/Tentpole": 1.0,
+    "Animated": 0.9, "Drama": 0.85, "Awards/Prestige": 0.7,
+}
+
+
+def genre_scenario_multipliers(genre: str) -> dict:
+    """Bear/base/bull box-office multipliers adjusted for this genre's
+    variance profile. Base case is unchanged across genres; only how far
+    bear/bull sit from it changes."""
+    spread = GENRE_VARIANCE_SPREAD.get(genre, 1.0)
+    base = SCENARIO_MULTIPLIERS["base"]
+    bear = base - (base - SCENARIO_MULTIPLIERS["bear"]) * spread
+    bull = base + (SCENARIO_MULTIPLIERS["bull"] - base) * spread
+    return {"bear": max(bear, 0.5), "base": base, "bull": bull}
 
 
 @dataclass
@@ -108,11 +136,15 @@ class MovieProject:
 
     def domestic_box_office(self, scenario) -> float:
         """`scenario` is either a named key ("bear"/"base"/"bull", for
-        planning-stage what-if previews) or a raw float multiplier (for the
+        planning-stage what-if previews — resolved against this project's
+        own genre-adjusted variance band) or a raw float multiplier (for the
         actual drawn outcome — see draw_actual_multiplier below). Every
         other revenue/NPV/IRR method forwards its `scenario` argument here,
         so both call styles work everywhere without duplicating formulas."""
-        multiplier = SCENARIO_MULTIPLIERS[scenario] if isinstance(scenario, str) else scenario
+        if isinstance(scenario, str):
+            multiplier = genre_scenario_multipliers(self.genre)[scenario]
+        else:
+            multiplier = scenario
         return self.opening_weekend() * multiplier * self.cannibalization_factor()
 
     def international_box_office(self, domestic_gross: float) -> float:
@@ -245,25 +277,28 @@ def strategic_fit_score(project: MovieProject) -> float:
     return float(min(max(50 + delta_pct * 100, 0), 100))
 
 
-def draw_actual_multiplier(team_name: str, cycle: int) -> float:
+def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama") -> float:
     """Resolves the real box-office multiplier at 'release' time — a
     continuous draw (not just one of 3 buckets), seeded off team+cycle the
     same way pages/simulation.py seeds its quarterly rating variance, so a
     given team's outcome for a given cycle is reproducible but not
     guessable in advance. Triangular distribution peaked at 'base', bounded
-    by 'bear'/'bull' — smoother and more realistic than a 3-way coin flip."""
+    by this genre's own bear/bull spread (see GENRE_VARIANCE_SPREAD) —
+    smoother than a 3-way coin flip, and a horror movie's draw genuinely
+    swings wider than an awards drama's."""
+    bounds = genre_scenario_multipliers(genre)
     seed = (abs(hash(team_name)) + cycle * 4201) % (2 ** 31)
     rng = np.random.default_rng(seed)
-    return float(rng.triangular(
-        SCENARIO_MULTIPLIERS["bear"], SCENARIO_MULTIPLIERS["base"], SCENARIO_MULTIPLIERS["bull"]
-    ))
+    return float(rng.triangular(bounds["bear"], bounds["base"], bounds["bull"]))
 
 
-def nearest_scenario_label(multiplier: float) -> str:
+def nearest_scenario_label(multiplier: float, genre: str = "Drama") -> str:
     """Which named scenario the actual drawn outcome reads closest to, for
     narrative framing in the results screen (e.g. 'landed close to your Base
-    Case')."""
-    return min(SCENARIO_MULTIPLIERS, key=lambda k: abs(SCENARIO_MULTIPLIERS[k] - multiplier))
+    Case') — compared against this genre's own adjusted bounds, not the
+    flat global ones."""
+    bounds = genre_scenario_multipliers(genre)
+    return min(bounds, key=lambda k: abs(bounds[k] - multiplier))
 
 
 def compute_movie_score(projects: list[MovieProject]) -> dict:

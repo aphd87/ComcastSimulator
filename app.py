@@ -22,7 +22,6 @@ import sys, copy
 sys.path.insert(0, ".")
 
 from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
-import streamlit.components.v1 as components
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
@@ -31,7 +30,12 @@ from utils.game_state import (
 from utils.models import annual_budget, cable_subs, distribution_revenue
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 
-components.html(TAILWIND_INJECT, height=0)
+# st.iframe (not the deprecated st.components.v1.html, removed after
+# 2026-06-01) auto-detects that TAILWIND_INJECT doesn't match a URL/file-path
+# pattern and embeds it as raw HTML directly. Unlike the old API, st.iframe
+# rejects height=0 outright (StreamlitInvalidHeightError) — 1px is the
+# smallest valid value and is visually negligible.
+st.iframe(TAILWIND_INJECT, height=1)
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 # ── Session state defaults ────────────────────────────────────────────────────
