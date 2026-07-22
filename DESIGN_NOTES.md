@@ -92,11 +92,82 @@ The original brief described continuous multi-year play — "prove yourself over
 
 `pages/portfolio_v2.py` is superseded by `simulation.py`'s quarterly engine (per commit `24ce9c9`) — likely safe to remove once confirmed nothing else imports it.
 
-## Open direction: a movie/theatrical component
+## Day 2 — Movie/Theatrical Component ("Universal Pictures")
 
-Floated 2026-07-22, not yet scoped or built. Universal Pictures is a real NBCUniversal division, and theatrical economics (box office exhibitor splits, marketing spend front-loaded relative to production cost, PVOD windows, home entertainment, and the Peacock exclusive-window strategy) are a genuinely different financial model than the TV amortization curves this simulator already teaches — good pedagogical contrast, not a redundant reskin.
+Scoped 2026-07-22. Audience is **MBA students** (same as Day 1) — this is not a simplified undergrad add-on, it should push real capital-allocation-under-uncertainty analysis. Universal Pictures is a real NBCUniversal division; theatrical economics (box office exhibitor splits, marketing spend front-loaded relative to and often exceeding production cost, theatrical/PVOD/streaming windowing, the Peacock exclusive-window strategy) are a genuinely different financial model than Day 1's TV amortization curves — good pedagogical contrast, not a redundant reskin.
 
-**Recommendation**: treat as a 4th/bonus level built *after* the core Oxygen → Bravo → Peacock arc, not bolted onto the existing three. It needs its own revenue engine (box office attendance/splits, theatrical-window-to-PVOD-to-streaming timing) rather than reusing `Show`'s ad-revenue/amortization model as-is. Worth a real scoping conversation before implementation — what's the pass/fail metric (box office ROI? total windowed revenue? Peacock exclusivity value?), and does it plug into the existing leaderboard/attempt system or stand alone.
+**Why Day 1 (TV) comes first, and how it connects**: Day 1 teaches the steady-state building blocks — amortization timing, recurring P&L, portfolio thinking — through a forgiving, repeatable rhythm (20 shows, quarterly turns, retries allowed). Day 1's Green Light tab (linear vs. Peacock for a new show) is structurally the *same question* a movie studio asks — Day 2 doesn't introduce a new concept, it raises the stakes on one students already have: a portfolio of steady, amortized bets (TV) vs. one concentrated, front-loaded, fast-decaying bet (a movie).
+
+**Duration: 6 years, structured as 3 movie cycles of 2 years each.** Revised from an initial 5-year guess — a real studio film runs 18–24 months from greenlight to release (pre-production/writing, the shoot, then post/VFX), so 5 years barely fit two full cycles. 6 years gives students **3 complete greenlight-to-release cycles**, enough to actually apply a lesson learned in Cycle 1 to Cycle 2 and 3 — the movie-industry equivalent of Day 1's "first attempt is official, retries are practice," but at the scale of a whole bet instead of a quarter.
+
+- **Cycle structure (repeated 3×, Years 1–2, 3–4, 5–6)**:
+  - **Year N (Greenlight/Production)** — the single-movie decision: budget tier, genre, talent, P&A commitment. Cash goes out; no revenue yet.
+  - **Year N+1 (Release/Windowing)** — release-strategy decision (theatrical/day-and-date/platform), window-length choice, then actual box-office/streaming results resolve against the bull/base/bear scenario drawn for that title.
+- **Portfolio complexity escalates across cycles**, not within Year 1 alone: Cycle 1 is a single film in isolation (learn the mechanics). Cycles 2–3 layer in slate effects — multiple concurrent titles, cannibalization dynamics compounding as PVOD/streaming windows realistically shorten year over year (mirrors Day 1's Oxygen → combined-portfolio escalation, just compressed into 2 more cycles instead of network unlocks).
+
+### Cost structure — the core contrast with Day 1
+Both production budget (`P`) and P&A/marketing spend (`M`) are committed *upfront*, before any revenue visibility — unlike Day 1's monthly-amortized cost spread over a season. Total capital at risk = `P + M`.
+
+### Revenue engine — windowed waterfall, not a steady monthly stream
+- **Opening weekend** = `f(marketing awareness, star power, genre appeal, screen count)` — same diminishing-returns marketing curve as Day 1's `MKT_ROI_PER_M`, but the payoff concentrates into one weekend instead of a season.
+- **Total domestic box office** = opening weekend × a **multiplier** (real industry term — "the film did a 2.8x"). This is where quality/word-of-mouth risk lives: marketing can buy an opening, not legs. Model the multiplier as the variable that differs across scenarios (see Variance below), not the opening weekend itself.
+- **International box office** = domestic × a genre-dependent multiplier.
+- Studio nets roughly half of box office (exhibitor split, front-loaded higher early in the run, declining over time) → **PVOD window** (premium rental, studio keeps the large majority of the transaction) → **Peacock exclusive streaming window** → **EST/home entertainment** → long-tail **library licensing**.
+
+### NPV over IRR as the primary metric
+Discount the windowed cash flows at a studio cost-of-capital proxy (~10–12%), subtract `P + M` upfront. NPV is the right unit — a single bet doesn't have a "margin," it has a return on capital at risk. Report IRR alongside it, since front-loaded-cost/back-loaded-revenue structures can swing IRR wildly — that swing is itself part of the lesson.
+
+### Variance is graded, not hidden
+Run bull/base/bear scenarios on the box-office multiplier (and optionally the international multiplier). Score partly on **NPV under the bear case**, not just expected NPV — the single biggest thing that separates this from Day 1's deterministic P&L, and the reason a real-options framing (staged investment; option to expand/abandon at each checkpoint — greenlight → production → marketing commit → wide vs. platform release) is legitimate here, not decorative.
+
+### Cannibalization math — the direct extension of Day 1's Green Light tab
+If a student picks day-and-date/streaming, apply a cannibalization discount to theatrical box office, but credit a dollarized "attributable subscriber value" (Peacock adds/retention tied to the title — same LTV logic Day 1 already applies to SVOD). Net comparison of *(theatrical-heavy NPV)* vs. *(streaming-heavy NPV, net of cannibalization)* is the actual decision, calculable rather than a gut call. Ground the release-strategy decision in real comparables (WarnerMedia's 2021 HBO Max day-and-date experiment, Universal's post-2020 shortened theatrical window with AMC) rather than an abstract slider.
+
+### Composite score (parallel to Day 1's `compute_score`, different components)
+- **Risk-adjusted NPV** (weighted toward the bear case) — largest weight, core financial outcome.
+- **Capital efficiency** — box-office lift per marketing dollar, penalizing "just spend the max."
+- **Strategic fit** — did the release-window choice maximize combined theatrical + streaming value net of cannibalization, vs. a naive "theatrical is always better" default.
+- **Decision quality at checkpoints** — if built with staged real-options turns, grade whether the student's contingent choice matched what the interim signal (tracking/awareness data, opening-weekend actuals) actually implied.
+
+**Pass/fail gate**: positive risk-adjusted NPV (not a fixed OCF margin %) — judged on whether the bet cleared its cost of capital under a reasonably conservative scenario.
+
+**Not yet decided**: exact turn structure for the staged real-options checkpoints (biggest open design risk — Day 1's tabs are single-decision-per-page; Day 2 may need a sequential-stage UI closer to `pages/simulation.py`'s quarterly engine), and whether Day 2 shares the existing leaderboard/attempt system or stands alone.
+
+## Frontend: Tailwind CSS
+
+Added 2026-07-22 (`utils/styles.py::TAILWIND_INJECT`, wired in `app.py`). Streamlit has no bundler step and this repo has no Node/npm toolchain, so this uses Tailwind's **Play CDN** (browser-side JIT) rather than a compiled build pipeline — the right-sized choice for a classroom tool, even though Tailwind's own docs flag Play CDN as unsuited to high-traffic production (doesn't apply here).
+
+**Real gotcha, worth remembering**: `st.markdown(html, unsafe_allow_html=True)` renders via `innerHTML`, and `<script>` tags inserted through `innerHTML` never execute in any browser — this is a DOM-level restriction, not Streamlit-specific. The correct injection path is `st.components.v1.html(...)`, but that renders inside a *sandboxed iframe* — so the injected script has to reach out via `window.parent.document` to attach itself to the actual app page, not just the throwaway iframe. `TAILWIND_INJECT` does this, with a dedup guard (`id="tailwind-cdn"`) since Streamlit re-runs the whole script on every interaction.
+
+Theme extended (`tailwind.config`) to match the existing hand-rolled palette in `GLOBAL_CSS` (bg/surface/line/ink/gold/etc., DM Serif Display/DM Mono/DM Sans), so new markup can mix Tailwind utility classes with the existing design tokens rather than clashing with them. **Adoption is incremental, not a forced rewrite**: new pages/components (including Day 2) should reach for Tailwind classes first; the ~3,500 lines of existing inline-styled HTML across `app.py`/`pages/*.py` don't need migrating unless touched anyway.
+
+## Final JTBD list (consolidated — Day 1, Day 2, and the frontend)
+
+**Student (player)**
+1. When I'm handed a portfolio of shows I didn't choose, I want to quickly tell cash cows from dogs, so I can decide what to renew, cancel, or fund without re-deriving the whole P&L by hand.
+2. When I decide whether a new show goes on linear or streaming, I want a side-by-side P&L (ad revenue/CPM vs. subscriber LTV) built from a few inputs, so I can reason about the real tradeoff instead of guessing.
+3. When I schedule a show's premiere date, I want to see the cash-timing consequence of a late-month launch, so I understand why amortization *timing*, not just total cost, matters.
+4. When I clear a network, I want a transparent score breakdown, so I know which specific decisions helped or hurt.
+5. When I fail a level, I want a bounded number of practice retries before advancing anyway, so one bad first attempt doesn't block the rest of the course.
+6. **(Day 2)** When I greenlight a movie, I want to see risk-adjusted NPV across bull/base/bear scenarios, not one deterministic number, so I learn to evaluate a concentrated bet the way a real studio does.
+7. **(Day 2)** When I choose a release strategy (theatrical/day-and-date/platform), I want the cannibalization-vs-subscriber-value tradeoff calculated explicitly, so the decision is analytical, not a gut call.
+8. **(Day 2)** When I manage Cycles 2 and 3 of a multi-year slate, I want portfolio-level effects (compounding cannibalization, shrinking windows) to carry forward from my earlier decisions, so the exercise rewards sustained strategy, not just one good pitch.
+
+**Instructor**
+9. When I run this in a live class, I want zero student PII stored anywhere, so I stay FERPA-compliant without vetting the tool myself.
+10. When multiple teams play at once, I want a shared, tamper-resistant leaderboard keyed to the first attempt, so grading reflects real decisions, not the best of unlimited retries.
+11. When I teach a concept (BCG matrix, HHI, amortization timing, LTV/CAC, and — new for Day 2 — NPV/real options under variance), I want it available as in-app reference content, so students can check theory against their own numbers mid-game.
+12. When a level's difficulty needs tuning, I want pass thresholds and scoring weights centralized in one place, not scattered through UI code.
+13. **(Frontend)** When I extend the UI (Day 2 or otherwise), I want a real utility-class system available, so new pages aren't hand-rolled inline-style strings copied from old ones.
+
+## Working list — next up
+
+Not yet built, in rough dependency order:
+1. Confirm the Tailwind injection actually renders correctly in a live browser (blocked on manual spot-check — Claude in Chrome isn't connected in this environment).
+2. Decide Day 2's turn structure (single-decision tabs like Day 1's Green Light, vs. a staged real-options sequence like `simulation.py`'s quarterly engine) — the biggest open design risk, resolve before writing any Day 2 code.
+3. Build the Day 2 financial engine (`utils/movie_models.py`?) — box-office/multiplier model, NPV/scenario math, cannibalization calc.
+4. Build Day 2 Streamlit page(s) once the turn structure is settled.
+5. Decide leaderboard integration — new network-equivalent entry, or a separate scoring track.
 
 ## Original mechanics brief (Zach, preserved verbatim in spirit)
 

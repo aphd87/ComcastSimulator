@@ -2,6 +2,62 @@
 Shared CSS injected into every page.
 """
 
+# Tailwind's Play CDN (browser-side JIT compiler) — not a compiled build
+# pipeline, since this repo has no Node/npm toolchain and Streamlit has no
+# bundler step to hook one into. Right-sized for a classroom tool; Tailwind's
+# own docs flag Play CDN as unsuited to high-traffic production, which
+# doesn't apply here. Theme extended to match the existing hand-rolled
+# palette in GLOBAL_CSS below, so new markup can mix Tailwind utility
+# classes with the existing design tokens instead of clashing with them.
+# New pages/components should reach for Tailwind classes first; existing
+# inline-styled HTML doesn't need a forced migration.
+#
+# Must be injected via st.components.v1.html(TAILWIND_INJECT, height=0), not
+# st.markdown(..., unsafe_allow_html=True) — script tags set through
+# innerHTML (which is what st.markdown does under the hood) never execute in
+# any browser, Streamlit or not. components.v1.html renders in its own
+# sandboxed iframe, so this reaches out via window.parent.document to attach
+# the script to the *actual* app page instead of the throwaway iframe.
+TAILWIND_INJECT = """
+<script>
+(function() {
+  var doc = window.parent.document;
+  if (doc.getElementById('tailwind-cdn')) return;  // Streamlit reruns this on every interaction
+  var s = doc.createElement('script');
+  s.id = 'tailwind-cdn';
+  s.src = 'https://cdn.tailwindcss.com';
+  s.onload = function() {
+    window.parent.tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg:        '#0b0c10',
+            surface:   '#12141a',
+            surface2:  '#1a1d26',
+            line:      '#252836',
+            ink:       '#e8eaf0',
+            ink2:      '#e0e2ea',
+            muted:     '#b0b5c4',
+            gold:      '#e8c547',
+            success:   '#66bb6a',
+            danger:    '#ef5350',
+            warn:      '#ffa726',
+            accent2:   '#4fc3f7',
+          },
+          fontFamily: {
+            serif: ['"DM Serif Display"', 'serif'],
+            mono:  ['"DM Mono"', 'monospace'],
+            sans:  ['"DM Sans"', 'sans-serif'],
+          },
+        },
+      },
+    };
+  };
+  doc.head.appendChild(s);
+})();
+</script>
+"""
+
 GLOBAL_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
