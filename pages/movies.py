@@ -16,6 +16,7 @@ from utils.movie_models import (
     MovieProject, GENRES, GENRE_INTL_MULT, GENRE_SVOD_APPEAL, RELEASE_STRATEGIES,
     SCENARIO_MULTIPLIERS, CYCLES_TOTAL, risk_adjusted_npv, capital_efficiency,
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
+    draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
 )
 from utils.game_state import record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS
 from utils.charts import base_layout, waterfall_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -241,19 +242,28 @@ def _release(ss):
         if st.button("▶  Lock Strategy  →  See Results", type="primary", use_container_width=True):
             project = _current_project(ss)
             multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre)
+            # Critical reception is drawn independently of box-office
+            # performance — a movie can open huge and get panned, or open
+            # modestly and find acclaim. Neither draw is known to the
+            # student until this exact moment.
+            critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
+            awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
             outcome = {
                 "cycle":            ss.movie_cycle,
                 "project_kwargs":   dict(project.__dict__),
                 "multiplier":       multiplier,
                 "scenario_label":   nearest_scenario_label(multiplier, project.genre),
-                "npv":              project.npv(multiplier),
-                "irr":              project.irr(multiplier),
-                "total_revenue":    project.total_revenue(multiplier),
+                "critical_score":   critical_score,
+                "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
+                "npv":              project.npv(multiplier, critical_score),
+                "irr":              project.irr(multiplier, critical_score),
+                "total_revenue":    project.total_revenue(multiplier, critical_score),
                 "domestic_bo":      project.domestic_box_office(multiplier),
                 "theatrical_net":   project.theatrical_studio_net(multiplier),
                 "pvod":             project.pvod_revenue(multiplier),
                 "sub_value":        project.subscriber_value(multiplier),
-                "longtail":         project.library_longtail(multiplier),
+                "longtail":         project.library_longtail(multiplier, critical_score),
+                "awards_bump":      project.awards_season_bump(multiplier, critical_score),
                 "capital_at_risk":  project.capital_at_risk(),
             }
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
@@ -293,10 +303,46 @@ def _results(ss):
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Revenue Waterfall</div>', unsafe_allow_html=True)
-    labels = ["Theatrical Net", "PVOD", "Peacock Sub Value", "Library/EST", "Total Revenue"]
-    vals = [result["theatrical_net"], result["pvod"], result["sub_value"], result["longtail"],
-            result["total_revenue"]]
+    # ── Critical reception — a genuinely separate outcome from box office ──────
+    cs = result["critical_score"]
+    cs_tier = "Widely Acclaimed" if cs >= 75 else ("Well Reviewed" if cs >= 55 else
+              ("Mixed" if cs >= 35 else "Panned"))
+    cs_c = SUCCESS if cs >= 55 else (WARN if cs >= 35 else DANGER)
+    genre = result["project_kwargs"]["genre"]
+    st.markdown('<div class="section-title">Critical Reception</div>', unsafe_allow_html=True)
+    awards_note = ""
+    if genre in AWARDS_ELIGIBLE_GENRES:
+        if result["awards_contender"]:
+            awards_note = (f'<div class="text-xs mt-2" style="color:{SUCCESS};">'
+                            f'🏆 Awards contender — cleared the {AWARDS_CONTENDER_THRESHOLD:.0f} threshold, '
+                            f'triggering a For-Your-Consideration rerelease bump: '
+                            f'+${result["awards_bump"]:.2f}M.</div>')
+        else:
+            awards_note = (f'<div class="text-xs text-muted mt-2">Didn\'t clear the '
+                            f'{AWARDS_CONTENDER_THRESHOLD:.0f} awards-contender threshold — no rerelease bump.</div>')
+    else:
+        awards_note = '<div class="text-xs text-muted mt-2">Not an awards-eligible genre — reception still affects library/EST value, but no rerelease window.</div>'
+    st.markdown(f"""
+    <div class="rounded-lg border border-line bg-surface2 p-4">
+      <div class="flex items-center gap-4">
+        <div class="text-3xl font-serif" style="color:{cs_c};">{cs:.0f}</div>
+        <div>
+          <div class="text-sm font-semibold" style="color:{cs_c};">{cs_tier}</div>
+          <div class="text-[10px] text-muted font-mono">Critical Reception Score / 100 — independent of box office</div>
+        </div>
+      </div>
+      {awards_note}
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-title mt-4">Revenue Waterfall</div>', unsafe_allow_html=True)
+    labels = ["Theatrical Net", "PVOD", "Peacock Sub Value", "Library/EST"]
+    vals = [result["theatrical_net"], result["pvod"], result["sub_value"], result["longtail"]]
+    if result["awards_bump"] > 0:
+        labels.append("Awards Rerelease")
+        vals.append(result["awards_bump"])
+    labels.append("Total Revenue")
+    vals.append(result["total_revenue"])
     fig = waterfall_chart(labels, vals, title="Revenue by Window ($M)", height=300)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -338,8 +384,10 @@ def _complete(ss):
         st.rerun()
         return
 
-    projects = [MovieProject(**r["project_kwargs"]) for r in sorted(ss.movie_log, key=lambda r: r["cycle"])]
-    score = compute_movie_score(projects)
+    sorted_log = sorted(ss.movie_log, key=lambda r: r["cycle"])
+    projects = [MovieProject(**r["project_kwargs"]) for r in sorted_log]
+    critical_scores = [r["critical_score"] for r in sorted_log]
+    score = compute_movie_score(projects, critical_scores)
 
     total_c = SUCCESS if score["total"] >= 70 else (WARN if score["total"] >= 50 else DANGER)
     npv_c = SUCCESS if score["avg_ra_npv_m"] >= 0 else DANGER

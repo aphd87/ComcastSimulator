@@ -89,6 +89,40 @@ def genre_scenario_multipliers(genre: str) -> dict:
     return {"bear": max(bear, 0.5), "base": base, "bull": bull}
 
 
+# ── Critical reception / awards season ─────────────────────────────────────────
+# Deliberately a *separate* risk axis from box-office performance, drawn off
+# its own seed — a movie can open huge and get panned (box office good,
+# reception bad) or open modestly and find critical acclaim (box office
+# thin, reception great). Modeling them as independent draws is the point:
+# they're genuinely uncorrelated in the real industry, and treating them as
+# one signal would hide that.
+# (worst-case, expected, best-case) critical-reception score, 0-100.
+CRITICAL_RECEPTION_BOUNDS = {
+    "Awards/Prestige":  (35, 68, 95),
+    "Drama":            (25, 55, 88),
+    "Animated":         (25, 52, 85),
+    "Sci-Fi/Fantasy":   (20, 48, 82),
+    "Comedy":           (15, 42, 78),
+    "Horror":           (10, 40, 85),   # widest swing of any genre — cult-classic potential
+    "Action/Tentpole":  (15, 38, 72),
+}
+# Only these genres realistically compete in awards season — an action
+# tentpole doesn't get a specialty For-Your-Consideration rerelease no
+# matter how well it's reviewed.
+AWARDS_ELIGIBLE_GENRES = {"Awards/Prestige", "Drama"}
+AWARDS_CONTENDER_THRESHOLD = 72   # critical score needed to trigger the rerelease bump
+
+
+def draw_critical_reception(team_name: str, cycle: int, genre: str) -> float:
+    """Continuous, seeded, reproducible-per-team-per-cycle draw — same
+    mechanism as draw_actual_multiplier, but a different seed offset so the
+    two draws move independently rather than in lockstep."""
+    lo, mode, hi = CRITICAL_RECEPTION_BOUNDS.get(genre, (15, 40, 80))
+    seed = (abs(hash(team_name)) + cycle * 7919 + 31) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    return float(rng.triangular(lo, mode, hi))
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -180,36 +214,68 @@ class MovieProject:
             sub_lift_m *= 1.1
         return sub_lift_m * SVOD_SUB_LTV_MO * 12 * SVOD_MARGIN
 
-    def library_longtail(self, scenario: str) -> float:
+    def library_longtail(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """Small, deferred EST/library licensing tail — a fixed fraction of
-        theatrical performance, arriving well after the windows above."""
-        return self.theatrical_studio_net(scenario) * 0.06
+        theatrical performance, arriving well after the windows above. When
+        a critical_score is supplied (i.e. the outcome has actually been
+        resolved — see draw_critical_reception), scales the tail 0.7x-1.8x:
+        critical reception has real, measurable effect on a film's enduring
+        library value, independent of how it did theatrically."""
+        base = self.theatrical_studio_net(scenario) * 0.06
+        if critical_score is None:
+            return base
+        quality_mult = 0.7 + (critical_score / 100) * 1.1
+        return base * quality_mult
 
-    def windowed_cashflows(self, scenario: str) -> list[tuple[float, float]]:
+    def awards_season_bump(self, scenario: str, critical_score: Optional[float] = None) -> float:
+        """A limited theatrical rerelease during awards season (For-Your-
+        Consideration campaigns, expanded runs after nominations) — only
+        applies to awards-eligible genres (see AWARDS_ELIGIBLE_GENRES) whose
+        critical reception clears AWARDS_CONTENDER_THRESHOLD. A real, if
+        modest, extra revenue window that a merely well-reviewed action
+        movie doesn't get access to, no matter how good its reviews are."""
+        if critical_score is None or self.genre not in AWARDS_ELIGIBLE_GENRES:
+            return 0.0
+        if critical_score < AWARDS_CONTENDER_THRESHOLD:
+            return 0.0
+        strength = (critical_score - AWARDS_CONTENDER_THRESHOLD) / (100 - AWARDS_CONTENDER_THRESHOLD)
+        return self.domestic_box_office(scenario) * 0.08 * strength
+
+    def windowed_cashflows(self, scenario: str, critical_score: Optional[float] = None) -> list[tuple[float, float]]:
         """Returns [(months_from_release, cash_m), ...] — the actual timing
         of each window's revenue, needed for discounting. Theatrical revenue
         is recognized at the midpoint of the run (~6 weeks in), not at
         release — a single cashflow parked at 2 weeks against an upfront
         cost produces an annualized IRR in the thousands of percent even for
-        an ordinary hit, which isn't a meaningful number to hand a student."""
+        an ordinary hit, which isn't a meaningful number to hand a student.
+
+        critical_score is None during planning-stage bear/base/bull previews
+        (a student genuinely can't know reviews in advance — including it
+        there would leak information they shouldn't have yet) and only
+        supplied once the outcome is actually resolved at Results."""
         theatrical = self.theatrical_studio_net(scenario)
         pvod       = self.pvod_revenue(scenario)
         sub_value  = self.subscriber_value(scenario)
-        longtail   = self.library_longtail(scenario)
+        longtail   = self.library_longtail(scenario, critical_score)
+        bump       = self.awards_season_bump(scenario, critical_score)
         window_mo  = self.window_days() / 30.0
-        return [
+        flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
             (window_mo + 1.0,    pvod),                       # PVOD opens right after theatrical window
             (window_mo + 3.0,    sub_value),                  # Peacock exclusive window follows PVOD
             (24.0,               longtail),                   # library/EST tail, ~2 years out
         ]
+        if bump > 0:
+            flows.append((11.0, bump))   # awards season (~Jan-Feb), roughly 11 months after release
+        return flows
 
-    def npv(self, scenario: str, discount_rate: float = COST_OF_CAPITAL) -> float:
-        cashflows = self.windowed_cashflows(scenario)
+    def npv(self, scenario: str, critical_score: Optional[float] = None,
+            discount_rate: float = COST_OF_CAPITAL) -> float:
+        cashflows = self.windowed_cashflows(scenario, critical_score)
         pv = sum(cash / ((1 + discount_rate) ** (months / 12.0)) for months, cash in cashflows)
         return pv - self.capital_at_risk()
 
-    def irr(self, scenario: str) -> Optional[float]:
+    def irr(self, scenario: str, critical_score: Optional[float] = None) -> Optional[float]:
         """Approximate IRR via a simple bisection search — front-loaded cost
         and back-loaded, windowed revenue means closed-form IRR isn't clean,
         and this doesn't need finance-library precision for a teaching sim.
@@ -219,7 +285,7 @@ class MovieProject:
         hit, not a bug — display as ">500%"), otherwise the converged rate.
         Silently returning the search boundary as if it were a converged
         answer would look like a real number without being one."""
-        cashflows = self.windowed_cashflows(scenario)
+        cashflows = self.windowed_cashflows(scenario, critical_score)
         total_in = sum(c for _, c in cashflows)
         if total_in <= self.capital_at_risk():
             return None   # never recovers capital — IRR undefined/negative-infinite
@@ -239,21 +305,25 @@ class MovieProject:
                 hi = mid
         return mid
 
-    def total_revenue(self, scenario: str) -> float:
-        return sum(cash for _, cash in self.windowed_cashflows(scenario))
+    def total_revenue(self, scenario: str, critical_score: Optional[float] = None) -> float:
+        return sum(cash for _, cash in self.windowed_cashflows(scenario, critical_score))
 
 
 # ── Portfolio / scoring helpers ────────────────────────────────────────────────
-def risk_adjusted_npv(project: MovieProject, bear_weight: float = 0.5) -> float:
+def risk_adjusted_npv(project: MovieProject, critical_score: Optional[float] = None,
+                       bear_weight: float = 0.5) -> float:
     """Weighted toward the bear case — rewards risk-aware greenlighting, not
     just an optimistic expected value. See DESIGN_NOTES.md 'Variance is
-    graded, not hidden.'"""
-    bear = project.npv("bear")
-    base = project.npv("base")
+    graded, not hidden.' critical_score, when the outcome has actually been
+    resolved, folds in the real (already-known) reception rather than
+    scoring purely on hypothetical box-office scenarios."""
+    bear = project.npv("bear", critical_score)
+    base = project.npv("base", critical_score)
     return bear_weight * bear + (1 - bear_weight) * base
 
 
-def capital_efficiency(project: MovieProject, scenario: str = "base") -> float:
+def capital_efficiency(project: MovieProject, scenario: str = "base",
+                        critical_score: Optional[float] = None) -> float:
     """Total lifetime revenue per marketing dollar — penalizes 'just spend
     the max' P&A strategies the way Day 1's greenlight marketing-ROI table
     does. A healthy real-world P&A efficiency benchmark is roughly 3-6x;
@@ -261,16 +331,16 @@ def capital_efficiency(project: MovieProject, scenario: str = "base") -> float:
     awareness that pays off across every window, not only the premiere."""
     if project.pa_spend_m <= 0:
         return 0.0
-    return project.total_revenue(scenario) / project.pa_spend_m
+    return project.total_revenue(scenario, critical_score) / project.pa_spend_m
 
 
-def strategic_fit_score(project: MovieProject) -> float:
+def strategic_fit_score(project: MovieProject, critical_score: Optional[float] = None) -> float:
     """0-100: did the release-strategy choice actually maximize combined
     theatrical + streaming value net of cannibalization, vs. what a naive
     'always go wide theatrical' default would have produced?"""
-    actual_npv = risk_adjusted_npv(project)
+    actual_npv = risk_adjusted_npv(project, critical_score)
     baseline = MovieProject(**{**project.__dict__, "release_strategy": "wide_theatrical"})
-    baseline_npv = risk_adjusted_npv(baseline)
+    baseline_npv = risk_adjusted_npv(baseline, critical_score)
     if baseline_npv == 0:
         return 50.0
     delta_pct = (actual_npv - baseline_npv) / abs(baseline_npv)
@@ -301,18 +371,26 @@ def nearest_scenario_label(multiplier: float, genre: str = "Drama") -> str:
     return min(bounds, key=lambda k: abs(bounds[k] - multiplier))
 
 
-def compute_movie_score(projects: list[MovieProject]) -> dict:
+def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[list] = None) -> dict:
     """Composite score across a slate of MovieProjects (one per cycle
     played so far). Weights mirror utils/game_state.py::compute_score's
-    pattern but with Day 2's own components — see DESIGN_NOTES.md."""
+    pattern but with Day 2's own components — see DESIGN_NOTES.md.
+
+    critical_scores, when given, must be the same length as projects (the
+    already-resolved reception per cycle — see draw_critical_reception) so
+    the final score reflects real awards-season/library value actually
+    earned, not just the hypothetical bear/base box-office scenarios."""
     if not projects:
         return {"total": 0.0, "risk_adjusted_npv": 0.0, "capital_efficiency": 0.0,
                  "strategic_fit": 0.0, "passed": False}
+    if critical_scores is None:
+        critical_scores = [None] * len(projects)
 
-    ra_npvs = [risk_adjusted_npv(p) for p in projects]
+    ra_npvs = [risk_adjusted_npv(p, cs) for p, cs in zip(projects, critical_scores)]
     avg_ra_npv = sum(ra_npvs) / len(ra_npvs)
-    avg_cap_eff = sum(capital_efficiency(p) for p in projects) / len(projects)
-    avg_fit = sum(strategic_fit_score(p) for p in projects) / len(projects)
+    avg_cap_eff = sum(capital_efficiency(p, critical_score=cs)
+                       for p, cs in zip(projects, critical_scores)) / len(projects)
+    avg_fit = sum(strategic_fit_score(p, cs) for p, cs in zip(projects, critical_scores)) / len(projects)
 
     # Normalize to 0-100 like Day 1's compute_score does. Bands calibrated
     # against this engine's own realistic output range (see the smoke test

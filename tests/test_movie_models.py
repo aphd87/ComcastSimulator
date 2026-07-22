@@ -16,6 +16,8 @@ from utils.movie_models import (
     compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
     genre_scenario_multipliers, SCENARIO_MULTIPLIERS, GENRE_VARIANCE_SPREAD,
     WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS,
+    draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
+    CRITICAL_RECEPTION_BOUNDS,
 )
 
 
@@ -165,6 +167,65 @@ class TestGenreVariance:
         # Wider spread means horror's bear case sits below the flat baseline bear.
         horror_bounds = genre_scenario_multipliers("Horror")
         assert horror_bounds["bear"] < SCENARIO_MULTIPLIERS["bear"]
+
+
+# ── Award season / critical reception ──────────────────────────────────────────
+class TestAwardSeason:
+    """Critical reception is a separate risk axis from box-office
+    performance — a movie can open huge and get panned, or open modestly
+    and find acclaim. Only awards-eligible genres get a rerelease bump, and
+    only above the contender threshold."""
+
+    def test_action_movie_never_gets_awards_bump_regardless_of_score(self):
+        p = _tentpole()
+        assert "Action/Tentpole" not in AWARDS_ELIGIBLE_GENRES
+        assert p.awards_season_bump("base", 99) == 0.0
+
+    def test_drama_below_threshold_gets_no_bump(self):
+        p = MovieProject(title="Quiet Drama", genre="Drama", budget_m=20, pa_spend_m=12,
+                          star_power=45, screens=700, cycle=1, release_strategy="platform")
+        assert p.awards_season_bump("base", AWARDS_CONTENDER_THRESHOLD - 1) == 0.0
+
+    def test_drama_above_threshold_gets_a_positive_bump(self):
+        p = MovieProject(title="Contender", genre="Drama", budget_m=20, pa_spend_m=12,
+                          star_power=45, screens=700, cycle=1, release_strategy="platform")
+        assert p.awards_season_bump("base", 90) > 0.0
+
+    def test_no_critical_score_means_no_bump_and_unscaled_longtail(self):
+        # Planning-stage previews (critical_score=None) shouldn't leak
+        # awards-season information the student can't know yet.
+        p = MovieProject(title="Contender", genre="Drama", budget_m=20, pa_spend_m=12,
+                          star_power=45, screens=700, cycle=1, release_strategy="platform")
+        assert p.awards_season_bump("base", None) == 0.0
+        base_longtail = p.theatrical_studio_net("base") * 0.06
+        assert p.library_longtail("base", None) == pytest.approx(base_longtail)
+
+    def test_acclaimed_reception_scales_longtail_up_panned_scales_it_down(self):
+        p = _tentpole()
+        base_longtail = p.theatrical_studio_net("base") * 0.06
+        assert p.library_longtail("base", 95) > base_longtail
+        assert p.library_longtail("base", 5) < base_longtail
+
+    def test_draw_is_reproducible_and_independent_of_box_office_seed(self):
+        cs1 = draw_critical_reception("Team Delta", 1, "Drama")
+        cs2 = draw_critical_reception("Team Delta", 1, "Drama")
+        assert cs1 == cs2
+        # Different genres should draw from different bounds even for the
+        # same team/cycle.
+        cs_action = draw_critical_reception("Team Delta", 1, "Action/Tentpole")
+        lo, _, hi = CRITICAL_RECEPTION_BOUNDS["Action/Tentpole"]
+        assert lo <= cs_action <= hi
+
+    def test_final_score_reflects_resolved_critical_reception(self):
+        # A drama slate with genuinely strong reception should score at
+        # least as well as the same slate scored blind (critical_score=None)
+        # -- the awards bump and longtail boost are additive, never negative.
+        projects = [MovieProject(title=f"Film {i}", genre="Drama", budget_m=20, pa_spend_m=12,
+                                  star_power=45, screens=700, cycle=i, release_strategy="platform")
+                    for i in (1, 2, 3)]
+        blind = compute_movie_score(projects)
+        acclaimed = compute_movie_score(projects, critical_scores=[90, 90, 90])
+        assert acclaimed["avg_ra_npv_m"] >= blind["avg_ra_npv_m"]
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
