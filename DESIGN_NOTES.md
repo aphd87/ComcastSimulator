@@ -162,12 +162,23 @@ Theme extended (`tailwind.config`) to match the existing hand-rolled palette in 
 
 ## Working list — next up
 
-Not yet built, in rough dependency order:
-1. Confirm the Tailwind injection actually renders correctly in a live browser (blocked on manual spot-check — Claude in Chrome isn't connected in this environment).
-2. Decide Day 2's turn structure (single-decision tabs like Day 1's Green Light, vs. a staged real-options sequence like `simulation.py`'s quarterly engine) — the biggest open design risk, resolve before writing any Day 2 code.
-3. Build the Day 2 financial engine (`utils/movie_models.py`?) — box-office/multiplier model, NPV/scenario math, cannibalization calc.
-4. Build Day 2 Streamlit page(s) once the turn structure is settled.
-5. Decide leaderboard integration — new network-equivalent entry, or a separate scoring track.
+**Built 2026-07-22, same session as the design above:**
+- **`utils/movie_models.py`** — full financial engine: `MovieProject` dataclass, opening-weekend/box-office/PVOD/subscriber-value/library formulas, `windowed_cashflows()`, `npv()`/`irr()`, `risk_adjusted_npv()`, `capital_efficiency()`, `strategic_fit_score()`, `compute_movie_score()`, `draw_actual_multiplier()` (seeded, reproducible-per-team-per-cycle continuous outcome draw via `np.random.triangular`), `nearest_scenario_label()`.
+  - **Calibration matters, caught before shipping**: the first pass produced a $200M movie showing a $650M+ NPV and an IRR pinned at the 500% search ceiling for every scenario — both wrong. Root causes: (1) `opening_weekend()` stacked star-power and P&A boosts multiplicatively instead of additively, blowing up box office scale; (2) theatrical revenue was timed at 2 weeks post-release, and *annualizing* a return that concentrated that fast produces an absurd IRR even for an ordinary hit. Fixed by rebalancing the opening-weekend formula (verified against realistic $10-20K/screen benchmarks) and moving theatrical revenue recognition to the run's midpoint (~6 weeks). Re-verified with a real smoke test (see the numbers below) before building any UI on top of it — don't trust a financial model that merely runs without erroring.
+  - Verified realistic output: a $200M tentpole (wide theatrical) now shows base-case NPV ≈ +$179M, bear ≈ +$44M, bull ≈ +$369M — a believable spread. A $25M indie (platform release) shows base ≈ -$1M, bear ≈ -$10M — appropriately marginal/risky. Day-and-date on the same tentpole in Cycle 3 drops NPV to negative (theatrical suppression not fully offset by subscriber value) — a real, teachable result, not an artifact.
+  - `irr()` now distinguishes "never recovers capital" (`None`) from "true IRR exceeds the 500% search ceiling" (`float('inf')`, displayed as ">500%") from an actually-converged rate — it no longer silently returns a boundary value dressed up as a precise answer.
+- **`pages/movies.py`** — the turn engine, mirroring `pages/simulation.py`'s Decisions→Results phase-state-machine pattern (confirmed as the right call, not just a superficial resemblance): Greenlight (concept + capital commit) → Release Strategy (side-by-side risk-adjusted NPV preview across wide/platform/day-and-date, extending Day 1's Green Light tab) → Results (actual outcome resolves against a hidden continuous draw, revenue waterfall chart, slate-so-far chart) → repeats for all `CYCLES_TOTAL` (3), then a Complete phase with the composite score breakdown and submission. Submission reuses Day 1's existing FERPA-safe leaderboard infra (`game_state.py::record_attempt`) under a new `"movies"` network key — no new persistence system needed.
+- **`pages/leaderboard.py`** refactored — per-network tab body extracted into `_render_board_tab()` and reused for a new "🎬 Universal Pictures" tab (`MOVIES_INFO`, deliberately *not* added to `NETWORK_INFO`/`NETWORK_ORDER` so it can't leak into the sidebar's TV network selector). Without this, a submitted movie score would have been recorded but invisible anywhere in the UI.
+- **`app.py`** — new "🎬 Movies (Day 2)" tab, positioned after Simulation and before Leaderboard. Fully independent of the sidebar's Active Network (Oxygen/Bravo/Peacock) selection — Day 2 doesn't read or depend on `ss.active_network`.
+
+**Verified this session**: all new/changed files syntax-check and import cleanly; the financial engine was smoke-tested directly (function calls, not just "doesn't crash") through several scenarios until the numbers were realistic; the local server (`localhost:8511`) starts with no traceback on the full wiring.
+
+**Not yet verified — needs a human in a real browser** (Claude in Chrome wasn't connected in this environment for the whole session): a full click-through of Greenlight → Release Strategy → Results → 3 cycles → Complete → Submit, and confirming Tailwind actually renders. Please run through at least one full slate before trusting this in front of students.
+
+**Still open / not built:**
+1. No automated tests for `utils/movie_models.py` (Day 1 has none either at the utils layer, so this matches existing project convention — worth reconsidering given the calibration bug caught above).
+2. Screen-count input isn't validated against budget tier (a $15M indie can currently be set to 4500 screens) — low priority, doesn't break anything, just an unrealistic combination a student could pick.
+3. No award-season/critical-reception dimension — genre and star power drive the box-office multiplier's *scale*, but the bull/base/bear variance itself isn't genre-differentiated (a horror movie and an awards drama currently have the same relative up/downside range, which isn't quite right — horror is famously more variance-prone per dollar).
 
 ## Original mechanics brief (Zach, preserved verbatim in spirit)
 

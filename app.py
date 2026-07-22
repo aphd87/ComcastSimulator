@@ -451,20 +451,25 @@ else:
     # ── Main Tabs ─────────────────────────────────────────────────────────────
     tabs = st.tabs([
         "📊 Simulation",
+        "🎬 Movies (Day 2)",
         "🏆 Leaderboard",
         "📖 Theory",
     ])
 
     from pages.simulation  import render as render_simulation
+    from pages.movies      import render as render_movies
     from pages.leaderboard import render as render_leaderboard
 
     with tabs[0]:
         render_simulation()
 
     with tabs[1]:
-        render_leaderboard()
+        render_movies()
 
     with tabs[2]:
+        render_leaderboard()
+
+    with tabs[3]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         cols = st.columns(3)
         theory_items = list(THEORY_CONTENT.values())
