@@ -197,6 +197,21 @@ Theme extended (`tailwind.config`) to match the existing hand-rolled palette in 
 1. The actual interactive click-through (Release → Results → Complete → Submit) is still only verified by direct unit tests on the underlying functions plus a manual code read — not by driving the real Streamlit widgets, for the AppTest reason documented above. **A human browser pass is the one thing nobody has done across this entire multi-session build** — please do this before trusting Day 2 in front of students.
 2. Tailwind's actual rendering is still unconfirmed for the same reason (no browser access this whole effort).
 
+## Running this for a real class — operational notes
+
+**Team identity has no account system, by design.** Registration is a free-text pseudonym (`st.text_input`), not tied to email or any student identity — matches the FERPA framing. Real consequence: if a team's members open the app on **separate devices**, they are *not* synced — each gets an independent session (own decisions, own budget state). Teams should share one device/browser tab.
+
+**The leaderboard is a plain local file** (`leaderboard.json`, `utils/game_state.py::LEADERBOARD_FILE`), not a database. Whether different teams' scores land on one shared leaderboard depends entirely on deployment:
+- **One central server** (e.g. Streamlit Community Cloud, one URL the whole class visits) → genuinely shared leaderboard. This is almost certainly the right model for a class and isn't set up yet — worth doing before real use.
+- **Each student runs it locally** → every instance has its own separate file; nobody's scores are actually comparable.
+
+**Sidebar consolidated 2026-07-22** (user feedback: "too many options for a simulation"). Went from 5 sections to 3 (Team Registration, Active Network, Budget Allocation) by removing:
+- **Development/Reserve budget sliders** — were dead code, never read by `pages/simulation.py`'s actual scoring engine, only fed the sidebar's own cosmetic "Remaining" display. Only Marketing affects real gameplay.
+- **Quick Checklist** — referenced tab names from before the "7 tabs to 3" redesign (`Portfolio`/`Renewal`/`P&L`, which no longer exist) and duplicated the per-network Mission Brief's "Suggested Order of Play" already shown in the main content, which is dynamic where this was static.
+- **Simulation Year slider** — removed per explicit user choice; a first attempt always plays Year 1 now, matching the "Level 1, your first assignment" narrative. `ss.year` stays fixed at 1 internally (still used by the cost/revenue math), only the ability to change it was removed.
+
+**Real environment gotcha, worth remembering**: this machine has two Streamlit installs on PATH at different versions — `C:\Program Files\Python314` (1.59.2) and Anaconda (`C:\Users\apalo\anaconda3`, 1.45.1). `streamlit run app.py` in a real shell resolves to the **Anaconda one**. A fix verified only against the other install (`st.iframe`, a newer API 1.45.1 doesn't have) shipped broken and threw `AttributeError` in actual use. Fixed with a `hasattr(st, "iframe")` runtime check rather than assuming a version. **Any future change should be verified against `anaconda3\python.exe` / `anaconda3\Scripts\streamlit.exe` explicitly**, not just whatever `python`/`streamlit` a fresh shell resolves to.
+
 ## Original mechanics brief (Zach, preserved verbatim in spirit)
 
 Recovered from an untracked `Zach Notes.docx` found in a stale duplicate clone (`OneDrive/Desktop/ComcastSimulator`) — preserved here since it's the closest thing to a founding design doc and wasn't committed anywhere.
