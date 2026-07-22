@@ -30,12 +30,20 @@ from utils.game_state import (
 from utils.models import annual_budget, cable_subs, distribution_revenue
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 
-# st.iframe (not the deprecated st.components.v1.html, removed after
-# 2026-06-01) auto-detects that TAILWIND_INJECT doesn't match a URL/file-path
-# pattern and embeds it as raw HTML directly. Unlike the old API, st.iframe
-# rejects height=0 outright (StreamlitInvalidHeightError) — 1px is the
-# smallest valid value and is visually negligible.
-st.iframe(TAILWIND_INJECT, height=1)
+# st.iframe (added in a newer Streamlit release than st.components.v1.html)
+# auto-detects that TAILWIND_INJECT doesn't match a URL/file-path pattern and
+# embeds it as raw HTML directly, and is the eventual replacement for the
+# deprecated components.v1.html. But this machine has two Streamlit
+# installs on PATH at different versions (Anaconda's is old enough that
+# st.iframe doesn't exist yet), so don't assume either API — try the newer
+# one, fall back to the older one. st.iframe also rejects height=0 outright
+# (StreamlitInvalidHeightError) where components.v1.html silently allowed
+# it — 1px is the smallest valid value either way and is visually negligible.
+if hasattr(st, "iframe"):
+    st.iframe(TAILWIND_INJECT, height=1)
+else:
+    import streamlit.components.v1 as components
+    components.html(TAILWIND_INJECT, height=1)
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 # ── Session state defaults ────────────────────────────────────────────────────
