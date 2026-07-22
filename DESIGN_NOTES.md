@@ -197,6 +197,25 @@ Theme extended (`tailwind.config`) to match the existing hand-rolled palette in 
 1. The actual interactive click-through (Release → Results → Complete → Submit) is still only verified by direct unit tests on the underlying functions plus a manual code read — not by driving the real Streamlit widgets, for the AppTest reason documented above. **A human browser pass is the one thing nobody has done across this entire multi-session build** — please do this before trusting Day 2 in front of students.
 2. Tailwind's actual rendering is still unconfirmed for the same reason (no browser access this whole effort).
 
+## Multi-school / multi-class leaderboard — added 2026-07-22
+
+Team identity used to be just `team_name` (a free-text pseudonym), which meant two different schools — or two sections of the same school — both having a "Team Alpha" would silently share attempt history and leaderboard position. Fixed by making a team's real identity the triple **(school, class_section, team_name)**:
+
+- **Registration** (`app.py`) now collects School (curated dropdown — Northwestern Kellogg / Indiana Kelley / "Other" free-text, so any school can use this without a code change) and Class/Section (free text) alongside Team Name. Same FERPA posture as team_name itself — self-reported classroom context, not tied to any student identity.
+- **Every gating/attempt function** in `utils/game_state.py` (`get_team_attempts`, `get_official_score`, `get_attempt_count`, `can_advance`, `get_team_network_status`) now takes `school`/`class_section` and scopes matching on all three fields, not just team_name.
+- **`get_network_leaderboard(network, school=None, class_section=None)`** — `None` (default) means unfiltered/cross-school; a value scopes down. This is the one function that directly satisfies all four of the user's requirements via different filter combinations:
+  1. **Class-only leaderboard** → `school=X, class_section=Y`
+  2. **Team-vs-team across schools** → unfiltered (`None, None`), now shown with school/class as a label on each row
+  3. Same as #1 — a class leaderboard *is* the class-scoped view
+  4. **School-overall leaderboard** → `school=X, class_section=None` (every class at that school, rolled together)
+- **`get_school_rollup(network)`** — new aggregate function (avg score, pass rate, top score, team count per school) — the school-vs-school comparison view, satisfying the other half of #2.
+
+`pages/leaderboard.py` exposes this as a **scope selector** (My Class / My School / All Schools, `st.radio`) controlling the per-network podium/rankings/chart, plus a standalone **School Comparison** section (table + bar chart) always showing every school side by side regardless of scope selection.
+
+**Verified, not just wired up**: `tests/test_game_state_scoping.py` (11 tests) — same-name teams at different schools/sections genuinely don't collide (attempts, `can_advance`, leaderboard ranking all isolated correctly), filtered views exclude what they should, rollup aggregates and ranks correctly. 46 tests total now passing.
+
+**Fun top-3 icons** (the lighter half of this request): 👑 crown for #1 (replacing a plain gold medal) with a looping CSS glow (`utils/styles.py::crown-glow`), silver/bronze medals unchanged for #2/#3.
+
 ## Running this for a real class — operational notes
 
 **Team identity has no account system, by design.** Registration is a free-text pseudonym (`st.text_input`), not tied to email or any student identity — matches the FERPA framing. Real consequence: if a team's members open the app on **separate devices**, they are *not* synced — each gets an independent session (own decisions, own budget state). Teams should share one device/browser tab.

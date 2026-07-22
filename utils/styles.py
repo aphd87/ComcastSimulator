@@ -191,6 +191,14 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 @keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:.6} }
 .live-good { animation: pulse-green .8s ease 1; color:#66bb6a; }
 
+/* #1 leaderboard podium glow — subtle, loops forever (not a one-shot like
+   pulse-green above), meant to sit under a crown emoji all class long. */
+@keyframes crown-glow {
+    0%,100% { box-shadow: 0 0 10px rgba(232,197,71,.35); }
+    50%     { box-shadow: 0 0 20px rgba(232,197,71,.65); }
+}
+.crown-glow { animation: crown-glow 2.2s ease-in-out infinite; }
+
 /* Lock overlay */
 .locked-overlay {
     background:rgba(11,12,16,.85);border:1px solid #252836;

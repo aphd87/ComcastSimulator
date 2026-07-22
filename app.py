@@ -25,7 +25,7 @@ from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
-    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS
+    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS, SCHOOL_PRESETS
 )
 from utils.models import annual_budget, cable_subs, distribution_revenue
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
@@ -50,6 +50,8 @@ st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 def init_state():
     defaults = {
         "team_name":       "",
+        "school":          "",
+        "class_section":   "",
         "registered":      False,
         "active_network":  "oxygen",
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
@@ -84,6 +86,12 @@ with st.sidebar:
     st.divider()
 
     # ── Team Registration ─────────────────────────────────────────────────────
+    # School + Class Section added 2026-07-22 — a team's real identity for
+    # gating/leaderboard purposes is (school, class_section, team_name), not
+    # just team_name alone, so the same "Team Alpha" pseudonym at two
+    # different schools (or two sections of the same school) never
+    # collides. Same FERPA posture as team_name itself: self-reported
+    # classroom context, not tied to any student identity.
     st.markdown('<div class="section-title">Team Registration</div>', unsafe_allow_html=True)
 
     if not ss.registered:
@@ -92,27 +100,46 @@ with st.sidebar:
             '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
             unsafe_allow_html=True
         )
+        school_choice = st.selectbox(
+            "School", SCHOOL_PRESETS, key="school_select",
+            help="Scopes your leaderboard to your own class/school — pick 'Other' to type your own."
+        )
+        if school_choice == "Other (type below)":
+            school_input = st.text_input("School Name", placeholder="e.g. Your University", key="school_input_field")
+        else:
+            school_input = school_choice
+        class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
+                                     max_chars=60, key="class_input_field")
         team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
                                     max_chars=30, key="team_input_field")
         if st.button("Register Team →", use_container_width=True):
-            if team_input.strip():
-                ss.team_name  = team_input.strip()
-                ss.registered = True
-                st.rerun()
-            else:
+            if not team_input.strip():
                 st.error("Please enter a team name.")
+            elif not school_input.strip():
+                st.error("Please enter a school name.")
+            elif not class_input.strip():
+                st.error("Please enter your class/section.")
+            else:
+                ss.team_name     = team_input.strip()
+                ss.school        = school_input.strip()
+                ss.class_section = class_input.strip()
+                ss.registered    = True
+                st.rerun()
     else:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
             f'<div style="font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
             f'<div style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</div>'
+            f'<div style="font-size:11px;color:#e0e2ea;margin-top:4px;">{ss.school} · {ss.class_section}</div>'
             f'</div>',
             unsafe_allow_html=True
         )
         if st.button("Change Team", use_container_width=True):
-            ss.registered = False
-            ss.team_name  = ""
+            ss.registered    = False
+            ss.team_name     = ""
+            ss.school        = ""
+            ss.class_section = ""
             st.rerun()
 
     st.divider()
@@ -120,7 +147,7 @@ with st.sidebar:
     # ── Network Selector ──────────────────────────────────────────────────────
     if ss.registered:
         st.markdown('<div class="section-title">Active Network</div>', unsafe_allow_html=True)
-        net_status = get_team_network_status(ss.team_name) if ss.registered else {}
+        net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section) if ss.registered else {}
 
         for net in NETWORK_ORDER:
             info     = NETWORK_INFO[net]
@@ -298,8 +325,8 @@ else:
     # ── Registered — show active network dashboard ─────────────────────────────
     net      = ss.active_network
     net_info = NETWORK_INFO[net]
-    attempts = get_attempt_count(ss.team_name, net)
-    status   = get_team_network_status(ss.team_name)
+    attempts = get_attempt_count(ss.team_name, net, ss.school, ss.class_section)
+    status   = get_team_network_status(ss.team_name, ss.school, ss.class_section)
     net_stat = status.get(net, {})
     passed   = net_stat.get("passed", False)
     can_sub  = attempts < MAX_ATTEMPTS and not passed

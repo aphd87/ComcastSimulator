@@ -29,6 +29,14 @@ SCORE_WEIGHTS = {
 
 NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
+# Curated list for the School selector at registration — "Other" reveals a
+# free-text field, so any school can use this without a code change; the
+# curated names just save typing/typos for the two known adopters, and
+# keep cross-school rollups (get_school_rollup) matching on a consistent
+# string instead of "Kellogg"/"kellogg"/"Northwestern Kellogg" all being
+# treated as different schools.
+SCHOOL_PRESETS = ["Northwestern Kellogg", "Indiana Kelley", "Other (type below)"]
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 def compute_score(
     ocf_margin: float,
@@ -94,80 +102,130 @@ def save_leaderboard(board: list[dict]) -> None:
     LEADERBOARD_FILE.write_text(json.dumps(board, indent=2))
 
 def record_attempt(team_name: str, network: str, attempt_num: int,
-                   score: float, passed: bool, details: dict) -> dict:
+                   score: float, passed: bool, details: dict,
+                   school: str = "", class_section: str = "") -> dict:
     """
     Record one attempt. First attempt is always official.
     FERPA note: team_name is a student-chosen pseudonym — no PII stored.
+    school/class_section are self-reported classroom context (e.g.
+    "Northwestern Kellogg" / "Fall 2026 — Media Strategy"), not tied to any
+    student identity — same FERPA posture as team_name itself, just enough
+    to scope leaderboards per class/school without an account system.
+
+    A team's real identity for gating/attempt-counting purposes is the
+    triple (school, class_section, team_name), not team_name alone — two
+    different classes (or schools) both having a "Team Alpha" must not
+    share attempt history. See get_team_attempts.
     """
     board = load_leaderboard()
 
     entry = {
-        "team_name":    team_name,
-        "network":      network,
-        "attempt":      attempt_num,
-        "score":        round(score, 1),
-        "passed":       passed,
-        "timestamp":    int(time.time()),
-        "is_official":  attempt_num == 1,   # first attempt locked as official
-        "details":      details,
+        "team_name":     team_name,
+        "school":        school,
+        "class_section": class_section,
+        "network":       network,
+        "attempt":       attempt_num,
+        "score":         round(score, 1),
+        "passed":        passed,
+        "timestamp":     int(time.time()),
+        "is_official":   attempt_num == 1,   # first attempt locked as official
+        "details":       details,
     }
     board.append(entry)
     save_leaderboard(board)
     return entry
 
-def get_team_attempts(team_name: str, network: str) -> list[dict]:
+def get_team_attempts(team_name: str, network: str, school: str = "", class_section: str = "") -> list[dict]:
     board = load_leaderboard()
-    return [e for e in board if e["team_name"] == team_name and e["network"] == network]
+    return [e for e in board if e["team_name"] == team_name and e["network"] == network
+            and e.get("school", "") == school and e.get("class_section", "") == class_section]
 
-def get_official_score(team_name: str, network: str) -> Optional[dict]:
+def get_official_score(team_name: str, network: str, school: str = "", class_section: str = "") -> Optional[dict]:
     """Returns the first (official) attempt for a team on a given network."""
-    attempts = get_team_attempts(team_name, network)
+    attempts = get_team_attempts(team_name, network, school, class_section)
     if not attempts: return None
     official = [a for a in attempts if a["is_official"]]
     return official[0] if official else attempts[0]
 
-def get_attempt_count(team_name: str, network: str) -> int:
-    return len(get_team_attempts(team_name, network))
+def get_attempt_count(team_name: str, network: str, school: str = "", class_section: str = "") -> int:
+    return len(get_team_attempts(team_name, network, school, class_section))
 
-def can_advance(team_name: str, current_network: str) -> bool:
+def can_advance(team_name: str, current_network: str, school: str = "", class_section: str = "") -> bool:
     """
     Can advance if:
     - Passed on any attempt, OR
     - Failed attempt 1 and completed at least one retry (attempt 2+)
     Students must repeat a level once before graduating — no free pass on first fail.
     """
-    attempts = get_team_attempts(team_name, current_network)
+    attempts = get_team_attempts(team_name, current_network, school, class_section)
     if not attempts: return False
     passed_any = any(a["passed"] for a in attempts)
     repeated   = len(attempts) >= 2   # must retry before advancing
     return passed_any or repeated
 
-def get_network_leaderboard(network: str) -> list[dict]:
+def get_network_leaderboard(network: str, school: Optional[str] = None,
+                             class_section: Optional[str] = None) -> list[dict]:
     """
-    Returns ranked leaderboard for a network using OFFICIAL (first attempt) scores.
-    Ties broken by timestamp (earlier = better).
+    Returns ranked leaderboard for a network using OFFICIAL (first attempt)
+    scores. Ties broken by timestamp (earlier = better).
+
+    school/class_section=None (the default) means unfiltered — every team
+    from every class/school, i.e. the cross-school view teams use to see
+    how they stack up against teams elsewhere. Pass a value to scope down
+    to one class (school + class_section) or one school (school only).
+    Ranking is always keyed on (school, class_section, team_name) so teams
+    with the same pseudonym in different classes never collide.
     """
     board = load_leaderboard()
     official = {}
     for entry in board:
         if entry["network"] != network or not entry["is_official"]:
             continue
-        team = entry["team_name"]
-        if team not in official or entry["timestamp"] < official[team]["timestamp"]:
-            official[team] = entry
+        if school is not None and entry.get("school", "") != school:
+            continue
+        if class_section is not None and entry.get("class_section", "") != class_section:
+            continue
+        key = (entry.get("school", ""), entry.get("class_section", ""), entry["team_name"])
+        if key not in official or entry["timestamp"] < official[key]["timestamp"]:
+            official[key] = entry
 
     ranked = sorted(official.values(), key=lambda x: (-x["score"], x["timestamp"]))
     for i, r in enumerate(ranked):
         r["rank"] = i + 1
     return ranked
 
-def get_team_network_status(team_name: str) -> dict:
+def get_school_rollup(network: str) -> list[dict]:
+    """Aggregate stats per school (across every class within it) for a
+    network — the school-vs-school comparison view. Only counts official
+    scores, same as get_network_leaderboard."""
+    board = get_network_leaderboard(network)   # unfiltered — every school/class
+    by_school: dict[str, list[dict]] = {}
+    for entry in board:
+        school = entry.get("school", "") or "(unspecified)"
+        by_school.setdefault(school, []).append(entry)
+
+    rollup = []
+    for school, entries in by_school.items():
+        scores = [e["score"] for e in entries]
+        rollup.append({
+            "school":      school,
+            "teams":       len(entries),
+            "avg_score":   round(sum(scores) / len(scores), 1),
+            "pass_rate":   round(sum(1 for e in entries if e["passed"]) / len(entries) * 100, 1),
+            "top_score":   round(max(scores), 1),
+        })
+    rollup.sort(key=lambda r: -r["avg_score"])
+    for i, r in enumerate(rollup):
+        r["rank"] = i + 1
+    return rollup
+
+def get_team_network_status(team_name: str, school: str = "", class_section: str = "") -> dict:
     """Returns which networks are unlocked and their status for a team."""
     status = {}
     prev_can_advance = True
     for i, net in enumerate(NETWORK_ORDER):
-        attempts = get_team_attempts(team_name, net)
-        official = get_official_score(team_name, net)
+        attempts = get_team_attempts(team_name, net, school, class_section)
+        official = get_official_score(team_name, net, school, class_section)
         locked   = not prev_can_advance and i > 0
         passed   = any(a["passed"] for a in attempts)
         used_all = len(attempts) >= MAX_ATTEMPTS
@@ -177,7 +235,7 @@ def get_team_network_status(team_name: str) -> dict:
             "official_score": official["score"] if official else None,
             "passed":       passed,
             "can_retry":    len(attempts) < MAX_ATTEMPTS and not passed,
-            "can_advance":  can_advance(team_name, net),
+            "can_advance":  can_advance(team_name, net, school, class_section),
         }
         prev_can_advance = status[net]["can_advance"]
     return status

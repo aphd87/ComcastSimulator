@@ -449,8 +449,8 @@ def _complete(ss):
         """, unsafe_allow_html=True)
 
     st.divider()
-    attempts = get_attempt_count(ss.team_name, MOVIE_NETWORK_KEY)
-    prev_official = get_official_score(ss.team_name, MOVIE_NETWORK_KEY)
+    attempts = get_attempt_count(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)
+    prev_official = get_official_score(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)
     already_passed = bool(prev_official and prev_official.get("passed", False))
     can_sub = attempts < MAX_ATTEMPTS and not already_passed
 
@@ -472,6 +472,7 @@ def _complete(ss):
                 entry = record_attempt(
                     team_name=ss.team_name, network=MOVIE_NETWORK_KEY,
                     attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
+                    school=ss.school, class_section=ss.class_section,
                 )
                 ss.movie_last_score = entry
                 ss.movie_submitted = True

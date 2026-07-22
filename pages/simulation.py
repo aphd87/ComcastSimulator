@@ -551,8 +551,8 @@ def _complete(ss, shows, net_info, year, team, net):
     mkt_eff     = (total_rev / total_mkt) if total_mkt > 0 else 0.0
     score_d     = compute_score_for_network(net, avg_margin, avg_roi, hhi, renewal_pct, mkt_eff)
 
-    attempts      = get_attempt_count(team, net)
-    prev_official = get_official_score(team, net)
+    attempts      = get_attempt_count(team, net, ss.school, ss.class_section)
+    prev_official = get_official_score(team, net, ss.school, ss.class_section)
     already_passed = prev_official and prev_official.get("passed", False)
     can_sub        = attempts < MAX_ATTEMPTS and not already_passed
 
@@ -685,6 +685,7 @@ def _complete(ss, shows, net_info, year, team, net):
                     score=score_d["total"],
                     passed=score_d["passed"],
                     details=score_d,
+                    school=ss.school, class_section=ss.class_section,
                 )
                 ss.last_score = entry
                 ss.submitted  = True
@@ -712,7 +713,7 @@ def _complete(ss, shows, net_info, year, team, net):
             if net != "peacock":
                 next_net = NETWORK_ORDER[NETWORK_ORDER.index(net) + 1]
                 next_info = NETWORK_INFO[next_net]
-                if e["passed"] or can_advance(team, net):
+                if e["passed"] or can_advance(team, net, ss.school, ss.class_section):
                     if st.button(f"→ Advance to {next_info['display_name']}",
                                  use_container_width=True):
                         ss.active_network  = next_net
