@@ -4,6 +4,27 @@ A Streamlit business simulation for teaching cable/streaming portfolio economics
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## Status as of 2026-07-22 end of session — read this first
+
+**Live app**: https://comcastsimulator-f3riawhvhbihgap5qh2yzm.streamlit.app/ (Streamlit Community Cloud, auto-redeploys on every push to `main`). **Status unconfirmed** — it threw an `ImportError` on first deploy, a fix went out in the last commit of the day (`31109dd`), but nobody has checked whether the redeploy actually fixed it. **Do that check first, next session.**
+
+**What happened today, roughly in order:**
+1. Recovered CableOS's original design brief from an untracked file in a stale duplicate clone, formalized into this doc with JTBD for both student and instructor.
+2. Designed and built the entire **Day 2 module** ("Universal Pictures" — movie/theatrical economics: NPV/IRR under variance, release-strategy tradeoffs, award season) — financial engine, turn-based UI, and tests. Caught and fixed a real calibration bug (unrealistic NPV, broken IRR) before shipping, and a real Streamlit deprecation (`components.v1.html` → `st.iframe`).
+3. Set up Tailwind CSS (Play CDN, since there's no build pipeline here).
+4. Diagnosed (not worked around) a genuine Streamlit AppTest testing-harness limitation — see `tests/test_movies_page.py`'s docstring.
+5. **Consolidated the sidebar** per user feedback ("too many options for a simulation") — cut two dead sliders and a stale checklist, removed the Year control.
+6. **Fixed a real crash** (`AttributeError: st.iframe`) the user hit running it locally — root cause was two Streamlit versions on their machine at different paths; fixed with a runtime capability check instead of assuming one version.
+7. Fixed a theme mismatch (`.streamlit/config.toml` was light while the whole app is dark) and removed a stray duplicate config file.
+8. **Built multi-school/multi-class leaderboard scoping** — a team's real identity is now `(school, class_section, team_name)`, not just a name, so two schools both having "Team Alpha" can't collide. Added a scope selector (My Class/My School/All Schools) and a school-vs-school comparison view. Added a 👑 crown icon for #1.
+9. User **deployed the app live** to Streamlit Community Cloud (see URL above) and hit an `ImportError`.
+10. Diagnosed as a likely Python-version mismatch — `utils/game_state.py`, `utils/models.py`, and `utils/charts.py` used modern `list[...]`/`dict[...]` type-hint syntax (needs Python 3.9+) without the `from __future__ import annotations` safety net, and had only ever been tested against a newer local Python than Cloud might be running. Fixed all three (commit `31109dd`) — **but this diagnosis was made from a redacted error message, not the real traceback, so it's a best-evidence guess, not a confirmed root cause.**
+
+**Next session, in order:**
+1. Check the live URL above. If it works, move on. If not, get the *full* (non-redacted) log from the app's "Manage app" panel — that's the one piece of information this session never had access to.
+2. Once deployment is confirmed working: a real human click-through of Day 2's full flow (Greenlight → Release → Results ×3 → Complete → Submit) — still nobody has done this, in a browser or otherwise, all session (Claude in Chrome never connected). Also confirm Tailwind actually renders.
+3. See "Working list — next up" below for smaller remaining items (award-season variance dimension follow-ups, etc.) — mostly already closed out.
+
 ## Premise
 
 It's 2012. Linear TV's growth era is ending — subscribers are cutting the cord, Netflix is spending aggressively, and every network still runs its own siloed P&L. The student is the General Manager of a network, responsible for the show slate, the budget, and Operating Cash Flow (OCF) — with the long game being survival into the streaming transition.
@@ -191,11 +212,11 @@ Theme extended (`tailwind.config`) to match the existing hand-rolled palette in 
 
 `risk_adjusted_npv`/`capital_efficiency`/`strategic_fit_score`/`compute_movie_score` all thread an optional `critical_score` through — the **final slate score now reflects the actually-resolved reception**, not just the hypothetical bear/base box-office scenarios it already accounted for. This closes a real gap that would otherwise have existed: the Results screen would have shown the awards bump, but the Complete-phase score would have silently dropped it since it reconstructs `MovieProject` objects from scratch rather than reusing the resolved outcome. Caught before shipping, not after. 7 new tests (`TestAwardSeason`) cover: action never gets the bump, drama below/above threshold, no-critical-score means no bump and unscaled longtail, acclaimed vs. panned longtail direction, draw reproducibility/independence from the box-office seed, and that final scoring only ever helps (never hurts) relative to being scored blind.
 
-**Final state**: 35 tests passing (28 on `utils/movie_models.py`, 4 AppTest-based on `pages/movies.py`'s Greenlight phase — see the AppTest limitation above for why not more), full app import-checks cleanly, local server starts with no traceback.
+**Final state, end of day 2026-07-22**: 46 tests passing (35 on Day 2's financial engine/page, 11 on multi-school leaderboard scoping — see "Multi-school / multi-class leaderboard" below), full app import-checks cleanly against the actual Anaconda runtime (not just whatever Python a fresh shell happens to resolve to — see "Status as of" at the top of this doc for why that distinction mattered), local server starts with no traceback, app is live-deployed (status unconfirmed, see top of doc).
 
-**Still genuinely open:**
-1. The actual interactive click-through (Release → Results → Complete → Submit) is still only verified by direct unit tests on the underlying functions plus a manual code read — not by driving the real Streamlit widgets, for the AppTest reason documented above. **A human browser pass is the one thing nobody has done across this entire multi-session build** — please do this before trusting Day 2 in front of students.
-2. Tailwind's actual rendering is still unconfirmed for the same reason (no browser access this whole effort).
+**Still genuinely open** (see "Status as of 2026-07-22" at the top for the full, current list — this one is superseded):
+1. ~~The actual interactive click-through~~ — still true, still nobody's done it, tracked at the top of this doc now alongside the deployment check.
+2. ~~Tailwind's actual rendering is unconfirmed~~ — same, tracked at the top now.
 
 ## Multi-school / multi-class leaderboard — added 2026-07-22
 
