@@ -43,11 +43,11 @@ def render():
     # Student inputs
     with st.expander("🎛️ Configure Premiere Day Scenario", expanded=True):
         c1,c2,c3,c4 = st.columns(4)
-        pd_show_name = c1.selectbox("Show", [s.name for s in shows[:10]])
+        pd_show_name = c1.selectbox("Show", [s.name for s in shows[:10]], key="sched_show")
         pd_launch    = c2.radio("Launch Day", [1, 15, 30], horizontal=True,
-                                help="Day of month the show premieres")
-        pd_eps       = c3.number_input("Episode Count", 6, 24, 10)
-        pd_cost_k    = c4.number_input("Cost/Episode ($K)", 100, 3000, 750, step=50)
+                                help="Day of month the show premieres", key="sched_launch_day")
+        pd_eps       = c3.number_input("Episode Count", 6, 24, 10, key="sched_eps")
+        pd_cost_k    = c4.number_input("Cost/Episode ($K)", 100, 3000, 750, step=50, key="sched_cost_k")
 
     total_season_cost = pd_eps * pd_cost_k / 1000     # $M
     monthly_amort     = total_season_cost / 12         # $M per month

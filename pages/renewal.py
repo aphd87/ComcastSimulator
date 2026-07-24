@@ -200,28 +200,95 @@ def render():
 
     decisions_df = pd.DataFrame(rows)
 
-    # Inline decision editor
-    with st.expander("🎛️ Override Renewal Decisions", expanded=True):
-        st.markdown('<span style="font-size:11px;color:#e0e2ea;">Change any show\'s decision. The budget impact recalculates live below.</span>', unsafe_allow_html=True)
+    # ── Show slate — click-to-decide cards ────────────────────────────────────
+    # Replaces the old column-of-selectboxes table (2026-07-24, per user
+    # feedback: "click each show, make a decision, see a schedule populate").
+    # Each card carries its Renew/Watch/Cancel decision (same
+    # ss.renewal_decisions mechanism as before) plus a premiere-month
+    # control that writes directly to the Show object's air_month — these
+    # are the same objects living in ss.oxygen_shows/etc., so the change
+    # persists and immediately feeds the live schedule below and the real
+    # amortization-timing math everywhere else in the app.
+    st.markdown('<div class="section-title">Your Slate — Decide & Schedule Each Show</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+        'For each show: Renew, Watch, or Cancel, and confirm which month it premieres. '
+        'The schedule below updates live as you set premiere months.</div>',
+        unsafe_allow_html=True)
 
-        nc = 4
-        chunks = [rows[i:i+nc] for i in range(0,len(rows),nc)]
-        for chunk in chunks:
-            cols = st.columns(nc)
-            for col, r in zip(cols, chunk):
-                with col:
+    show_by_id = {s.id: s for s in shows}
+    nc = 3
+    chunks = [rows[i:i+nc] for i in range(0, len(rows), nc)]
+    for chunk in chunks:
+        cols = st.columns(nc)
+        for col, r in zip(cols, chunk):
+            with col:
+                with st.container(border=True):
+                    s     = show_by_id[r["_id"]]
+                    ocf_c = SUCCESS if r["Proj OCF"] >= 0 else DANGER
+                    st.markdown(f"""
+                    <div style="font-size:13px;font-weight:600;color:#e8eaf0;">{r['Show']}</div>
+                    <div style="display:flex;gap:6px;margin:4px 0;">
+                      <span class="badge badge-gray">{r['Genre']}</span>
+                      <span class="badge badge-gray">{r['Network']}</span>
+                    </div>
+                    <div style="font-size:11px;color:#b0b5c4;font-family:DM Mono,monospace;">
+                      Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
+                    </div>
+                    <div style="font-size:12px;font-family:DM Mono,monospace;color:{ocf_c};margin:4px 0 8px;">
+                      Proj OCF ${r['Proj OCF']:+.1f}M · Auto: {r['Auto'].split()[1]}
+                    </div>
+                    """, unsafe_allow_html=True)
+
                     current = ss.renewal_decisions.get(r["_id"], "Renew")
-                    choice  = st.selectbox(
-                        f"{r['Show'][:18]}",
-                        ["Renew","Watch","Cancel"],
-                        index=["Renew","Watch","Cancel"].index(current),
-                        key=f"ren_{r['_id']}",
-                        help=f"Auto: {r['Auto']} · ROI: {r['ROI Next']:.1f}% · IP: {r['IP Score']}"
+                    choice = st.selectbox(
+                        "Decision", ["Renew", "Watch", "Cancel"],
+                        index=["Renew", "Watch", "Cancel"].index(current),
+                        key=f"ren_{r['_id']}", label_visibility="collapsed",
                     )
                     ss.renewal_decisions[r["_id"]] = choice
-                    color = "#81c784" if choice=="Renew" else ("#ffb74d" if choice=="Watch" else "#ef9a9a")
-                    st.markdown(f'<div style="font-size:10px;font-family:DM Mono,monospace;color:{color};">'
-                                f'OCF: ${r["Proj OCF"]:+.1f}M · IP: {r["IP Score"]}</div>', unsafe_allow_html=True)
+
+                    if choice != "Cancel":
+                        new_month = st.number_input(
+                            "Premiere month", 1, 12, value=s.air_month,
+                            key=f"premiere_{r['_id']}", label_visibility="collapsed",
+                            help="Premiere month — affects the amortization cash trough (see Scheduling).",
+                        )
+                        if new_month != s.air_month:
+                            s.air_month = new_month
+
+    # ── Live mini-schedule ────────────────────────────────────────────────────
+    st.markdown('<div class="section-title" style="margin-top:14px;">This Year\'s Schedule</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+        'Which shows premiere each month, updating live as you set premiere months above. '
+        'Months stacked with several premieres pile up amortization cost — spread them out if '
+        'your cash cows can\'t cover the gap.</div>',
+        unsafe_allow_html=True)
+
+    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    active_this_year = [show_by_id[r["_id"]] for r in rows
+                         if ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
+    month_map = {m: [] for m in range(1, 13)}
+    for s in active_this_year:
+        month_map[s.air_month].append(s.name)
+
+    sched_cols = st.columns(12)
+    for i, col in enumerate(sched_cols):
+        m = i + 1
+        names = month_map[m]
+        count = len(names)
+        bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
+        title_attr = ", ".join(names) if names else "No premieres"
+        col.markdown(f"""
+        <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
+             padding:6px 2px;text-align:center;min-height:56px;">
+          <div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
+          <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.caption("Number = shows premiering that month. Hover a column for names.")
 
     # ── Budget Impact ─────────────────────────────────────────────────────────
     st.divider()

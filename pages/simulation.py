@@ -144,6 +144,8 @@ def _init(ss, net_info):
         ss.sim_phase = "decisions"
     if not ss.get("level_budget"):
         ss.level_budget = float(net_info["budget_base"])
+    if not ss.get("decision_step"):
+        ss.decision_step = 1
 
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
@@ -220,146 +222,194 @@ def render():
 
 # ── Decisions phase ────────────────────────────────────────────────────────────
 
+STEP_LABELS = {1: "💰 Financing", 2: "🔄 Renewal", 3: "🎬 Greenlighting", 4: "📅 Scheduling"}
+
+
+def _last_year_recap(prev: dict, threshold: float):
+    """Pinned strip at the top of Decisions showing last year's actuals —
+    otherwise invisible the moment a student advances past Results. Added
+    2026-07-24 per user feedback: students need this as reference while
+    making this year's calls, not just a one-time glance in Results."""
+    ocf_c    = SUCCESS if prev["ocf"] >= 0 else DANGER
+    margin_c = SUCCESS if prev["margin"] >= threshold else (WARN if prev["ocf"] >= 0 else DANGER)
+    st.markdown(f"""
+    <div style="background:#12141a;border:1px solid #252836;border-radius:8px;
+         padding:10px 18px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+        <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
+             text-transform:uppercase;letter-spacing:.08em;">{prev['label']} — Last Year's Actuals</div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#e0e2ea;">Revenue <b style="font-family:DM Mono,monospace;color:#e8eaf0;">${prev['revenue']:.1f}M</b></span>
+          <span style="font-size:11px;color:#e0e2ea;">Cost <b style="font-family:DM Mono,monospace;color:{WARN};">${prev['cost']:.1f}M</b></span>
+          <span style="font-size:11px;color:#e0e2ea;">OCF <b style="font-family:DM Mono,monospace;color:{ocf_c};">${prev['ocf']:+.1f}M</b></span>
+          <span style="font-size:11px;color:#e0e2ea;">Margin <b style="font-family:DM Mono,monospace;color:{margin_c};">{prev['margin']:.1f}%</b></span>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def _step_bar(step: int):
+    """Explicit numbered step tracker replacing free-form tabs — the
+    sequence (Financing → Renewal → Greenlighting → Scheduling) wasn't
+    legible as a guided flow before. Added 2026-07-24 per user feedback."""
+    items = []
+    for i in range(1, 5):
+        if i < step:
+            bg, txt, clr = "#66bb6a", "✓", "#0b0c10"
+        elif i == step:
+            bg, txt, clr = "#e8c547", str(i), "#0b0c10"
+        else:
+            bg, txt, clr = "#252836", str(i), "#b0b5c4"
+        label_c = "#e8eaf0" if i == step else "#b0b5c4"
+        items.append(f'''
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
+          <div style="width:30px;height:30px;border-radius:50%;background:{bg};display:flex;
+               align-items:center;justify-content:center;font-family:DM Mono,monospace;
+               font-size:12px;font-weight:700;color:{clr};">{txt}</div>
+          <div style="font-size:10px;color:{label_c};font-family:DM Mono,monospace;text-align:center;">
+            {STEP_LABELS[i]}
+          </div>
+        </div>
+        ''')
+    connector = '<div style="flex:0.3;height:2px;background:#252836;margin-bottom:16px;"></div>'
+    st.markdown(f'<div style="display:flex;align-items:flex-start;margin-bottom:16px;">'
+                f'{connector.join(items)}</div>', unsafe_allow_html=True)
+
+
+def _step_financing(ss, shows, year, net_info, level_budget):
+    st.markdown('<div class="section-title">💰 Financing</div>', unsafe_allow_html=True)
+
+    # Budget is performance-linked as of 2026-07-24 (Zach Schlessel
+    # feedback: good year = more budget, poor year = a cut), not a flat
+    # 3%/yr — see performance_linked_growth() in utils/models.py.
+    if year > 1:
+        st.markdown(
+            f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:6px;">'
+            f'This year\'s budget (<b style="color:#e8eaf0;">${level_budget:.1f}M</b>) reflects how '
+            f'Year {year-1} went — clear the {net_info["pass_threshold"]:.0f}% margin target and next '
+            f'year\'s budget grows faster; miss it and it shrinks.</div>',
+            unsafe_allow_html=True)
+
+    # Revenue streams — where the money actually comes from, shown before
+    # the marketing-spend decision so students see ad vs. distribution
+    # (subscriber) revenue rather than just a budget number.
+    ann_ad_rev   = portfolio_ad_rev(shows, year, ss.get("mkt_budget", 5.0))
+    ann_dist_rev = distribution_revenue(year)
+    ann_total    = ann_ad_rev + ann_dist_rev
+    ad_pct   = (ann_ad_rev / ann_total * 100) if ann_total else 0
+    dist_pct = 100 - ad_pct if ann_total else 0
+
+    st.markdown(
+        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+        'Two revenue streams fund everything below: <b style="color:#e8eaf0;">ad revenue</b> '
+        '(rating × marketing lift, eroding as cord-cutting continues) and '
+        '<b style="color:#e8eaf0;">distribution revenue</b> (affiliate fees × subscriber count, '
+        'also eroding but with an escalation clause). At current ratings/marketing:</div>',
+        unsafe_allow_html=True)
+
+    rcol1, rcol2, rcol3 = st.columns(3)
+    rcol1.metric("📺 Ad Revenue", f"${ann_ad_rev:.1f}M", f"{ad_pct:.0f}% of revenue")
+    rcol2.metric("📡 Distribution", f"${ann_dist_rev:.1f}M", f"{dist_pct:.0f}% of revenue")
+    rcol3.metric("Total Revenue", f"${ann_total:.1f}M")
+
+    # ── Linear vs. Streaming economics ──────────────────────────────────────
+    active_for_cmp = _active_shows(shows, ss.cancelled_shows)
+    if active_for_cmp:
+        avg_rating   = sum(s.rating for s in active_for_cmp) / len(active_for_cmp)
+        avg_eps      = round(sum(s.episodes for s in active_for_cmp) / len(active_for_cmp))
+        avg_ep_cost  = sum(s.ep_cost_k for s in active_for_cmp) / len(active_for_cmp)
+        per_show_mkt = ss.get("mkt_budget", 5.0) / len(active_for_cmp)
+
+        st.markdown('<div class="section-title" style="margin-top:14px;">Linear vs. Streaming — Your Average Show</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+            'Same math as the Greenlighting tab\'s linear-vs-SVOD builder, run on your own '
+            'portfolio\'s average show instead of a new pitch. Linear wins on immediate cash '
+            'early on; SVOD subscriber LTV catches up over time.</div>',
+            unsafe_allow_html=True)
+
+        checkpoints = sorted(set(y for y in (year, year + 3, year + 6) if y >= 1))
+        lin_vals, svod_vals = [], []
+        for yr in checkpoints:
+            lin  = greenlight_linear(avg_eps, avg_ep_cost, avg_rating, per_show_mkt, yr)
+            svod = greenlight_svod(avg_eps, avg_ep_cost, avg_rating, 65, per_show_mkt, yr)
+            lin_vals.append(round(lin["ocf"], 2))
+            svod_vals.append(round(svod["ocf"], 2))
+
+        fig_ls = go.Figure()
+        fig_ls.add_trace(go.Bar(name="📺 Linear OCF", x=[f"Year {y}" for y in checkpoints],
+                                 y=lin_vals, marker_color=ACCENT, opacity=0.85))
+        fig_ls.add_trace(go.Bar(name="📱 SVOD OCF", x=[f"Year {y}" for y in checkpoints],
+                                 y=svod_vals, marker_color=ACCENT2, opacity=0.85))
+        fig_ls.update_layout(**base_layout("Average Show OCF: Linear vs. SVOD ($M)", height=240), barmode="group")
+        st.plotly_chart(fig_ls, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Genre appeal fixed at 65/100 (moderate streaming conversion) for this comparison — the Greenlighting tab lets you tune it per concept.")
+
+    st.divider()
+
+    # ── Marketing spend ───────────────────────────────────────────────────
+    st.markdown('<div class="section-title">Decision — Marketing Spend</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+        'Higher spend lifts ratings and ad revenue. Each $1M ≈ +1.5% ad rev lift. '
+        'Diminishing returns above $16M.</div>', unsafe_allow_html=True)
+
+    # key="mkt_budget" binds this widget directly to ss.mkt_budget — reads
+    # its current value as the default and writes back on every change, so
+    # every other step (and the pinned P&L preview) always sees the live
+    # figure instead of a value only synced at End Year (a real staleness
+    # bug the old per-year-keyed slider had, fixed incidentally here).
+    st.slider("Marketing ($M this year)", 0.0, 24.0, step=0.5, key="mkt_budget")
+
+    if ss.cancelled_shows:
+        already = [s.name for s in shows if s.id in ss.cancelled_shows]
+        st.markdown(
+            f'<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-top:6px;">'
+            f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
+
+
 def _decisions(ss, shows, net_info, year):
-    threshold = net_info["pass_threshold"]
+    threshold    = net_info["pass_threshold"]
+    level_budget = ss.level_budget
+
+    prev = next((r for r in ss.yearly_log if r["year"] == year - 1), None) if year > 1 else None
+    if prev:
+        _last_year_recap(prev, threshold)
+
+    if not ss.get("decision_step"):
+        ss.decision_step = 1
+    step = ss.decision_step
+    _step_bar(step)
+
+    # Persisted regardless of which step is currently shown, so the pinned
+    # P&L preview and End Year button always reflect the latest decisions.
+    mkt = ss.get("mkt_budget", 5.0)
+    active_now = _active_shows(shows, ss.cancelled_shows)
+    new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
 
     left, right = st.columns([3, 2])
 
     with left:
-        # ── Financing ────────────────────────────────────────────────────────
-        st.markdown('<div class="section-title">💰 Financing</div>', unsafe_allow_html=True)
-
-        # Budget is performance-linked as of 2026-07-24 (Zach Schlessel
-        # feedback: good year = more budget, poor year = a cut), not a flat
-        # 3%/yr — see performance_linked_growth() in utils/models.py. Shown
-        # here as real context (not just informational), since it's what
-        # actually caps this year's spend below.
-        level_budget = ss.level_budget
-        if year > 1:
-            st.markdown(
-                f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:6px;">'
-                f'This year\'s budget (<b style="color:#e8eaf0;">${level_budget:.1f}M</b>) reflects how '
-                f'Year {year-1} went — clear the {net_info["pass_threshold"]:.0f}% margin target and next '
-                f'year\'s budget grows faster; miss it and it shrinks.</div>',
-                unsafe_allow_html=True)
-
-        # Revenue streams — where the money actually comes from, shown before
-        # the marketing-spend decision so students see ad vs. distribution
-        # (subscriber) revenue rather than just a budget number.
-        ann_ad_rev  = portfolio_ad_rev(shows, year, ss.get("mkt_budget", 5.0))
-        ann_dist_rev = distribution_revenue(year)
-        ann_total    = ann_ad_rev + ann_dist_rev
-        ad_pct   = (ann_ad_rev / ann_total * 100) if ann_total else 0
-        dist_pct = 100 - ad_pct if ann_total else 0
-
-        st.markdown(
-            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
-            'Two revenue streams fund everything below: <b style="color:#e8eaf0;">ad revenue</b> '
-            '(rating × marketing lift, eroding as cord-cutting continues) and '
-            '<b style="color:#e8eaf0;">distribution revenue</b> (affiliate fees × subscriber count, '
-            'also eroding but with an escalation clause). At current ratings/marketing:</div>',
-            unsafe_allow_html=True)
-
-        rcol1, rcol2, rcol3 = st.columns(3)
-        rcol1.metric("📺 Ad Revenue", f"${ann_ad_rev:.1f}M", f"{ad_pct:.0f}% of revenue")
-        rcol2.metric("📡 Distribution", f"${ann_dist_rev:.1f}M", f"{dist_pct:.0f}% of revenue")
-        rcol3.metric("Total Revenue", f"${ann_total:.1f}M")
-
-        # ── Linear vs. Streaming economics ──────────────────────────────────────
-        # Uses the current portfolio's own average show economics (not a
-        # hypothetical concept) run through the same greenlight_linear/
-        # greenlight_svod formulas pages/greenlight.py already uses for a
-        # single new-show pitch — here showing what your existing average
-        # show would earn on each platform, and how that crosses over time.
-        # Answers Zach Schlessel's "linear has higher CPM / Peacock has
-        # lower sub acquisition but originals drive usage" framing with real
-        # numbers from this team's own slate, not a generic hypothetical.
-        active_for_cmp = _active_shows(shows, ss.cancelled_shows)
-        if active_for_cmp:
-            avg_rating  = sum(s.rating for s in active_for_cmp) / len(active_for_cmp)
-            avg_eps     = round(sum(s.episodes for s in active_for_cmp) / len(active_for_cmp))
-            avg_ep_cost = sum(s.ep_cost_k for s in active_for_cmp) / len(active_for_cmp)
-            per_show_mkt = ss.get("mkt_budget", 5.0) / len(active_for_cmp)
-
-            st.markdown('<div class="section-title" style="margin-top:14px;">Linear vs. Streaming — Your Average Show</div>',
-                        unsafe_allow_html=True)
-            st.markdown(
-                '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
-                'Same math as the Greenlighting tab\'s linear-vs-SVOD builder, run on your own '
-                'portfolio\'s average show instead of a new pitch. Linear wins on immediate cash '
-                'early on; SVOD subscriber LTV catches up over time.</div>',
-                unsafe_allow_html=True)
-
-            checkpoints = sorted(set(y for y in (year, year + 3, year + 6) if y >= 1))
-            lin_vals, svod_vals = [], []
-            for yr in checkpoints:
-                lin  = greenlight_linear(avg_eps, avg_ep_cost, avg_rating, per_show_mkt, yr)
-                svod = greenlight_svod(avg_eps, avg_ep_cost, avg_rating, 65, per_show_mkt, yr)
-                lin_vals.append(round(lin["ocf"], 2))
-                svod_vals.append(round(svod["ocf"], 2))
-
-            fig_ls = go.Figure()
-            fig_ls.add_trace(go.Bar(name="📺 Linear OCF", x=[f"Year {y}" for y in checkpoints],
-                                     y=lin_vals, marker_color=ACCENT, opacity=0.85))
-            fig_ls.add_trace(go.Bar(name="📱 SVOD OCF", x=[f"Year {y}" for y in checkpoints],
-                                     y=svod_vals, marker_color=ACCENT2, opacity=0.85))
-            fig_ls.update_layout(**base_layout("Average Show OCF: Linear vs. SVOD ($M)", height=240), barmode="group")
-            st.plotly_chart(fig_ls, use_container_width=True, config={"displayModeBar": False})
-            st.caption("Genre appeal fixed at 65/100 (moderate streaming conversion) for this comparison — the Greenlighting tab lets you tune it per concept.")
-
-        st.divider()
-
-        # ── Marketing spend ───────────────────────────────────────────────────
-        st.markdown('<div class="section-title">Decision — Marketing Spend</div>',
-                    unsafe_allow_html=True)
-        st.markdown(
-            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
-            'Higher spend lifts ratings and ad revenue. Each $1M ≈ +1.5% ad rev lift. '
-            'Diminishing returns above $16M.</div>', unsafe_allow_html=True)
-
-        default_mkt = ss.get("mkt_budget", 5.0)
-        mkt = st.slider("Marketing ($M this year)", 0.0, 24.0,
-                         float(round(default_mkt, 2)), step=0.5, key=f"dec_mkt_{year}")
-
-        if ss.cancelled_shows:
-            already = [s.name for s in shows if s.id in ss.cancelled_shows]
-            st.markdown(
-                f'<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-top:6px;">'
-                f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
-
-        st.divider()
-
-        # ── Renewal, Greenlighting, Scheduling ──────────────────────────────────
-        # These tools were fully built but never wired into the app — the
-        # engine only ever exposed Financing. Same math, no rewrite, just
-        # given a home. Tabs rather than expanders: renewal.py and
-        # schedule.py each already open their own internal st.expander, and
-        # Streamlit disallows nesting an expander inside another expander.
-        #
-        # Renewal is the real cancellation mechanism now (2026-07-24) — its
-        # Renew/Watch/Cancel choices, written into ss.renewal_decisions by
-        # its own selectbox widgets, are read below to build new_cancel.
-        # There's no separate quick-cancel control here anymore; annual
-        # turns make Renewal the natural single place that decision lives.
-        from pages.renewal    import render as render_renewal
-        from pages.greenlight import render as render_greenlight
-        from pages.schedule   import render as render_schedule
-
-        section_tabs = st.tabs([
-            "🔄 Renewal — Renew / Watch / Cancel",
-            "🎬 Greenlighting — New Show Concept",
-            "📅 Scheduling — Amortization & Timing",
-        ])
-        with section_tabs[0]:
+        if step == 1:
+            _step_financing(ss, shows, year, net_info, level_budget)
+            mkt = ss.get("mkt_budget", 5.0)
+        elif step == 2:
+            # Renewal is the real cancellation mechanism (2026-07-24) — its
+            # Renew/Watch/Cancel choices, written into ss.renewal_decisions
+            # by its own show-card widgets, are read above/below to build
+            # new_cancel.
+            from pages.renewal import render as render_renewal
             render_renewal()
-        with section_tabs[1]:
+            new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
+        elif step == 3:
+            from pages.greenlight import render as render_greenlight
             render_greenlight()
-        with section_tabs[2]:
+        else:
+            from pages.schedule import render as render_schedule
             render_schedule()
-
-        active_now = _active_shows(shows, ss.cancelled_shows)
-        new_cancel = {s.id for s in active_now
-                      if ss.renewal_decisions.get(s.id) == "Cancel"}
 
     with right:
         # ── Live P&L preview ──────────────────────────────────────────────────
@@ -465,22 +515,33 @@ def _decisions(ss, shows, net_info, year):
 
     st.divider()
 
-    # ── End year button ───────────────────────────────────────────────────────
-    btn_col, _ = st.columns([1, 2])
-    with btn_col:
-        if st.button(f"▶  End Year {year}  →  See Results",
-                     type="primary", use_container_width=True):
-            result           = _compute_year(ss, shows, year, mkt, new_cancel)
-            result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
-            ss.yearly_log.append(result)
-            ss.cancelled_shows = ss.cancelled_shows | new_cancel
-            ss.mkt_budget      = mkt     # sync to sidebar/other pages' ss.get("mkt_budget")
-            # Next year's budget is performance-linked, not a flat 3%/yr —
-            # computed from THIS year's actual result, so it's only known
-            # once results are in, same as a real budget review would be.
-            ss.level_budget    = level_budget * performance_linked_growth(result["margin"], threshold)
-            ss.sim_phase       = "results"
-            st.rerun()
+    # ── Step navigation ────────────────────────────────────────────────────────
+    nav_back, nav_next = st.columns([1, 1])
+    with nav_back:
+        if step > 1:
+            if st.button(f"← Back: {STEP_LABELS[step-1]}", use_container_width=True):
+                ss.decision_step = step - 1
+                st.rerun()
+    with nav_next:
+        if step < 4:
+            if st.button(f"Next: {STEP_LABELS[step+1]} →", type="primary", use_container_width=True):
+                ss.decision_step = step + 1
+                st.rerun()
+        else:
+            if st.button(f"▶  End Year {year}  →  See Results",
+                         type="primary", use_container_width=True):
+                result           = _compute_year(ss, shows, year, mkt, new_cancel)
+                result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
+                ss.yearly_log.append(result)
+                ss.cancelled_shows = ss.cancelled_shows | new_cancel
+                ss.mkt_budget      = mkt     # sync to sidebar/other pages' ss.get("mkt_budget")
+                # Next year's budget is performance-linked, not a flat 3%/yr —
+                # computed from THIS year's actual result, so it's only known
+                # once results are in, same as a real budget review would be.
+                ss.level_budget    = level_budget * performance_linked_growth(result["margin"], threshold)
+                ss.decision_step   = 1   # reset the wizard for next year
+                ss.sim_phase       = "results"
+                st.rerun()
 
 
 # ── Results phase ──────────────────────────────────────────────────────────────
@@ -620,12 +681,14 @@ def _results(ss, shows, net_info, year, team, net):
             # before that update projected next year's figure.
             ss.level_budget    = result["budget"]
             ss.sim_phase       = "decisions"
+            ss.decision_step   = 1
             st.rerun()
     with nav2:
         if year < YEARS_PER_LEVEL:
             if st.button(f"→ Start Year {year + 1}", type="primary", use_container_width=True):
-                ss.year      = year + 1
-                ss.sim_phase = "decisions"
+                ss.year          = year + 1
+                ss.sim_phase     = "decisions"
+                ss.decision_step = 1
                 st.rerun()
         else:
             if st.button("→ View Final Results & Submit Score",
@@ -887,6 +950,7 @@ def _complete(ss, shows, net_info, team, net):
                         ss.research_revealed = {}
                         ss.year              = 1
                         ss.level_budget      = None   # re-derived from next_net's budget_base
+                        ss.decision_step     = 1
                         st.rerun()
 
     with restart_col:
@@ -900,4 +964,5 @@ def _complete(ss, shows, net_info, team, net):
             ss.last_score        = None
             ss.year              = 1
             ss.level_budget      = None   # re-derived from net_info's budget_base
+            ss.decision_step     = 1
             st.rerun()

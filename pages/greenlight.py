@@ -36,24 +36,24 @@ def render():
     with st.container():
         c1,c2,c3 = st.columns(3)
         with c1:
-            show_name = st.text_input("Show Name / Concept", "My New Show")
-            genre     = st.selectbox("Genre", ["Reality","Competition","Talk","Scripted","True Crime","Drama"])
-            eps       = st.number_input("Episode Count", 4, 24, 10, step=1)
+            show_name = st.text_input("Show Name / Concept", "My New Show", key="gl_show_name")
+            genre     = st.selectbox("Genre", ["Reality","Competition","Talk","Scripted","True Crime","Drama"], key="gl_genre")
+            eps       = st.number_input("Episode Count", 4, 24, 10, step=1, key="gl_eps")
         with c2:
             ep_cost   = st.number_input("Cost per Episode ($K)", 100, 5000, 750, step=50,
-                                         help="Bravo reality ~$650-900K. Scripted ~$1-2M.")
+                                         help="Bravo reality ~$650-900K. Scripted ~$1-2M.", key="gl_ep_cost")
             rating    = st.slider("Projected Rating (18-49)", 0.3, 4.0, 1.2, step=0.1,
-                                   help="Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+")
+                                   help="Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+", key="gl_rating")
             mkt_spend = st.slider("Marketing Budget ($M)", 0.0, 10.0, 2.0, step=0.5,
-                                   help="Each $1M adds ~1.5% rating lift on linear; also lifts SVOD sub acquisition.")
+                                   help="Each $1M adds ~1.5% rating lift on linear; also lifts SVOD sub acquisition.", key="gl_mkt_spend")
         with c3:
             appeal    = st.slider("Genre Appeal Score (SVOD)", 20, 100, 72, step=1,
                                    help="How well does this genre convert to streaming subscriptions? "
-                                        "True Crime: 85. Scripted drama: 90. Reality: 60.")
+                                        "True Crime: 85. Scripted drama: 90. Reality: 60.", key="gl_appeal")
             air_month = st.slider("Premiere Month", 1, 12, 3, step=1,
-                                   format="%d", help="Affects amortization cash trough (see Schedule tab).")
+                                   format="%d", help="Affects amortization cash trough (see Schedule tab).", key="gl_air_month")
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
-                                         help="Price premium vs. baseline. Higher = more LTV per acquired sub.")
+                                         help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
 
     # ── Title / IP legal-risk check ─────────────────────────────────────────────
     title_collision = show_name.strip().lower() in _PROTECTED_TITLES

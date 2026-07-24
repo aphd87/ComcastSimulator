@@ -96,6 +96,7 @@ def init_state():
         "mkt_budget":      5.0,
         "renewal_decisions": {},
         "research_revealed": {},
+        "decision_step":    1,   # 1-4 wizard step within the Decisions phase (Financing/Renewal/Greenlighting/Scheduling)
         "last_score":      None,
         "submitted":       False,
         "sim_phase":       "decisions",
@@ -237,6 +238,7 @@ with st.sidebar:
                         ss.research_revealed = {}
                         ss.year              = 1
                         ss.level_budget      = None   # re-derived from the new network's budget_base
+                        ss.decision_step     = 1
                         st.rerun()
                 else:
                     st.markdown(
