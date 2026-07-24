@@ -13,7 +13,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from utils.models import (
-    distribution_revenue, annual_budget, portfolio_ad_rev,
+    distribution_revenue, portfolio_ad_rev,
     greenlight_linear, greenlight_svod, performance_linked_growth,
 )
 from utils.game_state import (

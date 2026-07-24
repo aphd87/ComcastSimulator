@@ -1,6 +1,8 @@
-# CableOS — Design Notes
+# VideoOS — Design Notes
 
-A Streamlit business simulation for teaching cable/streaming portfolio economics through the lens of Comcast/NBCUniversal's networks. Set in 2012, at the start of the cord-cutting shift. FERPA-safe: students register with a pseudonym team name only, no PII is stored (see `app.py`, `utils/game_state.py`).
+**Renamed from CableOS 2026-07-24** — the simulator spans both TV/Streaming and Movies now, so "Cable" undersold it; "Video Network Portfolio Simulator" is the actual scope. Code, docs, and UI all use VideoOS going forward; historical entries below that predate the rename keep the old name where it's part of the historical record (commit messages, past session summaries) rather than rewriting history.
+
+A Streamlit business simulation for teaching video network portfolio economics through the lens of Comcast/NBCUniversal's networks. Set in 2012, at the start of the cord-cutting shift. FERPA-safe: students register with a pseudonym team name only, no PII is stored (see `app.py`, `utils/game_state.py`).
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
@@ -11,7 +13,14 @@ This doc captures the original design intent (from Zach's mechanics brief) recon
 2. Real bug caught mid-session: the original plan wrapped Renewal/Greenlighting/Scheduling in `st.expander`, which broke — `renewal.py` and `schedule.py` each already open their own internal `st.expander`, and Streamlit disallows nesting one expander inside another. Fixed by using `st.tabs` for the outer grouping instead; no changes to any of the three reused files' internals.
 3. Sidebar cut down to nav-only. Removed the "Budget Allocation" marketing slider (duplicated the Decisions-phase slider; the Decisions-phase one is now the single source of truth). Movies (Day 2) moved from a sub-tab nested under whichever TV network happened to be active to its own peer button in the sidebar's network selector, next to Oxygen/Bravo/Peacock — `app.py`'s main content now branches on `ss.active_network == "movies"`.
 4. Verified via headless `streamlit.testing.v1.AppTest`, run against the Anaconda install (per the "Real environment gotcha" note further down) — team registration, Oxygen's full Decisions phase (all four new sections, including the tabs' own internal expanders), and the Movies sidebar button all execute with zero exceptions.
-5. Wrote an MBA-facing overview of the whole tool as a polished `.docx` — `C:\Users\apalo\OneDrive\Desktop\Comcast Simulator\CableOS - MBA Overview.docx`. Not part of this repo; a standalone deliverable generated with `python-docx`, grounded in this doc's JTBD/mechanics sections rather than re-derived.
+5. Wrote an MBA-facing overview of the whole tool as a polished `.docx`. Not part of this repo; a standalone deliverable generated with `python-docx`, grounded in this doc's JTBD/mechanics sections rather than re-derived.
+
+**Second pass, same day** — Zach Schlessel's feedback (quarters→years, real performance-linked budget, paid research, title-risk check, 3 charts), then a QA pass and a rename/nav restructure per the user:
+6. Implemented quarters→years, real performance-linked budget, paid Research, title/IP legal-risk check, and 3 additive charts — see "Real mechanics built 2026-07-24" and the Zach Schlessel feedback section further down for full detail. Committed to git (commit `5cb039d`) at the user's request, not pushed anywhere.
+7. QA pass caught two real bugs from the quarters→years rewrite: a dead `annual_budget` import left in `simulation.py`/`renewal.py`, and `app.py`'s `LEVEL_BRIEFS` "Suggested Order of Play" text still referencing pre-refactor tab names. Both fixed. Also deleted `pages/portfolio_v2.py` (confirmed dead, user chose to delete just this one — `finance.py`/`forecast.py` kept as-is, still orphaned but potentially useful later).
+8. **Renamed CableOS → VideoOS** throughout code/docs, per the user (the tool now spans TV/Streaming + Movies, "Cable" undersold it).
+9. **Sidebar restructured to 3-way top-level nav** (Leaderboard / TV-Streaming / Movies) — see "App structure" below. Added a "Choose Your Simulation" landing screen shown once after registering.
+10. Attempted to also rebrand the MBA overview `.docx` on the Desktop — **blocked, the file is currently open/locked** (likely open in Word). Not done yet; revisit next session or once it's closed. Filename as of the 07-24 first pass: `CableOS - MBA Overview.docx` (still has the old name).
 
 **Still open, carried over from 2026-07-22 below — neither has changed:**
 - **No real human browser click-through has ever happened**, on Day 1 or Day 2. AppTest confirms today's restructure executes without exceptions — that's meaningfully weaker than an actual click-through (visual layout, whether Tailwind renders, whether the four new Financing/Renewal/Greenlighting/Scheduling sections are actually usable in one page rather than just import-clean). **Do this before using any of today's changes in front of students.**
@@ -126,21 +135,21 @@ Rebuilt `pages/simulation.py` from a quarterly loop (4 quarters inside a frozen 
 
 ## App structure
 
-Updated 2026-07-24 — Renewal/Greenlighting/Scheduling are no longer orphaned files; they're wired into Simulation's Decisions phase as tabs. Movies is a sidebar nav item, not a main-content tab.
+**Sidebar nav restructured 2026-07-24 (second pass, same day)** — three peer top-level sections: 🏆 Leaderboard, 📺 TV/Streaming, 🎬 Movies (`ss.active_section`). Previously Leaderboard was a tab nested inside whichever of TV/Movies was active (duplicated in both), and Movies was a peer of the Oxygen/Bravo/Peacock network buttons rather than a peer of TV itself. The Oxygen/Bravo/Peacock selector is now a secondary selector shown only when TV/Streaming is the active section (`ss.active_network`, unchanged mechanics — lock icons, attempt badges, official scores). A new "Choose Your Simulation" landing screen (`ss.active_section is None`) appears once right after registering, with TV/Streaming and Movies as two cards plus a Leaderboard shortcut; picking a section persists it in the sidebar for free switching afterward.
 
-| Tab / section | File | Purpose |
+| Section | File | Purpose |
 |---|---|---|
-| Simulation → Financing | `pages/simulation.py` | Annual turn engine (2026-07-24, was quarterly) — Decisions → Results × 4 years, then submit for score. Financing (revenue-stream breakdown, marketing spend) is the always-open anchor of the Decisions phase; cancellation now lives in the Renewal tab. |
-| Simulation → Renewal (tab) | `pages/renewal.py` | Renew/Watch/Cancel decision matrix, IP-value vs. OCF tradeoff, budget waterfall. Wired into the Decisions phase 2026-07-24 — built earlier but never called from anywhere in the app until now. |
-| Simulation → Greenlighting (tab) | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept. Wired in 2026-07-24, same history as Renewal. |
-| Simulation → Scheduling (tab) | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid, scheduling optimizer. Wired in 2026-07-24, same history as Renewal. |
-| Movies (Day 2) | `pages/movies.py` | Own sidebar nav button (peer to Oxygen/Bravo/Peacock) as of 2026-07-24 — previously a sub-tab nested under whichever TV network was active, which misrepresented it as TV-network-scoped when it isn't. |
-| Leaderboard | `pages/leaderboard.py` | Per-network rankings (TV + Movies), official-attempt-only, FERPA-safe. |
-| Theory | (in `app.py`, `THEORY_CONTENT`) | BCG matrix, HHI diversification, cord-cutting S-curve, amortization, LTV/CAC. Rendered via a shared `_render_theory_grid()` helper as of 2026-07-24 (previously copy-pasted in three places). |
-| *(not wired in)* | `pages/finance.py` | Full income statement, revenue decomposition, distribution model. Financing's new revenue-stream summary covers a condensed version of this; the full page (donuts, monthly trend, distribution calculator) is still orphaned — candidate for a future session if the condensed version isn't enough. |
-| *(not wired in)* | `pages/forecast.py` | Full 10-year portfolio simulation across all three networks. Still orphaned — no session has connected it to the app. |
+| 🏆 Leaderboard | `pages/leaderboard.py` | Standalone top-level section as of this pass (was nested tabs, duplicated per-section). Already covered TV networks + Movies internally via its own tabs (`_render_board_tab`, `MOVIES_INFO`) — no wrapping needed, `render()` takes no args and reads `ss` directly. |
+| 📺 TV/Streaming → Financing | `pages/simulation.py` | Annual turn engine — Decisions → Results × 4 years per network, then submit for score. Financing (revenue-stream breakdown, marketing spend) is the always-open anchor; cancellation lives in the Renewal tab. |
+| 📺 TV/Streaming → Renewal (tab) | `pages/renewal.py` | Renew/Watch/Cancel decision matrix, IP-value vs. OCF tradeoff, budget waterfall, paid Research. |
+| 📺 TV/Streaming → Greenlighting (tab) | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept, title/IP legal-risk check. |
+| 📺 TV/Streaming → Scheduling (tab) | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid, scheduling optimizer. |
+| 📺 TV/Streaming → Theory (tab) | (in `app.py`, `THEORY_CONTENT`) | BCG matrix, HHI diversification, cord-cutting S-curve, amortization, LTV/CAC. |
+| 🎬 Movies | `pages/movies.py` | Universal Pictures — Day 2. Own top-level section, own Theory tab, independent of TV network progress. |
+| *(not wired in)* | `pages/finance.py` | Full income statement, revenue decomposition, distribution model. Financing's revenue-stream summary covers a condensed version; the full page is still orphaned. |
+| *(not wired in)* | `pages/forecast.py` | Full 10-year portfolio simulation across all three networks. Still orphaned. |
 
-`pages/portfolio_v2.py` is superseded by `simulation.py`'s turn engine (per commit `24ce9c9`) — likely safe to remove once confirmed nothing else imports it.
+`pages/portfolio_v2.py` — superseded by `simulation.py`'s turn engine (per commit `24ce9c9`), confirmed nothing imported it, **deleted 2026-07-24**.
 
 ## Day 2 — Movie/Theatrical Component ("Universal Pictures")
 

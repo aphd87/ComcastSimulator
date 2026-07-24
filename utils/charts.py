@@ -1,5 +1,5 @@
 """
-Shared Plotly theme and chart helpers — matches the dark CableOS aesthetic.
+Shared Plotly theme and chart helpers — matches the dark VideoOS aesthetic.
 """
 from __future__ import annotations   # list[...]/dict[...] type hints below need Python
                                        # 3.9+ without this — see utils/game_state.py

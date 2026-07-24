@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from utils.models import (
-    annual_budget, portfolio_ad_rev, portfolio_cost,
+    portfolio_ad_rev, portfolio_cost,
     distribution_revenue, renewal_decision, CONTENT_COST_ESC,
     performance_linked_growth,
 )

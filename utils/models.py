@@ -1,5 +1,5 @@
 """
-CableOS — Financial engine & data model
+VideoOS — Financial engine & data model
 All monetary values in $M unless noted.
 """
 from __future__ import annotations   # list[...]/dict[...] type hints below need Python

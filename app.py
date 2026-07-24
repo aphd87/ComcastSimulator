@@ -1,6 +1,9 @@
 """
-CableOS v2 — Cable Network Portfolio Simulator
+VideoOS — Video Network Portfolio Simulator
 Streamlit entry point · app.py
+
+Renamed from CableOS 2026-07-24, per the user: the simulator now spans both
+TV/Streaming and Movies, so "Cable" undersold what it actually covers.
 
 Run locally:
     pip install streamlit plotly pandas numpy
@@ -12,7 +15,7 @@ Leaderboard stores: team_name, network, attempt#, score, timestamp, pass/fail.
 import streamlit as st
 
 st.set_page_config(
-    page_title="CableOS — Network Portfolio Simulator",
+    page_title="VideoOS — Video Network Portfolio Simulator",
     page_icon="📺",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -83,6 +86,7 @@ def init_state():
         "school":          "",
         "class_section":   "",
         "registered":      False,
+        "active_section":  None,   # "leaderboard" / "tv" / "movies" — chosen on the post-registration landing screen
         "active_network":  "oxygen",
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
         "oxygen_shows":    copy.deepcopy(OXYGEN_SLATE),
@@ -109,9 +113,9 @@ ss = st.session_state
 with st.sidebar:
     st.markdown(
         '<div style="font-family:DM Serif Display,serif;font-size:24px;'
-        'color:#e8c547;margin-bottom:2px;">CableOS</div>'
+        'color:#e8c547;margin-bottom:2px;">VideoOS</div>'
         '<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;'
-        'margin-bottom:20px;letter-spacing:.1em;">NETWORK PORTFOLIO SIMULATOR · 2012</div>',
+        'margin-bottom:20px;letter-spacing:.1em;">VIDEO NETWORK PORTFOLIO SIMULATOR · 2012</div>',
         unsafe_allow_html=True
     )
     st.divider()
@@ -167,69 +171,80 @@ with st.sidebar:
             unsafe_allow_html=True
         )
         if st.button("Change Team", use_container_width=True):
-            ss.registered    = False
-            ss.team_name     = ""
-            ss.school        = ""
-            ss.class_section = ""
+            ss.registered     = False
+            ss.team_name      = ""
+            ss.school         = ""
+            ss.class_section  = ""
+            ss.active_section = None   # back to the landing screen for the next team
             st.rerun()
 
     st.divider()
 
-    # ── Network Selector ──────────────────────────────────────────────────────
+    # ── Top-level nav ─────────────────────────────────────────────────────────
+    # Restructured 2026-07-24 per user request: three peer sections on the
+    # left — Leaderboard, TV/Streaming, Movies — instead of Movies being
+    # buried as a peer of individual TV networks and Leaderboard only
+    # reachable as a nested tab within whichever section was active.
     if ss.registered:
-        st.markdown('<div class="section-title">Active Network</div>', unsafe_allow_html=True)
-        net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section) if ss.registered else {}
+        st.markdown('<div class="section-title">Simulation</div>', unsafe_allow_html=True)
 
-        for net in NETWORK_ORDER:
-            info     = NETWORK_INFO[net]
-            status   = net_status.get(net, {})
-            locked   = status.get("locked", net != "oxygen")
-            attempts = status.get("attempts", 0)
-            passed   = status.get("passed", False)
-            off_sc   = status.get("official_score")
+        section_defs = [
+            ("leaderboard", "🏆 Leaderboard"),
+            ("tv",          "📺 TV / Streaming"),
+            ("movies",      "🎬 Movies"),
+        ]
+        for section_key, section_label in section_defs:
+            is_active = ss.active_section == section_key
+            if st.button(f"{'🎯' if is_active else ''} {section_label}".strip(),
+                         key=f"section_{section_key}", use_container_width=True,
+                         type="primary" if is_active else "secondary"):
+                ss.active_section = section_key
+                st.rerun()
 
-            if net == "oxygen":
-                locked = False   # Oxygen always unlocked (Level 1)
+        # ── TV network sub-selector — only shown once TV/Streaming is picked ────
+        if ss.active_section == "tv":
+            st.markdown(
+                '<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;'
+                'text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px 4px;">'
+                'Active Network</div>', unsafe_allow_html=True)
+            net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
 
-            lock_icon = "🔒" if locked else ("✅" if passed else ("⚠️" if attempts > 0 else "▶️"))
-            active    = ss.active_network == net
+            for net in NETWORK_ORDER:
+                info     = NETWORK_INFO[net]
+                status   = net_status.get(net, {})
+                locked   = status.get("locked", net != "oxygen")
+                attempts = status.get("attempts", 0)
+                passed   = status.get("passed", False)
+                off_sc   = status.get("official_score")
 
-            btn_style = (
-                f"background:rgba({','.join(str(int(info['color'][i:i+2],16)) for i in (1,3,5))},.2);"
-                f"border:2px solid {info['color']};"
-                if active else ""
-            )
+                if net == "oxygen":
+                    locked = False   # Oxygen always unlocked (Level 1)
 
-            label = f"{lock_icon} {info['display_name']}"
-            if off_sc:   label += f" · {off_sc:.0f}pts"
-            if attempts: label += f" ({attempts} attempt{'s' if attempts>1 else ''})"
+                lock_icon = "🔒" if locked else ("✅" if passed else ("⚠️" if attempts > 0 else "▶️"))
 
-            if not locked:
-                if st.button(label, key=f"net_{net}", use_container_width=True):
-                    ss.active_network    = net
-                    ss.submitted         = False
-                    ss.sim_phase         = "decisions"
-                    ss.yearly_log        = []
-                    ss.cancelled_shows   = set()
-                    ss.renewal_decisions = {}
-                    ss.research_revealed = {}
-                    ss.year              = 1
-                    ss.level_budget      = None   # re-derived from the new network's budget_base
-                    st.rerun()
-            else:
-                st.markdown(
-                    f'<div style="opacity:.4;padding:6px 10px;border-radius:5px;'
-                    f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:12px;">'
-                    f'{lock_icon} {info["display_name"]} — Locked</div>',
-                    unsafe_allow_html=True
-                )
+                label = f"{lock_icon} {info['display_name']}"
+                if off_sc:   label += f" · {off_sc:.0f}pts"
+                if attempts: label += f" ({attempts} attempt{'s' if attempts>1 else ''})"
 
-        # ── Movies — peer nav item, independent of TV network progress ─────────
-        movies_active = ss.active_network == "movies"
-        if st.button(f"{'🎯' if movies_active else '🎬'} Movies (Day 2)",
-                     key="net_movies", use_container_width=True):
-            ss.active_network = "movies"
-            st.rerun()
+                if not locked:
+                    if st.button(label, key=f"net_{net}", use_container_width=True):
+                        ss.active_network    = net
+                        ss.submitted         = False
+                        ss.sim_phase         = "decisions"
+                        ss.yearly_log        = []
+                        ss.cancelled_shows   = set()
+                        ss.renewal_decisions = {}
+                        ss.research_revealed = {}
+                        ss.year              = 1
+                        ss.level_budget      = None   # re-derived from the new network's budget_base
+                        st.rerun()
+                else:
+                    st.markdown(
+                        f'<div style="opacity:.4;padding:6px 10px;border-radius:5px;'
+                        f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:12px;">'
+                        f'{lock_icon} {info["display_name"]} — Locked</div>',
+                        unsafe_allow_html=True
+                    )
 
         st.divider()
 
@@ -237,7 +252,7 @@ with st.sidebar:
         # (including Marketing spend) now live in the main page's quarterly
         # Financing section (pages/simulation.py), not the sidebar. This was
         # the last decision control still duplicated between sidebar and
-        # main content; the sidebar is nav-only now (registration, network
+        # main content; the sidebar is nav-only now (registration, section
         # select). ss.mkt_budget stays as the shared session-state value
         # simulation.py's Financing section reads/writes each quarter.
 
@@ -259,9 +274,9 @@ with st.sidebar:
 if not ss.registered:
     # ── Welcome / Theory screen ────────────────────────────────────────────────
     st.markdown(
-        '<h1 style="text-align:center;margin-bottom:4px;">CableOS</h1>'
+        '<h1 style="text-align:center;margin-bottom:4px;">VideoOS</h1>'
         '<div style="text-align:center;font-family:DM Mono,monospace;font-size:13px;'
-        'color:#e0e2ea;margin-bottom:32px;">Cable Network Portfolio Simulator · 2012</div>',
+        'color:#e0e2ea;margin-bottom:32px;">Video Network Portfolio Simulator · 2012</div>',
         unsafe_allow_html=True
     )
 
@@ -289,7 +304,73 @@ if not ss.registered:
         unsafe_allow_html=True
     )
 
-elif ss.active_network == "movies":
+elif ss.active_section is None:
+    # ── Choose Your Simulation — shown once, right after registering ───────────
+    st.markdown(f"""
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-family:DM Serif Display,serif;font-size:24px;color:#e8eaf0;">
+        Welcome, {ss.team_name}
+      </div>
+      <div style="font-size:13px;color:#e0e2ea;margin-top:6px;">
+        Choose your simulation to begin — you can switch anytime from the sidebar.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    ccol1, ccol2 = st.columns(2)
+    with ccol1:
+        st.markdown("""
+        <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
+             padding:28px 20px;text-align:center;height:100%;">
+          <div style="font-size:42px;">📺</div>
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+            TV / Streaming
+          </div>
+          <div style="font-size:12px;color:#e0e2ea;line-height:1.6;">
+            Run Oxygen → Bravo → Peacock as General Manager. Annual portfolio decisions —
+            financing, renewal, greenlighting, scheduling — amortization timing, and the
+            linear-vs-SVOD tradeoff.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("→ Start TV / Streaming", use_container_width=True, type="primary"):
+            ss.active_section = "tv"
+            st.rerun()
+    with ccol2:
+        st.markdown("""
+        <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
+             padding:28px 20px;text-align:center;height:100%;">
+          <div style="font-size:42px;">🎬</div>
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+            Movies
+          </div>
+          <div style="font-size:12px;color:#e0e2ea;line-height:1.6;">
+            Universal Pictures — risk-adjusted NPV under bull/base/bear variance, theatrical
+            vs. streaming release-window strategy, and award-season reception. A concentrated,
+            front-loaded bet, in contrast to TV's steady, amortized portfolio.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("→ Start Movies", use_container_width=True, type="primary"):
+            ss.active_section = "movies"
+            st.rerun()
+
+    st.divider()
+    lcol, _ = st.columns([1, 2])
+    with lcol:
+        if st.button("🏆 Just check the Leaderboard", use_container_width=True):
+            ss.active_section = "leaderboard"
+            st.rerun()
+
+elif ss.active_section == "leaderboard":
+    # ── Leaderboard — standalone top-level section ──────────────────────────────
+    # pages/leaderboard.py already covers TV networks and Movies internally
+    # via its own tabs (_render_board_tab, MOVIES_INFO) — no wrapping needed.
+    st.markdown('<h2 style="margin-bottom:4px;">🏆 Leaderboard</h2>', unsafe_allow_html=True)
+    from pages.leaderboard import render as render_leaderboard
+    render_leaderboard()
+
+elif ss.active_section == "movies":
     # ── Movies — peer section, independent of TV network progress ──────────────
     st.markdown("""
     <div style="background:#12141a;border:1px solid #252836;border-radius:10px;
@@ -299,22 +380,19 @@ elif ss.active_network == "movies":
       </div>
       <div style="font-size:12px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
         Theatrical vs. streaming economics: risk-adjusted NPV, release-window strategy, and
-        award-season reception — a concentrated, front-loaded bet, in contrast to Day 1's
-        steady, amortized TV portfolio.
+        award-season reception — a concentrated, front-loaded bet, in contrast to TV's
+        steady, amortized portfolio.
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["🎬 Movies", "🏆 Leaderboard", "📖 Theory"])
+    tabs = st.tabs(["🎬 Movies", "📖 Theory"])
 
-    from pages.movies      import render as render_movies
-    from pages.leaderboard import render as render_leaderboard
+    from pages.movies import render as render_movies
 
     with tabs[0]:
         render_movies()
     with tabs[1]:
-        render_leaderboard()
-    with tabs[2]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         _render_theory_grid()
 
@@ -394,11 +472,11 @@ else:
                 "Hit a <b style='color:#e8eaf0;'>12% OCF margin</b> to pass."
             ),
             "steps": [
-                "📊 <b>Portfolio</b> — review your slate, spot cash cows vs. dogs",
-                "🔄 <b>Renewal</b> — cancel low-ROI shows to free budget",
-                "📣 <b>Sidebar</b> — adjust marketing and reserve allocation",
-                "💰 <b>P&L</b> — confirm your income statement looks healthy",
-                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+                "💰 <b>Financing</b> — see your revenue streams, set marketing spend",
+                "🔄 <b>Renewal</b> — renew, watch, or cancel; pay for research if unsure",
+                "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
+                "📅 <b>Scheduling</b> — check premiere timing and amortization impact",
+                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
             ],
         },
         "bravo": {
@@ -411,11 +489,11 @@ else:
                 "Hit a <b style='color:#e8eaf0;'>15% OCF margin</b> to pass."
             ),
             "steps": [
-                "📊 <b>Portfolio</b> — separate Oxygen shows from Bravo, protect cash cows",
+                "💰 <b>Financing</b> — separate Oxygen shows from Bravo, watch the combined budget",
                 "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
-                "🎬 <b>Green Light</b> — decide which new shows go linear vs. SVOD",
-                "💰 <b>P&L</b> — watch the dual-network cost structure",
-                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+                "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
+                "📅 <b>Scheduling</b> — watch the dual-network cost structure",
+                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
             ],
         },
         "peacock": {
@@ -428,11 +506,11 @@ else:
                 "Hit a <b style='color:#e8eaf0;'>10% OCF margin</b> across all three networks to pass."
             ),
             "steps": [
-                "🎬 <b>Green Light</b> — build the linear vs. Peacock P&L for each new show",
-                "📈 <b>Forecast</b> — model the SVOD crossover year",
+                "🎬 <b>Greenlighting</b> — build the linear vs. Peacock P&L for each new show",
+                "💰 <b>Financing</b> — check the linear-vs-streaming economics chart",
                 "🔄 <b>Renewal</b> — decide which linear shows to wind down",
-                "💰 <b>P&L</b> — track the cannibalization impact on Bravo & Oxygen",
-                "🎯 <b>Portfolio → Submit</b> — lock in your official score",
+                "📅 <b>Scheduling</b> — track the cannibalization impact on Bravo & Oxygen",
+                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
             ],
         },
     }
@@ -466,24 +544,19 @@ else:
     st.divider()
 
     # ── Main Tabs ─────────────────────────────────────────────────────────────
-    # Movies moved to its own sidebar nav item (peer to Oxygen/Bravo/Peacock) —
-    # see the ss.active_network == "movies" branch above — since it isn't
-    # actually scoped to whichever TV network happens to be active here.
+    # Movies and Leaderboard are both top-level sidebar sections now
+    # (2026-07-24), not tabs nested under whichever TV network is active —
+    # see the ss.active_section == "movies"/"leaderboard" branches above.
     tabs = st.tabs([
         "📊 Simulation",
-        "🏆 Leaderboard",
         "📖 Theory",
     ])
 
-    from pages.simulation  import render as render_simulation
-    from pages.leaderboard import render as render_leaderboard
+    from pages.simulation import render as render_simulation
 
     with tabs[0]:
         render_simulation()
 
     with tabs[1]:
-        render_leaderboard()
-
-    with tabs[2]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         _render_theory_grid()

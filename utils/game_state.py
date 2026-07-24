@@ -1,5 +1,5 @@
 """
-CableOS — Game State & Scoring Engine
+VideoOS — Game State & Scoring Engine
 FERPA-safe: no student names stored, only team names (student-chosen pseudonyms).
 Leaderboard tracks: team_name, network_level, attempt_number, score, timestamp.
 First attempt score is locked as the official score — subsequent attempts are practice only.
