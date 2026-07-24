@@ -4,7 +4,20 @@ A Streamlit business simulation for teaching cable/streaming portfolio economics
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
-## Status as of 2026-07-22 end of session — read this first
+## Status as of 2026-07-24 end of session — read this first
+
+**What happened today:**
+1. Restructured the quarterly Decisions phase (`pages/simulation.py`) into **Financing → Renewal → Greenlighting → Scheduling**. Renewal/Greenlighting/Scheduling reuse `pages/renewal.py`/`greenlight.py`/`schedule.py` verbatim — all three were fully built in earlier sessions but never actually imported or called from anywhere in the app, so students could never reach them despite the math and UI already existing. Financing (new revenue-stream breakdown — ad vs. distribution revenue — ahead of the existing marketing slider and cancel-shows decision) stays open by default; Renewal/Greenlighting/Scheduling sit below it.
+2. Real bug caught mid-session: the original plan wrapped Renewal/Greenlighting/Scheduling in `st.expander`, which broke — `renewal.py` and `schedule.py` each already open their own internal `st.expander`, and Streamlit disallows nesting one expander inside another. Fixed by using `st.tabs` for the outer grouping instead; no changes to any of the three reused files' internals.
+3. Sidebar cut down to nav-only. Removed the "Budget Allocation" marketing slider (duplicated the Decisions-phase slider; the Decisions-phase one is now the single source of truth). Movies (Day 2) moved from a sub-tab nested under whichever TV network happened to be active to its own peer button in the sidebar's network selector, next to Oxygen/Bravo/Peacock — `app.py`'s main content now branches on `ss.active_network == "movies"`.
+4. Verified via headless `streamlit.testing.v1.AppTest`, run against the Anaconda install (per the "Real environment gotcha" note further down) — team registration, Oxygen's full Decisions phase (all four new sections, including the tabs' own internal expanders), and the Movies sidebar button all execute with zero exceptions.
+5. Wrote an MBA-facing overview of the whole tool as a polished `.docx` — `C:\Users\apalo\OneDrive\Desktop\Comcast Simulator\CableOS - MBA Overview.docx`. Not part of this repo; a standalone deliverable generated with `python-docx`, grounded in this doc's JTBD/mechanics sections rather than re-derived.
+
+**Still open, carried over from 2026-07-22 below — neither has changed:**
+- **No real human browser click-through has ever happened**, on Day 1 or Day 2. AppTest confirms today's restructure executes without exceptions — that's meaningfully weaker than an actual click-through (visual layout, whether Tailwind renders, whether the four new Financing/Renewal/Greenlighting/Scheduling sections are actually usable in one page rather than just import-clean). **Do this before using any of today's changes in front of students.**
+- **Whether the Streamlit Cloud deployment survived the `ImportError` fix from 07-22 was never checked** — do that first, since it's independent of and predates today's local changes.
+
+## History — 2026-07-22 session status (superseded by 2026-07-24 above)
 
 **Live app**: https://comcastsimulator-f3riawhvhbihgap5qh2yzm.streamlit.app/ (Streamlit Community Cloud, auto-redeploys on every push to `main`). **Status unconfirmed** — it threw an `ImportError` on first deploy, a fix went out in the last commit of the day (`31109dd`), but nobody has checked whether the redeploy actually fixed it. **Do that check first, next session.**
 
@@ -77,7 +90,7 @@ Models the full arc: Oxygen alone (Y1–3) → + Bravo (Y4–7) → + Peacock (Y
 
 ## Progression & scoring
 
-Three sequential levels — **Oxygen → Bravo → Peacock** — each independently scored:
+Three sequential levels — **Oxygen → Bravo → Peacock** — each independently scored. **Each level is now 4 real years (2026-07-24), not 4 quarters within a frozen Year 1** — see "Annual turn engine" below.
 
 | Network | Pass threshold (OCF margin) | Note |
 |---|---|---|
@@ -98,20 +111,36 @@ Score is a weighted composite (`compute_score`, `SCORE_WEIGHTS`), not just OCF:
 
 The original brief described continuous multi-year play — "prove yourself over 3–5 years, then earn a second network; launch streaming in year 6, 8, or 10." The built game instead uses **pass/fail attempts** to gate advancement between networks, rather than a single unbroken 10-year playthrough. This is an intentional compression for classroom time constraints, not a missed requirement — the 10-year full-portfolio arc still exists as a standalone forecasting exercise (`pages/forecast.py`), just decoupled from the level-gating mechanic itself.
 
+**Partially reconciled 2026-07-24**: each level is now a genuine 4-year run (see "Annual turn engine" below) rather than a single frozen year — closer to the original "prove yourself over 3-5 years" framing than the quarterly engine it replaced, though still a bounded-attempt gate per level rather than one continuous playthrough across all three networks. Zach Schlessel's 2026-07-24 feedback pushes further in this direction (see his feedback section) — worth revisiting whether a continuous cross-network arc is the eventual target.
+
+## Annual turn engine (2026-07-24 — replaces the quarterly engine)
+
+Rebuilt `pages/simulation.py` from a quarterly loop (4 quarters inside a frozen "Year 1") to a real annual loop — `ss.year` is now the actual turn counter (1→`YEARS_PER_LEVEL`=4) driving every financial formula, not a fixed value the sidebar used to (and could no longer) change. Direct response to Zach Schlessel's "change from quarters to years" feedback, scoped specifically to the turn-cadence structural change — see his feedback section for the rest, still backlog.
+
+- **Financial math simplified, not just relabeled**: cost/revenue no longer need the `/4` quarterly-slice bookkeeping (`monthly_amort(year)*3`, `ann_mkt/4`, etc.) — a turn is a full year now, so `Show.annual_amort_expense()` / `ad_revenue()` / `distribution_revenue()` are used directly. Removes a real inconsistency the quarterly engine had: revenue/cost were divided into quarters while `year` stayed frozen at 1 all session, so escalation/decay never actually progressed within a level; now each turn genuinely reflects that year's economics.
+- **Renewal is now the actual cancellation mechanism.** Wiring Renewal into the Decisions phase earlier the same day only made it *visible* — its Renew/Watch/Cancel choices were written to `ss.renewal_decisions` but never mutated `ss.cancelled_shows`. With annual turns, Renewal is where Zach's "Order of Play" puts the cancellation decision, so its Cancel choices now drive `ss.cancelled_shows` directly at year-end. Financing's old standalone "Decision 2 — Cancel Shows" quick-multiselect was removed as redundant.
+- **Cancellation penalty**: mid-year cancellations pay 25% of that year's amortization as a sunk-cost penalty (the annual-cadence equivalent of the old quarterly engine's "50% one-quarter penalty" — same intuition, rescaled).
+- Session-state field renames: `ss.sim_month` (quarter-within-year counter) removed — `ss.year` serves this role directly now. `ss.monthly_log` → `ss.yearly_log`; each entry's `"quarter"` key → `"year"`.
+- Verified via a full `AppTest` run through all 4 years of Oxygen (Decisions→Results ×4 → Complete → Submit → Advance to Bravo) — no exceptions, real score computed (88.8/100, passed), `ss.year` correctly reset to 1 on advancing to Bravo.
+- **Not yet done**: a real human browser click-through of the new annual flow (same standing gap as the rest of this doc — AppTest confirms it executes, not that it's legible/usable on screen).
+
 ## App structure
 
-| Tab | File | Purpose |
-|---|---|---|
-| Simulation | `pages/simulation.py` | Quarterly turn engine — Decisions → Results × 4 quarters, then submit for score. Current main gameplay loop (replaced `portfolio_v2.py`). |
-| P&L / OCF | `pages/finance.py` | Full income statement, revenue decomposition, distribution model. |
-| Schedule & Amortization | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid. |
-| Green Light | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept. |
-| Renewal | `pages/renewal.py` | Renew/cancel decisions, cost escalation, budget impact. |
-| 10-Year Forecast | `pages/forecast.py` | Full portfolio simulation across all three networks. |
-| Leaderboard | `pages/leaderboard.py` | Per-network rankings, official-attempt-only, FERPA-safe. |
-| Theory | (in `app.py`, `THEORY_CONTENT`) | BCG matrix, HHI diversification, cord-cutting S-curve, amortization, LTV/CAC. |
+Updated 2026-07-24 — Renewal/Greenlighting/Scheduling are no longer orphaned files; they're wired into Simulation's Decisions phase as tabs. Movies is a sidebar nav item, not a main-content tab.
 
-`pages/portfolio_v2.py` is superseded by `simulation.py`'s quarterly engine (per commit `24ce9c9`) — likely safe to remove once confirmed nothing else imports it.
+| Tab / section | File | Purpose |
+|---|---|---|
+| Simulation → Financing | `pages/simulation.py` | Annual turn engine (2026-07-24, was quarterly) — Decisions → Results × 4 years, then submit for score. Financing (revenue-stream breakdown, marketing spend) is the always-open anchor of the Decisions phase; cancellation now lives in the Renewal tab. |
+| Simulation → Renewal (tab) | `pages/renewal.py` | Renew/Watch/Cancel decision matrix, IP-value vs. OCF tradeoff, budget waterfall. Wired into the Decisions phase 2026-07-24 — built earlier but never called from anywhere in the app until now. |
+| Simulation → Greenlighting (tab) | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept. Wired in 2026-07-24, same history as Renewal. |
+| Simulation → Scheduling (tab) | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid, scheduling optimizer. Wired in 2026-07-24, same history as Renewal. |
+| Movies (Day 2) | `pages/movies.py` | Own sidebar nav button (peer to Oxygen/Bravo/Peacock) as of 2026-07-24 — previously a sub-tab nested under whichever TV network was active, which misrepresented it as TV-network-scoped when it isn't. |
+| Leaderboard | `pages/leaderboard.py` | Per-network rankings (TV + Movies), official-attempt-only, FERPA-safe. |
+| Theory | (in `app.py`, `THEORY_CONTENT`) | BCG matrix, HHI diversification, cord-cutting S-curve, amortization, LTV/CAC. Rendered via a shared `_render_theory_grid()` helper as of 2026-07-24 (previously copy-pasted in three places). |
+| *(not wired in)* | `pages/finance.py` | Full income statement, revenue decomposition, distribution model. Financing's new revenue-stream summary covers a condensed version of this; the full page (donuts, monthly trend, distribution calculator) is still orphaned — candidate for a future session if the condensed version isn't enough. |
+| *(not wired in)* | `pages/forecast.py` | Full 10-year portfolio simulation across all three networks. Still orphaned — no session has connected it to the app. |
+
+`pages/portfolio_v2.py` is superseded by `simulation.py`'s turn engine (per commit `24ce9c9`) — likely safe to remove once confirmed nothing else imports it.
 
 ## Day 2 — Movie/Theatrical Component ("Universal Pictures")
 
@@ -245,14 +274,141 @@ Team identity used to be just `team_name` (a free-text pseudonym), which meant t
 - **One central server** (e.g. Streamlit Community Cloud, one URL the whole class visits) → genuinely shared leaderboard. This is almost certainly the right model for a class and isn't set up yet — worth doing before real use.
 - **Each student runs it locally** → every instance has its own separate file; nobody's scores are actually comparable.
 
-**Sidebar consolidated 2026-07-22** (user feedback: "too many options for a simulation"). Went from 5 sections to 3 (Team Registration, Active Network, Budget Allocation) by removing:
-- **Development/Reserve budget sliders** — were dead code, never read by `pages/simulation.py`'s actual scoring engine, only fed the sidebar's own cosmetic "Remaining" display. Only Marketing affects real gameplay.
-- **Quick Checklist** — referenced tab names from before the "7 tabs to 3" redesign (`Portfolio`/`Renewal`/`P&L`, which no longer exist) and duplicated the per-network Mission Brief's "Suggested Order of Play" already shown in the main content, which is dynamic where this was static.
-- **Simulation Year slider** — removed per explicit user choice; a first attempt always plays Year 1 now, matching the "Level 1, your first assignment" narrative. `ss.year` stays fixed at 1 internally (still used by the cost/revenue math), only the ability to change it was removed.
+**Sidebar is nav-only as of 2026-07-24** (Team Registration, Active Network selector including Movies) — no gameplay decisions live there anymore. This was the end state of a two-step consolidation:
+- **2026-07-22** (user feedback: "too many options for a simulation") — went from 5 sections to 3 (Team Registration, Active Network, Budget Allocation) by removing dead Development/Reserve budget sliders (never read by `pages/simulation.py`'s scoring engine), a stale Quick Checklist (referenced pre-redesign tab names), and the Simulation Year slider (a first attempt always plays Year 1 now; `ss.year` stays fixed at 1 internally, only the ability to change it was removed).
+- **2026-07-24** — removed the remaining Budget Allocation/Marketing slider too, since it duplicated the Decisions-phase Financing section's marketing control (the Decisions-phase one is now the only copy). Added Movies as a peer button in the Active Network selector, alongside Oxygen/Bravo/Peacock.
 
 **Real environment gotcha, worth remembering**: this machine has two Streamlit installs on PATH at different versions — `C:\Program Files\Python314` (1.59.2) and Anaconda (`C:\Users\apalo\anaconda3`, 1.45.1). `streamlit run app.py` in a real shell resolves to the **Anaconda one**. A fix verified only against the other install (`st.iframe`, a newer API 1.45.1 doesn't have) shipped broken and threw `AttributeError` in actual use. Fixed with a `hasattr(st, "iframe")` runtime check rather than assuming a version. **Any future change should be verified against `anaconda3\python.exe` / `anaconda3\Scripts\streamlit.exe` explicitly**, not just whatever `python`/`streamlit` a fresh shell resolves to.
 
-## Original mechanics brief (Zach, preserved verbatim in spirit)
+## Zach Schlessel (NBCUniversal) — feedback received 2026-07-24, pending triage
+
+Received via email, covers two distinct artifacts — **only the second applies to this repo**:
+1. **"Thesis Edits Needed"** (remove Paris Olympics reference; focus on Peacock originals vs. library vs. NBC/Bravo investment value; emphasize cross-platform cost amortization) — reads as edits to the written case study (`Independent Study Case A/B - Comcast NBCU` docs), not this codebase. Not actioned here.
+2. **Simulation design feedback** (below) — a real, structural rework proposal for CableOS, not yet reconciled against what's built. Preserved close to verbatim so the actual ask isn't lossy-summarized before a decision is made on scope/priority.
+
+**Major structural tensions with the current build, flagged before any of this is implemented:**
+- ~~**"Change from quarters to years"**~~ — **implemented 2026-07-24**, see "Annual turn engine" above. User confirmed the specific structure via a clarifying question: each level (Oxygen/Bravo/Peacock) is now 4 real annual turns, not 4 quarters within a frozen year — matching this feedback's "Multi-Year Dynamics...compounds over a 4-year window" and "Deck 1/Deck 2" language, and the *original* Zach brief's "prove yourself over 3-5 years" framing more closely than the quarterly engine it replaced.
+- ~~**Performance-based budget compounding**~~ — **implemented 2026-07-24**, see "Real mechanics built" below. Was a flat 3%/yr; now genuinely tied to each year's actual margin.
+- ~~**Paid "research" option**~~ — **implemented 2026-07-24**, see below.
+- ~~**Title/IP legal-risk check**~~ — **implemented 2026-07-24**, see below.
+- **Amortization reassigned from network to content category** — currently Oxygen=36mo/Bravo=12mo/Peacock=36mo (network-based); this feedback proposes True Crime=24mo vs. Non-True-Crime=12mo (genre-based), independent of which network airs it. **Still deliberately not implemented** — would retroactively change the cost burden on Oxygen's mostly-True-Crime slate and could break the calibrated 12%/15%/10% pass thresholds. Needs a scope decision (replace vs. layer on top of network base) before touching it.
+- **Budget model reframed as abstract 0-100 allocation sliders** — needs a value-mapping decision (what does "73" mean in dollars?) before it can be built without guessing. Not yet implemented.
+- **AI-graded custom show-concept option** — needs an actual LLM API call wired up (secrets/cost implications), a different kind of change than anything else here. Not yet implemented.
+- **Movies category rework** (sequels/new-IP/kids/horror-indie replacing Day 2's current risk-adjusted-NPV/genre model) — would touch the tested, calibrated Day 2 engine (46 passing tests). Not yet implemented, needs explicit scope agreement first.
+
+## Real mechanics built 2026-07-24 (beyond the quarters-to-years engine and the 3 charts)
+
+Three more items from Zach's feedback, each genuinely wired into gameplay (not illustrative, not decorative):
+
+1. **Performance-linked budget** (`utils/models.py::performance_linked_growth()`) — replaces the flat 3%/yr `annual_budget()` growth. `ss.level_budget` is now real state: clear the level's pass threshold in a given year → next year's budget grows 8%; land between 0 and threshold → the old 3%; go negative → a 6% cut. Wired into the year-end transition in `pages/simulation.py` (captured in each `yearly_log` entry as `"budget"`, reset alongside other per-level state on network switch/advance/restart). Financing shows the real number with an over-budget warning (content cost + marketing vs. `ss.level_budget`) where none existed before (the old sidebar's budget-cap warnings were removed earlier the same session along with the sidebar's redundant marketing slider — this restores real budget feedback, just performance-linked instead of fixed). Renewal's Budget Bridge shows next year as a range (best/worst case) rather than a false-precision single number, since it genuinely isn't knowable until this year's results are in.
+2. **Paid Research** (`pages/renewal.py`, `utils/models.py::preview_show_variance()`/`variance_to_stars()`) — $2M/show, deducted immediately from `ss.level_budget`. Reveals a real 1-5 star signal by replicating the *exact* seeded RNG sequence `_compute_year()` will use for that team+year (same seed formula, same per-show draw order) — a genuine preview of the actual upcoming outcome, not a decorative random number. `ss.research_revealed` tracks per-show-per-year reveals, reset with other per-level state.
+3. **Title/IP legal-risk check** (`pages/greenlight.py`) — a "Show Name / Concept" matching any real title already in `utils/data.py`'s slates (Bravo/Oxygen/Peacock combined) triggers a legal-risk banner and blocks the P&L build entirely (`return` before any calculation), matching "Risk = 0 score: take an existing show title without permission, gets sued." Reuses existing show data as the protected-titles set rather than a separate hardcoded list.
+
+All three verified via a single `AppTest` run through a full 4-year Oxygen level (with research purchases each year) → Submit → Advance to Bravo → Movies nav, no exceptions, `level_budget` correctly reset to Bravo's own base ($220M) on advancing.
+
+Next step on the remaining items (genre-based amortization, 0-100 sliders, AI-graded show creation, movies category rework): agree scope/priority with the user before writing more code — each has a real conflict or missing decision, spelled out above.
+
+**Three additive charts built 2026-07-24** (after the annual engine, on the user's request to visualize themes from this feedback "without upsetting anything" — no mechanic/formula changes, existing math surfaced or reused):
+1. **Genre decay-curve chart** (`pages/renewal.py`) — plots `Show.projected_rating()`'s existing ip_score-driven maturation forward 6 years, grouped by genre. Answers Zach's own open question "how visible should decay curves be to students?" by making math that already existed visible for the first time.
+2. **Linear vs. Streaming economics chart** (Financing, `pages/simulation.py`) — runs the team's own portfolio-average show through the existing `greenlight_linear`/`greenlight_svod` formulas at 3 year-checkpoints, visualizing Zach's "linear has higher CPM, Peacock has lower sub acquisition but originals drive usage" framing with the team's real numbers instead of a generic hypothetical.
+3. **Year-over-year performance vs. budget chart** (Complete phase, `pages/simulation.py`) — actual OCF margin per year plotted against the real fixed-3%/yr budget line *and* an illustrative performance-linked budget line (margin ≥ threshold → +8%/yr, 0 to threshold → the real +3%, negative → −6%) computed from the team's actual results. Explicitly illustrative — does not change `annual_budget()` or any real budget mechanic; visualizes what Zach's "good year = more budget, poor year = a cut" idea would have looked like without committing to it yet.
+
+Verified via `AppTest` through a full 4-year level (Decisions → Results ×4 → Complete) — all three charts render with no exceptions at every year. Still not human-browser-verified, same standing gap as everything else in this doc.
+
+---
+
+> **Streaming Entertainment Simulation: Zach's Feedback**
+>
+> **High Level Strategic Focus**
+>
+> *Core Business Shift (2018 to 2026)*
+> 2018: Arms dealer model, build your own streamer, or buy smaller player (Tubi, Star, Showtime). 2026: Competing with FAANG, big talent deals (Taylor Sheridan), high sports rights costs, can't shut down Peacock, decade-long content rights, must partner with tech or pursue M&A.
+>
+> *Key Strategic Emphasis for Case*
+> Shift from subscription growth to profitability. Prioritize profitability over subscriber acquisition. Studio business model changes: less profit from traditional window, incentives need to align with talent. No monoculture anymore: streaming built on old sitcoms and dramas, broadcast can't compete.
+>
+> *Thesis Edits Needed*
+> Remove Paris Olympics reference (too far out). Edit to focus on value of Peacock originals vs. library vs. investment in NBC/Bravo. Emphasize how streaming amortizes costs across platforms.
+>
+> **Peacock Business Model Context**
+>
+> *Three Platform Structure*: Peacock (standalone streamer), NBC (linear network/broadcast), Bravo (linear cable).
+>
+> *Key Financial Dynamics — Linear (NBC/Bravo) Advantages*: Higher CPMs, more ad spots per hour (40-min shows, 20 min content), better ad revenue per hour, strong brand ecosystem, lower marketing spend required.
+>
+> *Peacock Challenges & Opportunities*: Lower sub acquisition than linear. Originals drive more subscriptions and usage; greater variability in performance. Library is cheaper but harder to predict — attracts fewer subs but is profitable (programmatic advertising). Sports as loss leader: NFL season is 5 months, massive sub spike, then churn.
+>
+> *The Profitability Curve Problem*: Amortization curve — studios must spread content costs across window and time. Overinvestment risk — entertainment slate can overinvest to fill content needs. Sports dynamics — NFL brings millions of subs for 5 months, requires originals to retain them for the remaining 9 months. Tier breaker — originals win long-term for brand equity and differentiation.
+>
+> **Core Student Decision Framework**
+>
+> *Business Strategy Layer*: Understand macro shifts (subs vs. profitability). Balance sports investment with entertainment profitability gap. Align budget discipline with creative flexibility. Consensus build: platform value, originals value, talent relations, ad sales, press benefits.
+>
+> *Creative Alignment*: Don't tell creatives exactly what to do — give guidelines and direction (e.g., "only 4 originals, certain areas to play"). Example: "We're moving away from horror/supernatural, moving toward prestige drama." Balance with talent sensibility: biggest hits break the mold, can't be engineered by research/finance.
+>
+> *Business Side Skills Required*: Financials must make sense AND convince creatives they align with creative vision. Acknowledge intangibles and qualitative considerations. Weigh opportunities and risks. Use case studies from other streamers to back decisions.
+>
+> **Simulation Structure**
+>
+> *Time Horizon*: Change from quarters to years (not quarters).
+>
+> *Annual Workflow — Order of Play (Year 1 Planning - Q1)*: Portfolio Review (spot cash cows vs. dogs in slate) → Renewal Decisions (cancel low-ROI shows to free budget) → Sidebar (adjust marketing and reserve allocation) → P&L Check (confirm income statement is healthy) → Portfolio Submit (lock in official score).
+>
+> *Carry-Forward from Previous Year*: Expected 5-10% decline on renewed shows (base case). Marketing assumed flat. Students can pay for research to examine decline scenarios.
+>
+> *Launch Timing Decision*: "Which quarter would you launch these shows and why?" Strategic consideration: how does timing shape brand equity?
+>
+> *Budget Constraints*: Total spend budget (e.g., $100 million). Students allocate content spend vs. marketing spend. Minimum thresholds (e.g., $3M marketing minimum for show viability).
+>
+> **TV Shows / Series Simulation**
+>
+> *Content Categories*: True Crime (lower ratings, better decay rate, lower CPM, amortizes over 2 years) vs. Non True Crime (higher ratings, higher decay rate, higher CPM, amortizes over 12 months). Different revenue profiles require different strategic positioning.
+>
+> *Simulation Mechanics — Deck 1: Oxygen / Basic Model*: 100 million annual budget. Allocate 0-100 on content, 0-100 on marketing. Content generates ratings, marketing impacts performance. Repeats fill 24/7 schedule for 52 weeks.
+>
+> *Deck 2: Bravo / Advanced Model*: Repeat erosion and decay modeling. Decay rate randomized by genre. Students pick slate that nets to budget. Shows available in specific years (production delays).
+>
+> *Revenue Calculation*: `Revenue = (Rating × CPM × Ad Spots per Hour) × Decay Curve × Hours per Day × 365 Days + Research Cost (optional) + Talent/Risk Adjustments`.
+>
+> *Performance Variables*: Ratings Band (varies by talent attached, genre, title testing). Decay Curve (genre-dependent decline). Marketing Spend Relationship (~1 percentage point rating increase per $1M, threshold dependent). Research Option (pay for a 1-5 star rating prediction — 1 star = 30% decline, 5 star = 10% growth).
+>
+> *Renewal & Greenlight Decisions*: Renew existing shows (with expected decline). Greenlight new shows (within budget). Make production choices (some shows available only Year 2+). Students balance risk: pay for research or gamble on instinct.
+>
+> *Risk & Title Compliance*: Risk assessment for each show (legal, market, creative). Risk = 0 score: take an existing show title without permission (gets sued) — originality matters.
+>
+> *Show Creation Option*: Students can propose a custom show (title + 3-4 sentence description); AI grades the concept and determines if testing/research is worth paying for.
+>
+> **Movies Simulation**
+>
+> *Same Year 1 Practice as TV*: Budget allocation, greenlight decisions, research vs. risk-taking.
+>
+> *Movie Categories*: Sequels, New Adult IP, Kids IP, Horror or Indie — different profiles with different revenue streams.
+>
+> *Windowing Strategy (Year 3 Introduction)*: Trade-off decisions — theatrical vs. streaming vs. PVOD vs. rental. Window length impacts box office revenue vs. streaming revenue; earlier streaming window hurts theater but helps streaming. Genre determines licensing/merchandise potential.
+>
+> *Revenue Streams*: Box office (theatrical window), licensing revenue (VOD, streaming, rental), theme park/merchandise opportunities, Universal licensing deals ("pay yourself" model).
+>
+> *Constraints*: Limited film slots (e.g., "10 films or 3 films"). Windowing rules apply year 3 onward. Genre determines theme park eligibility.
+>
+> **Grading & Scoring**
+>
+> *Evaluation Criteria*: P&L Health (does budget balance, is profitability trending right). Portfolio Strategy (are cash cows protecting losses appropriately). Renewal Logic (smart cancellations vs. emotional attachments). Marketing Discipline (spend threshold met, ROI positive). Creative Alignment (do chosen shows reflect stated strategy). Brand Equity (long-term positioning — originals vs. library balance).
+>
+> *Randomization*: Performance bands for new shows (talent, genre, testing dependent). Starting-point decay curves randomized. Production availability randomized. Shows can fail for legitimate reasons (talent departure, poor script, etc.).
+>
+> *Multi-Year Dynamics*: Year-over-year budget adjusts based on performance — good performance means more budget allocation, poor performance means a cut for the following year. Compounds over a 4-year simulation window.
+>
+> **Key Pedagogical Takeaways**
+>
+> *What Students Learn*: Financials & strategy integration (how numbers drive creative decisions). Platform dynamics (linear vs. streaming profitability profiles differ). Risk management (when to research vs. when to bet on instinct). Talent relations (financials only work if creatives are aligned). Long-term thinking (short-term wins vs. brand equity). Constraints (real production, talent, and budget limitations).
+>
+> *Case Study Scaffolding*: Start simple (Oxygen — basic spend allocation) → build complexity (Bravo — decay curves, genres, repeats) → add realism (multi-year — budget pressure, cumulative effects) → introduce windowing (movie distribution strategy).
+>
+> **Open Simulation Decisions**
+>
+> Will students manually create show titles or select from a catalog? How frequently does production availability randomize? Should budget constraints shift mid-year (emergency cancellations)? How visible should decay curves be to students (hidden vs. transparent)? Can students see competitors' slates (comparative analysis)? How are tie-breaker decisions (same ROI) handled?
+
+## Original mechanics brief (Zach Schlessel, NBCUniversal — preserved verbatim in spirit)
 
 Recovered from an untracked `Zach Notes.docx` found in a stale duplicate clone (`OneDrive/Desktop/ComcastSimulator`) — preserved here since it's the closest thing to a founding design doc and wasn't committed anywhere.
 

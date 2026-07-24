@@ -46,6 +46,36 @@ else:
     components.html(TAILWIND_INJECT, height=1)
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
+
+def _render_theory_grid():
+    """Shared theory-card grid — used on the welcome screen and both the TV
+    and Movies Theory tabs, so the reference content is identical everywhere."""
+    theory_items = list(THEORY_CONTENT.values())
+    cols = st.columns(3)
+    for i, col in enumerate(cols):
+        if i < len(theory_items):
+            t = theory_items[i]
+            col.markdown(f"""
+            <div class="theory-card">
+              <div class="theory-icon">{t['icon']}</div>
+              <div class="theory-title">{t['title']}</div>
+              <div class="theory-body">{t['brief']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    cols2 = st.columns(2)
+    for i, col in enumerate(cols2):
+        idx = i + 3
+        if idx < len(theory_items):
+            t = theory_items[idx]
+            col.markdown(f"""
+            <div class="theory-card">
+              <div class="theory-icon">{t['icon']}</div>
+              <div class="theory-title">{t['title']}</div>
+              <div class="theory-body">{t['brief']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
 # ── Session state defaults ────────────────────────────────────────────────────
 def init_state():
     defaults = {
@@ -57,14 +87,15 @@ def init_state():
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
         "oxygen_shows":    copy.deepcopy(OXYGEN_SLATE),
         "peacock_shows":   copy.deepcopy(PEACOCK_SLATE),
-        "year":            1,
+        "year":            1,   # real turn counter within a level as of 2026-07-24 (1-4 years), not frozen
+        "level_budget":    None,   # re-derived from net_info["budget_base"] on first render (pages/simulation.py::_init)
         "mkt_budget":      5.0,
         "renewal_decisions": {},
+        "research_revealed": {},
         "last_score":      None,
         "submitted":       False,
-        "sim_month":       1,
         "sim_phase":       "decisions",
-        "monthly_log":     [],
+        "yearly_log":      [],
         "cancelled_shows": set(),
     }
     for k, v in defaults.items():
@@ -175,13 +206,15 @@ with st.sidebar:
 
             if not locked:
                 if st.button(label, key=f"net_{net}", use_container_width=True):
-                    ss.active_network  = net
-                    ss.submitted       = False
-                    ss.sim_month       = 1
-                    ss.sim_phase       = "decisions"
-                    ss.monthly_log     = []
-                    ss.cancelled_shows = set()
-                    ss.year            = 1
+                    ss.active_network    = net
+                    ss.submitted         = False
+                    ss.sim_phase         = "decisions"
+                    ss.yearly_log        = []
+                    ss.cancelled_shows   = set()
+                    ss.renewal_decisions = {}
+                    ss.research_revealed = {}
+                    ss.year              = 1
+                    ss.level_budget      = None   # re-derived from the new network's budget_base
                     st.rerun()
             else:
                 st.markdown(
@@ -191,64 +224,22 @@ with st.sidebar:
                     unsafe_allow_html=True
                 )
 
+        # ── Movies — peer nav item, independent of TV network progress ─────────
+        movies_active = ss.active_network == "movies"
+        if st.button(f"{'🎯' if movies_active else '🎬'} Movies (Day 2)",
+                     key="net_movies", use_container_width=True):
+            ss.active_network = "movies"
+            st.rerun()
+
         st.divider()
 
-        # ── Budget Controls ───────────────────────────────────────────────────
-        # Simulation Year removed 2026-07-22 — a first attempt always plays
-        # Year 1, matching the "Level 1, your first assignment" narrative and
-        # how the quarterly engine actually works (one attempt = one year).
-        # ss.year stays fixed at its init_state() default (1) and is still
-        # used internally by the cost/revenue math below and in
-        # pages/simulation.py — only the ability to change it was removed.
-        st.markdown('<div class="section-title">Budget Allocation ($M)</div>', unsafe_allow_html=True)
-
-        net_info = NETWORK_INFO[ss.active_network]
-        base_budget = net_info["budget_base"] * (1.03 ** (ss.year - 1))
-
-        from utils.models import portfolio_cost
-        _net = ss.active_network
-        shows = ss.oxygen_shows[:]
-        if _net in ("bravo", "peacock"):
-            shows += ss.bravo_shows
-        if _net == "peacock":
-            shows += ss.peacock_shows
-        content_cost = portfolio_cost(shows, ss.year)
-
-        # Development/Reserve sliders removed 2026-07-22 — dead controls,
-        # never read by pages/simulation.py's actual scoring engine (only
-        # this sidebar's own cosmetic "Remaining" display used them). Only
-        # Marketing feeds real gameplay (synced live with simulation.py's
-        # Decision 1 quarterly marketing slider).
-        ss.mkt_budget = st.slider("📣 Marketing ($M)", 0.0, 20.0, ss.mkt_budget, 0.5)
-
-        allocated = content_cost + ss.mkt_budget
-        remaining = base_budget - allocated
-        rem_color = "#66bb6a" if remaining >= 0 else "#ef5350"
-
-        st.markdown(f"""
-        <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px;margin-top:6px;">
-          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
-            <span style="color:#e0e2ea;">Total Budget</span>
-            <span style="font-family:DM Mono,monospace;">${base_budget:.1f}M</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">
-            <span style="color:#e0e2ea;">Content Cost</span>
-            <span style="font-family:DM Mono,monospace;color:#ef5350;">-${content_cost:.1f}M</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;
-               border-top:1px solid #252836;padding-top:6px;margin-top:4px;">
-            <span>Remaining</span>
-            <span style="font-family:DM Mono,monospace;color:{rem_color};">{'+'if remaining>=0 else ''}${remaining:.1f}M</span>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if remaining < -5:
-            st.error("⚠️ Significantly over budget!")
-        elif remaining < 0:
-            st.warning("Over budget — reduce marketing spend.")
-        elif remaining > 30:
-            st.info(f"${remaining:.0f}M unallocated. Add marketing or new shows.")
+        # Budget Allocation removed 2026-07-24 — all gameplay decisions
+        # (including Marketing spend) now live in the main page's quarterly
+        # Financing section (pages/simulation.py), not the sidebar. This was
+        # the last decision control still duplicated between sidebar and
+        # main content; the sidebar is nav-only now (registration, network
+        # select). ss.mkt_budget stays as the shared session-state value
+        # simulation.py's Financing section reads/writes each quarter.
 
     # Quick Checklist removed 2026-07-22 — it referenced tab names
     # ("Portfolio", "Renewal", "P&L") from before the 7-tabs-to-3 redesign
@@ -289,30 +280,7 @@ if not ss.registered:
     """, unsafe_allow_html=True)
 
     # Theory cards
-    cols = st.columns(3)
-    theory_items = list(THEORY_CONTENT.values())
-    for i, col in enumerate(cols):
-        if i < len(theory_items):
-            t = theory_items[i]
-            col.markdown(f"""
-            <div class="theory-card">
-              <div class="theory-icon">{t['icon']}</div>
-              <div class="theory-title">{t['title']}</div>
-              <div class="theory-body">{t['brief']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    cols2 = st.columns(2)
-    for i, col in enumerate(cols2):
-        idx = i + 3
-        if idx < len(theory_items):
-            t = theory_items[idx]
-            col.markdown(f"""
-            <div class="theory-card">
-              <div class="theory-icon">{t['icon']}</div>
-              <div class="theory-title">{t['title']}</div>
-              <div class="theory-body">{t['brief']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    _render_theory_grid()
 
     st.divider()
     st.markdown(
@@ -321,8 +289,37 @@ if not ss.registered:
         unsafe_allow_html=True
     )
 
+elif ss.active_network == "movies":
+    # ── Movies — peer section, independent of TV network progress ──────────────
+    st.markdown("""
+    <div style="background:#12141a;border:1px solid #252836;border-radius:10px;
+         padding:20px 24px;margin-bottom:16px;">
+      <div style="font-family:DM Serif Display,serif;font-size:22px;color:#e8c547;">
+        🎬 Universal Pictures — Day 2
+      </div>
+      <div style="font-size:12px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
+        Theatrical vs. streaming economics: risk-adjusted NPV, release-window strategy, and
+        award-season reception — a concentrated, front-loaded bet, in contrast to Day 1's
+        steady, amortized TV portfolio.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tabs = st.tabs(["🎬 Movies", "🏆 Leaderboard", "📖 Theory"])
+
+    from pages.movies      import render as render_movies
+    from pages.leaderboard import render as render_leaderboard
+
+    with tabs[0]:
+        render_movies()
+    with tabs[1]:
+        render_leaderboard()
+    with tabs[2]:
+        st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
+        _render_theory_grid()
+
 else:
-    # ── Registered — show active network dashboard ─────────────────────────────
+    # ── Registered — show active TV network dashboard ───────────────────────────
     net      = ss.active_network
     net_info = NETWORK_INFO[net]
     attempts = get_attempt_count(ss.team_name, net, ss.school, ss.class_section)
@@ -469,49 +466,24 @@ else:
     st.divider()
 
     # ── Main Tabs ─────────────────────────────────────────────────────────────
+    # Movies moved to its own sidebar nav item (peer to Oxygen/Bravo/Peacock) —
+    # see the ss.active_network == "movies" branch above — since it isn't
+    # actually scoped to whichever TV network happens to be active here.
     tabs = st.tabs([
         "📊 Simulation",
-        "🎬 Movies (Day 2)",
         "🏆 Leaderboard",
         "📖 Theory",
     ])
 
     from pages.simulation  import render as render_simulation
-    from pages.movies      import render as render_movies
     from pages.leaderboard import render as render_leaderboard
 
     with tabs[0]:
         render_simulation()
 
     with tabs[1]:
-        render_movies()
-
-    with tabs[2]:
         render_leaderboard()
 
-    with tabs[3]:
+    with tabs[2]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
-        cols = st.columns(3)
-        theory_items = list(THEORY_CONTENT.values())
-        for i, col in enumerate(cols):
-            if i < len(theory_items):
-                t = theory_items[i]
-                col.markdown(f"""
-                <div class="theory-card">
-                  <div class="theory-icon">{t['icon']}</div>
-                  <div class="theory-title">{t['title']}</div>
-                  <div class="theory-body">{t['brief']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-        cols2 = st.columns(2)
-        for i, col in enumerate(cols2):
-            idx = i + 3
-            if idx < len(theory_items):
-                t = theory_items[idx]
-                col.markdown(f"""
-                <div class="theory-card">
-                  <div class="theory-icon">{t['icon']}</div>
-                  <div class="theory-title">{t['title']}</div>
-                  <div class="theory-body">{t['brief']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        _render_theory_grid()

@@ -134,6 +134,50 @@ def renewal_decision(show: Show, year: int, mkt_boost: float) -> str:
     return "❌ Cancel"
 
 
+def performance_linked_growth(margin: float, threshold: float) -> float:
+    """Multiplier applied to next year's budget based on this year's OCF
+    margin vs. the level's pass threshold — replaces a flat annual growth
+    rate with Zach Schlessel's (NBCUniversal) "good year = more budget, poor
+    year = a cut" feedback (see DESIGN_NOTES.md). Single source of truth for
+    both the real budget mechanic (pages/simulation.py) and Renewal's
+    forward-looking estimate (pages/renewal.py)."""
+    if margin >= threshold:
+        return 1.08
+    elif margin >= 0:
+        return 1.03
+    else:
+        return 0.94
+
+
+def preview_show_variance(team_name: str, year: int, shows: list, target_id: int) -> float:
+    """Replicates the exact seeded RNG sequence pages/simulation.py's
+    _compute_year() will use for `year`, returning the variance draw for
+    `target_id` — a genuine preview of the actual upcoming outcome, not a
+    decorative random number. Read-only: does not consume or advance any
+    real game state, safe to call repeatedly. Powers the paid Research
+    feature in pages/renewal.py.
+
+    `shows` must be in the same order render() builds it in (oxygen + bravo
+    + peacock, as applicable) — draws are consumed sequentially, one per
+    show, same as the real computation."""
+    seed = (abs(hash(team_name)) + year * 1337) % (2 ** 31)
+    rng  = np.random.default_rng(seed)
+    for s in shows:
+        v = float(rng.uniform(0.93, 1.08))
+        if s.id == target_id:
+            return v
+    return 1.0
+
+
+def variance_to_stars(v: float) -> int:
+    """Maps a [0.93, 1.08] variance draw to a 1-5 star research rating —
+    Zach Schlessel's feedback: "1 star = 30% decline, 5 star = 10% growth"
+    (here scaled to this engine's actual ±7%-ish variance band, not his
+    example numbers verbatim, since our variance range is narrower)."""
+    frac = (v - 0.93) / (1.08 - 0.93)
+    return min(5, max(1, int(frac * 5) + 1))
+
+
 # ── Green Light model ─────────────────────────────────────────────────────────
 def greenlight_linear(episodes: int, ep_cost_k: float, rating: float,
                       mkt_m: float, year: int) -> dict:

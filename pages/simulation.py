@@ -1,13 +1,21 @@
 """
-Simulation tab — quarterly turn engine.
-Decisions → Results → repeat for 4 quarters, then submit final score.
+Simulation tab — annual turn engine.
+Decisions → Results → repeat for 4 years, then submit final score.
+
+Restructured 2026-07-24 from a quarterly engine (4 quarters within a single
+frozen "year 1") to a genuine annual engine (4 real years per level) per
+Zach Schlessel's (NBCUniversal) feedback — see DESIGN_NOTES.md. ss.year is
+now the actual turn counter driving all financial math, not a fixed value.
 """
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from utils.models import distribution_revenue, annual_budget
+from utils.models import (
+    distribution_revenue, annual_budget, portfolio_ad_rev,
+    greenlight_linear, greenlight_svod, performance_linked_growth,
+)
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
@@ -15,65 +23,61 @@ from utils.game_state import (
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
-QUARTER_LABELS  = ["Q1", "Q2", "Q3", "Q4"]
-QUARTER_MONTHS  = ["Jan – Mar", "Apr – Jun", "Jul – Sep", "Oct – Dec"]
-QUARTERS_PER_LEVEL = 4
+YEARS_PER_LEVEL = 4
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _qlabel(q: int, year: int) -> str:
-    idx = (q - 1) % 4
-    return f"{QUARTER_LABELS[idx]} · {QUARTER_MONTHS[idx]} · {2011 + year}"
+def _year_label(year: int) -> str:
+    return f"Year {year} · {2011 + year}"
 
 
 def _active_shows(shows, cancelled: set):
     return [s for s in shows if s.id not in cancelled]
 
 
-def _quarterly_cost(shows, year: int, prev_cancelled: set, new_cancel: set) -> float:
-    """Quarterly amort cost. New cancellations pay 50% penalty; prior cancellations cost nothing."""
+def _annual_cost(shows, year: int, prev_cancelled: set, new_cancel: set) -> float:
+    """Full annual amort cost. New cancellations pay a 25% sunk-cost penalty
+    (production already committed before the decision); prior cancellations
+    cost nothing."""
     total = 0.0
     for s in shows:
         if s.id in prev_cancelled:
             continue
         if s.id in new_cancel:
-            total += s.monthly_amort(year) * 3 * 0.5   # one-quarter penalty
+            total += s.annual_amort_expense(year) * 0.25
         else:
-            total += s.monthly_amort(year) * 3          # normal quarterly amort
+            total += s.annual_amort_expense(year)
     return total
 
 
-def _preview_pnl(shows, year: int, quarterly_mkt: float,
+def _preview_pnl(shows, year: int, mkt: float,
                  prev_cancelled: set, new_cancel: set) -> dict:
     """Expected (no-variance) P&L for the live preview card."""
     cancelled = prev_cancelled | new_cancel
     active    = _active_shows(shows, cancelled)
-    ann_mkt   = quarterly_mkt * 4
-    per       = ann_mkt / max(len(active), 1)
+    per       = mkt / max(len(active), 1)
 
-    ad_rev   = sum(s.ad_revenue(year, per) / 4 for s in active)
-    dist_rev = distribution_revenue(year) / 4
+    ad_rev   = sum(s.ad_revenue(year, per) for s in active)
+    dist_rev = distribution_revenue(year)
     rev      = ad_rev + dist_rev
-    cost     = _quarterly_cost(shows, year, prev_cancelled, new_cancel)
+    cost     = _annual_cost(shows, year, prev_cancelled, new_cancel)
     ga       = rev * 0.06
-    ocf      = rev - cost - quarterly_mkt - ga
+    ocf      = rev - cost - mkt - ga
     margin   = (ocf / rev * 100) if rev > 0 else 0.0
     return {"rev": rev, "ad_rev": ad_rev, "dist_rev": dist_rev,
             "cost": cost, "ga": ga, "ocf": ocf, "margin": margin}
 
 
-def _compute_quarter(ss, shows, year: int, quarterly_mkt: float,
-                     q: int, new_cancel: set) -> dict:
-    """Apply seeded ±7% rating variance and compute the quarter's actual P&L."""
-    seed = (abs(hash(ss.team_name)) + q * 1337 + year * 100) % (2 ** 31)
+def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set) -> dict:
+    """Apply seeded ±7% rating variance and compute the year's actual P&L."""
+    seed = (abs(hash(ss.team_name)) + year * 1337) % (2 ** 31)
     rng  = np.random.default_rng(seed)
 
     prev_cancelled = ss.cancelled_shows
     cancelled_all  = prev_cancelled | new_cancel
     active         = _active_shows(shows, cancelled_all)
-    ann_mkt        = quarterly_mkt * 4
-    per            = ann_mkt / max(len(active), 1)
+    per            = mkt / max(len(active), 1)
 
     show_rows  = []
     adj_ad_rev = 0.0
@@ -90,9 +94,9 @@ def _compute_quarter(ss, shows, year: int, quarterly_mkt: float,
                                "status": "cancelled",
                                "rating_base": s.rating, "rating_adj": 0.0,
                                "variance": round(v, 3), "revenue": 0.0,
-                               "cost": round(s.monthly_amort(year) * 3 * 0.5, 2)})
+                               "cost": round(s.annual_amort_expense(year) * 0.25, 2)})
         else:
-            rev = (s.ad_revenue(year, per) / 4) * v
+            rev = s.ad_revenue(year, per) * v
             adj_ad_rev += rev
             show_rows.append({"id": s.id, "name": s.name, "network": s.network,
                                "status": "active",
@@ -100,23 +104,23 @@ def _compute_quarter(ss, shows, year: int, quarterly_mkt: float,
                                "rating_adj": round(s.rating * v, 2),
                                "variance": round(v, 3),
                                "revenue": round(rev, 2),
-                               "cost": round(s.monthly_amort(year) * 3, 2)})
+                               "cost": round(s.annual_amort_expense(year), 2)})
 
-    dist_rev   = distribution_revenue(year) / 4
+    dist_rev   = distribution_revenue(year)
     total_rev  = adj_ad_rev + dist_rev
     total_cost = sum(r["cost"] for r in show_rows)
     ga         = total_rev * 0.06
-    ocf        = total_rev - total_cost - quarterly_mkt - ga
+    ocf        = total_rev - total_cost - mkt - ga
     margin     = (ocf / total_rev * 100) if total_rev > 0 else 0.0
 
     return {
-        "quarter": q,
-        "label":   _qlabel(q, year),
+        "year":    year,
+        "label":   _year_label(year),
         "revenue": round(total_rev, 2),
         "ad_rev":  round(adj_ad_rev, 2),
         "dist_rev":round(dist_rev, 2),
         "cost":    round(total_cost, 2),
-        "mkt":     round(quarterly_mkt, 2),
+        "mkt":     round(mkt, 2),
         "ga":      round(ga, 2),
         "ocf":     round(ocf, 2),
         "margin":  round(margin, 1),
@@ -127,24 +131,28 @@ def _compute_quarter(ss, shows, year: int, quarterly_mkt: float,
 
 # ── Session state init ─────────────────────────────────────────────────────────
 
-def _init(ss):
-    if not isinstance(ss.get("monthly_log"), list):
-        ss.monthly_log = []
+def _init(ss, net_info):
+    if not isinstance(ss.get("yearly_log"), list):
+        ss.yearly_log = []
     if not isinstance(ss.get("cancelled_shows"), set):
         ss.cancelled_shows = set(ss.get("cancelled_shows") or [])
-    if ss.get("sim_month") is None:
-        ss.sim_month = 1
+    if not isinstance(ss.get("renewal_decisions"), dict):
+        ss.renewal_decisions = {}
+    if not ss.get("year"):
+        ss.year = 1
     if ss.get("sim_phase") not in ("decisions", "results", "complete"):
         ss.sim_phase = "decisions"
+    if not ss.get("level_budget"):
+        ss.level_budget = float(net_info["budget_base"])
 
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
 
-def _progress_bar(ss, net_info, q, phase, year):
+def _progress_bar(ss, net_info, year, phase):
     dot_items = []
-    for i in range(1, QUARTERS_PER_LEVEL + 1):
-        done    = any(r["quarter"] == i for r in ss.monthly_log)
-        current = (i == q) and phase != "complete"
+    for i in range(1, YEARS_PER_LEVEL + 1):
+        done    = any(r["year"] == i for r in ss.yearly_log)
+        current = (i == year) and phase != "complete"
         if done or phase == "complete":
             bg, txt, clr = "#66bb6a", "✓", "#0b0c10"
         elif current:
@@ -157,20 +165,20 @@ def _progress_bar(ss, net_info, q, phase, year):
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:{clr};">{txt}</div>'
             f'<div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;margin-top:2px;">'
-            f'{QUARTER_LABELS[i-1]}</div>'
+            f'Yr {i}</div>'
             f'</div>'
         )
     connector   = '<div style="width:44px;height:2px;background:#252836;margin-bottom:16px;"></div>'
     phase_label = {"decisions": "▶ Decision Phase",
-                   "results":   "📊 Quarter Results",
-                   "complete":  "✅ Season Complete"}[phase]
-    q_label = _qlabel(q, year) if phase != "complete" else f"Year {year} — Season Complete"
+                   "results":   "📊 Year Results",
+                   "complete":  "✅ Level Complete"}[phase]
+    y_label = _year_label(year) if phase != "complete" else f"{net_info['display_name']} — Level Complete"
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
          padding:14px 20px;margin-bottom:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div style="font-family:DM Mono,monospace;font-size:11px;color:#e0e2ea;">{q_label}</div>
+        <div style="font-family:DM Mono,monospace;font-size:11px;color:#e0e2ea;">{y_label}</div>
         <div style="font-family:DM Mono,monospace;font-size:10px;color:{net_info['color']};
              text-transform:uppercase;letter-spacing:.08em;">{phase_label}</div>
       </div>
@@ -185,12 +193,12 @@ def _progress_bar(ss, net_info, q, phase, year):
 
 def render():
     ss       = st.session_state
-    _init(ss)
-
     net      = ss.active_network
     net_info = NETWORK_INFO[net]
+    _init(ss, net_info)
+
     team     = ss.team_name
-    year     = ss.get("year", 1)
+    year     = ss.year
 
     shows = ss.oxygen_shows[:]
     if net in ("bravo", "peacock"):
@@ -198,79 +206,164 @@ def render():
     if net == "peacock":
         shows += ss.get("peacock_shows", [])
 
-    q     = ss.sim_month
     phase = ss.sim_phase
 
-    _progress_bar(ss, net_info, q, phase, year)
+    _progress_bar(ss, net_info, year, phase)
 
     if phase == "decisions":
-        _decisions(ss, shows, net_info, year, q)
+        _decisions(ss, shows, net_info, year)
     elif phase == "results":
-        _results(ss, shows, net_info, year, q, team, net)
+        _results(ss, shows, net_info, year, team, net)
     else:
-        _complete(ss, shows, net_info, year, team, net)
+        _complete(ss, shows, net_info, team, net)
 
 
 # ── Decisions phase ────────────────────────────────────────────────────────────
 
-def _decisions(ss, shows, net_info, year, q):
+def _decisions(ss, shows, net_info, year):
     threshold = net_info["pass_threshold"]
 
     left, right = st.columns([3, 2])
 
     with left:
-        # ── Marketing spend ───────────────────────────────────────────────────
-        st.markdown('<div class="section-title">Decision 1 — Quarterly Marketing Spend</div>',
-                    unsafe_allow_html=True)
-        st.markdown(
-            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
-            'Higher spend lifts ratings and ad revenue. Each $1M quarterly ≈ +1.5% ad rev lift. '
-            'Diminishing returns above $4M.</div>', unsafe_allow_html=True)
+        # ── Financing ────────────────────────────────────────────────────────
+        st.markdown('<div class="section-title">💰 Financing</div>', unsafe_allow_html=True)
 
-        default_mkt = ss.get("mkt_budget", 5.0) / 4
-        mkt = st.slider("Marketing ($M this quarter)", 0.0, 6.0,
-                         float(round(default_mkt, 2)), step=0.25, key=f"dec_mkt_{q}")
+        # Budget is performance-linked as of 2026-07-24 (Zach Schlessel
+        # feedback: good year = more budget, poor year = a cut), not a flat
+        # 3%/yr — see performance_linked_growth() in utils/models.py. Shown
+        # here as real context (not just informational), since it's what
+        # actually caps this year's spend below.
+        level_budget = ss.level_budget
+        if year > 1:
+            st.markdown(
+                f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:6px;">'
+                f'This year\'s budget (<b style="color:#e8eaf0;">${level_budget:.1f}M</b>) reflects how '
+                f'Year {year-1} went — clear the {net_info["pass_threshold"]:.0f}% margin target and next '
+                f'year\'s budget grows faster; miss it and it shrinks.</div>',
+                unsafe_allow_html=True)
+
+        # Revenue streams — where the money actually comes from, shown before
+        # the marketing-spend decision so students see ad vs. distribution
+        # (subscriber) revenue rather than just a budget number.
+        ann_ad_rev  = portfolio_ad_rev(shows, year, ss.get("mkt_budget", 5.0))
+        ann_dist_rev = distribution_revenue(year)
+        ann_total    = ann_ad_rev + ann_dist_rev
+        ad_pct   = (ann_ad_rev / ann_total * 100) if ann_total else 0
+        dist_pct = 100 - ad_pct if ann_total else 0
+
+        st.markdown(
+            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+            'Two revenue streams fund everything below: <b style="color:#e8eaf0;">ad revenue</b> '
+            '(rating × marketing lift, eroding as cord-cutting continues) and '
+            '<b style="color:#e8eaf0;">distribution revenue</b> (affiliate fees × subscriber count, '
+            'also eroding but with an escalation clause). At current ratings/marketing:</div>',
+            unsafe_allow_html=True)
+
+        rcol1, rcol2, rcol3 = st.columns(3)
+        rcol1.metric("📺 Ad Revenue", f"${ann_ad_rev:.1f}M", f"{ad_pct:.0f}% of revenue")
+        rcol2.metric("📡 Distribution", f"${ann_dist_rev:.1f}M", f"{dist_pct:.0f}% of revenue")
+        rcol3.metric("Total Revenue", f"${ann_total:.1f}M")
+
+        # ── Linear vs. Streaming economics ──────────────────────────────────────
+        # Uses the current portfolio's own average show economics (not a
+        # hypothetical concept) run through the same greenlight_linear/
+        # greenlight_svod formulas pages/greenlight.py already uses for a
+        # single new-show pitch — here showing what your existing average
+        # show would earn on each platform, and how that crosses over time.
+        # Answers Zach Schlessel's "linear has higher CPM / Peacock has
+        # lower sub acquisition but originals drive usage" framing with real
+        # numbers from this team's own slate, not a generic hypothetical.
+        active_for_cmp = _active_shows(shows, ss.cancelled_shows)
+        if active_for_cmp:
+            avg_rating  = sum(s.rating for s in active_for_cmp) / len(active_for_cmp)
+            avg_eps     = round(sum(s.episodes for s in active_for_cmp) / len(active_for_cmp))
+            avg_ep_cost = sum(s.ep_cost_k for s in active_for_cmp) / len(active_for_cmp)
+            per_show_mkt = ss.get("mkt_budget", 5.0) / len(active_for_cmp)
+
+            st.markdown('<div class="section-title" style="margin-top:14px;">Linear vs. Streaming — Your Average Show</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+                'Same math as the Greenlighting tab\'s linear-vs-SVOD builder, run on your own '
+                'portfolio\'s average show instead of a new pitch. Linear wins on immediate cash '
+                'early on; SVOD subscriber LTV catches up over time.</div>',
+                unsafe_allow_html=True)
+
+            checkpoints = sorted(set(y for y in (year, year + 3, year + 6) if y >= 1))
+            lin_vals, svod_vals = [], []
+            for yr in checkpoints:
+                lin  = greenlight_linear(avg_eps, avg_ep_cost, avg_rating, per_show_mkt, yr)
+                svod = greenlight_svod(avg_eps, avg_ep_cost, avg_rating, 65, per_show_mkt, yr)
+                lin_vals.append(round(lin["ocf"], 2))
+                svod_vals.append(round(svod["ocf"], 2))
+
+            fig_ls = go.Figure()
+            fig_ls.add_trace(go.Bar(name="📺 Linear OCF", x=[f"Year {y}" for y in checkpoints],
+                                     y=lin_vals, marker_color=ACCENT, opacity=0.85))
+            fig_ls.add_trace(go.Bar(name="📱 SVOD OCF", x=[f"Year {y}" for y in checkpoints],
+                                     y=svod_vals, marker_color=ACCENT2, opacity=0.85))
+            fig_ls.update_layout(**base_layout("Average Show OCF: Linear vs. SVOD ($M)", height=240), barmode="group")
+            st.plotly_chart(fig_ls, use_container_width=True, config={"displayModeBar": False})
+            st.caption("Genre appeal fixed at 65/100 (moderate streaming conversion) for this comparison — the Greenlighting tab lets you tune it per concept.")
 
         st.divider()
 
-        # ── Cancel shows ──────────────────────────────────────────────────────
-        st.markdown('<div class="section-title">Decision 2 — Cancel Shows (optional)</div>',
+        # ── Marketing spend ───────────────────────────────────────────────────
+        st.markdown('<div class="section-title">Decision — Marketing Spend</div>',
                     unsafe_allow_html=True)
         st.markdown(
             '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
-            'Cancelling stops all future amort cost but incurs a 50% one-quarter penalty now. '
-            'Target shows with negative OCF — they are destroying value every quarter.</div>',
-            unsafe_allow_html=True)
+            'Higher spend lifts ratings and ad revenue. Each $1M ≈ +1.5% ad rev lift. '
+            'Diminishing returns above $16M.</div>', unsafe_allow_html=True)
 
-        active = _active_shows(shows, ss.cancelled_shows)
-        ann_mkt = mkt * 4
-        per_preview = ann_mkt / max(len(active), 1)
-
-        rows_sorted = sorted(
-            [(s.name, round(s.ocf(year, per_preview), 2), s.id) for s in active],
-            key=lambda x: x[1]   # lowest OCF first
-        )
-        options     = [f"{n}  (OCF ${o:+.2f}M/yr)" for n, o, _ in rows_sorted]
-        id_by_label = {f"{n}  (OCF ${o:+.2f}M/yr)": sid for n, o, sid in rows_sorted}
-
-        selected = st.multiselect(
-            "Shows to cancel this quarter",
-            options=options,
-            default=[],
-            key=f"cancel_{q}",
-            help="Sorted lowest OCF first. Cancellations are permanent.",
-        )
-        new_cancel = {id_by_label[l] for l in selected}
+        default_mkt = ss.get("mkt_budget", 5.0)
+        mkt = st.slider("Marketing ($M this year)", 0.0, 24.0,
+                         float(round(default_mkt, 2)), step=0.5, key=f"dec_mkt_{year}")
 
         if ss.cancelled_shows:
             already = [s.name for s in shows if s.id in ss.cancelled_shows]
             st.markdown(
                 f'<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-top:6px;">'
-                f'Already cancelled: {", ".join(already)}</div>', unsafe_allow_html=True)
+                f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
+
+        st.divider()
+
+        # ── Renewal, Greenlighting, Scheduling ──────────────────────────────────
+        # These tools were fully built but never wired into the app — the
+        # engine only ever exposed Financing. Same math, no rewrite, just
+        # given a home. Tabs rather than expanders: renewal.py and
+        # schedule.py each already open their own internal st.expander, and
+        # Streamlit disallows nesting an expander inside another expander.
+        #
+        # Renewal is the real cancellation mechanism now (2026-07-24) — its
+        # Renew/Watch/Cancel choices, written into ss.renewal_decisions by
+        # its own selectbox widgets, are read below to build new_cancel.
+        # There's no separate quick-cancel control here anymore; annual
+        # turns make Renewal the natural single place that decision lives.
+        from pages.renewal    import render as render_renewal
+        from pages.greenlight import render as render_greenlight
+        from pages.schedule   import render as render_schedule
+
+        section_tabs = st.tabs([
+            "🔄 Renewal — Renew / Watch / Cancel",
+            "🎬 Greenlighting — New Show Concept",
+            "📅 Scheduling — Amortization & Timing",
+        ])
+        with section_tabs[0]:
+            render_renewal()
+        with section_tabs[1]:
+            render_greenlight()
+        with section_tabs[2]:
+            render_schedule()
+
+        active_now = _active_shows(shows, ss.cancelled_shows)
+        new_cancel = {s.id for s in active_now
+                      if ss.renewal_decisions.get(s.id) == "Cancel"}
 
     with right:
         # ── Live P&L preview ──────────────────────────────────────────────────
-        st.markdown('<div class="section-title">Expected This Quarter</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
         p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel)
 
         ocf_c    = SUCCESS if p["ocf"] >= 0 else DANGER
@@ -293,20 +386,33 @@ def _decisions(ss, shows, net_info, year, q):
         ])
 
         if new_cancel:
-            penalty = sum(s.monthly_amort(year) * 3 * 0.5
+            cancel_names = [s.name for s in shows if s.id in new_cancel]
+            penalty = sum(s.annual_amort_expense(year) * 0.25
                           for s in shows if s.id in new_cancel)
             penalty_note = (f'<div style="font-size:10px;color:{WARN};margin-top:6px;'
-                            f'font-family:DM Mono,monospace;">⚠ Cancel penalty this quarter: '
-                            f'${penalty:.2f}M</div>')
+                            f'font-family:DM Mono,monospace;">⚠ Cancelling this year '
+                            f'({", ".join(cancel_names)}): ${penalty:.2f}M sunk-cost penalty</div>')
         else:
             penalty_note = ""
+
+        spend_this_year = p["cost"] + mkt
+        if spend_this_year > level_budget:
+            over = spend_this_year - level_budget
+            budget_note = (f'<div style="font-size:10px;color:{DANGER};margin-top:6px;'
+                           f'font-family:DM Mono,monospace;">⚠ ${over:.1f}M over this year\'s '
+                           f'${level_budget:.1f}M budget (content + marketing) — cut marketing or '
+                           f'cancel more in Renewal.</div>')
+        else:
+            budget_note = (f'<div style="font-size:10px;color:{TEXT2};margin-top:6px;'
+                           f'font-family:DM Mono,monospace;">Budget: ${level_budget:.1f}M · '
+                           f'committed ${spend_this_year:.1f}M</div>')
 
         st.markdown(f"""
         <div style="background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px;">
           {rows_html}
           <div style="margin-top:10px;padding-top:8px;border-top:1px solid #252836;">
             <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;">
-              <span style="color:#e8eaf0;">Quarterly OCF</span>
+              <span style="color:#e8eaf0;">Annual OCF</span>
               <span style="font-family:DM Mono,monospace;color:{ocf_c};">${p['ocf']:+.2f}M</span>
             </div>
             <div style="margin-top:8px;">
@@ -322,6 +428,7 @@ def _decisions(ss, shows, net_info, year, q):
             </div>
           </div>
           {penalty_note}
+          {budget_note}
         </div>
         """, unsafe_allow_html=True)
 
@@ -329,8 +436,7 @@ def _decisions(ss, shows, net_info, year, q):
 
     # ── Active slate summary ──────────────────────────────────────────────────
     with st.expander("📋 View Active Show Slate", expanded=False):
-        ann_mkt = mkt * 4
-        per = ann_mkt / max(len(_active_shows(shows, ss.cancelled_shows | new_cancel)), 1)
+        per = mkt / max(len(_active_shows(shows, ss.cancelled_shows | new_cancel)), 1)
         slate_rows = []
         for s in shows:
             if s.id in ss.cancelled_shows:
@@ -342,8 +448,8 @@ def _decisions(ss, shows, net_info, year, q):
             slate_rows.append({
                 "Show": s.name, "Network": s.network, "Genre": s.genre,
                 "Rating": round(s.rating, 2),
-                "Qtr Rev $M": round(s.ad_revenue(year, per) / 4, 2) if status == "✅ Active" else 0.0,
-                "Qtr Cost $M": round(s.monthly_amort(year) * 3, 2) if status not in ("Cancelled",) else 0.0,
+                "Annual Rev $M": round(s.ad_revenue(year, per), 2) if status == "✅ Active" else 0.0,
+                "Annual Cost $M": round(s.annual_amort_expense(year), 2) if status not in ("Cancelled",) else 0.0,
                 "Status": status,
             })
         df = pd.DataFrame(slate_rows)
@@ -352,31 +458,36 @@ def _decisions(ss, shows, net_info, year, q):
             .map(lambda v: "color:#66bb6a;" if v == "✅ Active"
                  else ("color:#ef5350;" if "Cancel" in str(v) else "color:#b0b5c4;"),
                  subset=["Status"])
-            .format({"Rating": "{:.2f}", "Qtr Rev $M": "${:.2f}M", "Qtr Cost $M": "${:.2f}M"})
+            .format({"Rating": "{:.2f}", "Annual Rev $M": "${:.2f}M", "Annual Cost $M": "${:.2f}M"})
             .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "11px"}),
             use_container_width=True, height=280,
         )
 
     st.divider()
 
-    # ── End quarter button ────────────────────────────────────────────────────
+    # ── End year button ───────────────────────────────────────────────────────
     btn_col, _ = st.columns([1, 2])
     with btn_col:
-        if st.button(f"▶  End {QUARTER_LABELS[(q-1)%4]}  →  See Results",
+        if st.button(f"▶  End Year {year}  →  See Results",
                      type="primary", use_container_width=True):
-            result = _compute_quarter(ss, shows, year, mkt, q, new_cancel)
-            ss.monthly_log.append(result)
+            result           = _compute_year(ss, shows, year, mkt, new_cancel)
+            result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
+            ss.yearly_log.append(result)
             ss.cancelled_shows = ss.cancelled_shows | new_cancel
-            ss.mkt_budget      = mkt * 4     # sync annual equivalent to sidebar
+            ss.mkt_budget      = mkt     # sync to sidebar/other pages' ss.get("mkt_budget")
+            # Next year's budget is performance-linked, not a flat 3%/yr —
+            # computed from THIS year's actual result, so it's only known
+            # once results are in, same as a real budget review would be.
+            ss.level_budget    = level_budget * performance_linked_growth(result["margin"], threshold)
             ss.sim_phase       = "results"
             st.rerun()
 
 
 # ── Results phase ──────────────────────────────────────────────────────────────
 
-def _results(ss, shows, net_info, year, q, team, net):
-    log    = ss.monthly_log
-    result = next((r for r in log if r["quarter"] == q), None)
+def _results(ss, shows, net_info, year, team, net):
+    log    = ss.yearly_log
+    result = next((r for r in log if r["year"] == year), None)
     if not result:
         ss.sim_phase = "decisions"
         st.rerun()
@@ -422,7 +533,7 @@ def _results(ss, shows, net_info, year, q, team, net):
     active_rows = [r for r in result["shows"] if r["status"] == "active"]
     if active_rows:
         movers = sorted(active_rows, key=lambda x: abs(x["variance"] - 1.0), reverse=True)[:5]
-        st.markdown('<div class="section-title">Rating Movers This Quarter</div>',
+        st.markdown('<div class="section-title">Rating Movers This Year</div>',
                     unsafe_allow_html=True)
         cols = st.columns(5)
         for i, m in enumerate(movers):
@@ -450,67 +561,70 @@ def _results(ss, shows, net_info, year, q, team, net):
 
     # ── Cumulative P&L chart ──────────────────────────────────────────────────
     if log:
-        st.markdown('<div class="section-title" style="margin-top:18px;">Season P&L — Quarter by Quarter</div>',
+        st.markdown('<div class="section-title" style="margin-top:18px;">Level P&L — Year by Year</div>',
                     unsafe_allow_html=True)
         st.markdown(
             '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
             'Green bars = revenue. Red bars = total spend (cost + marketing + G&A). '
-            'Gold line = net OCF. A line above zero means you\'re profitable that quarter.</div>',
+            'Gold line = net OCF. A line above zero means you\'re profitable that year.</div>',
             unsafe_allow_html=True)
 
-        qlabels = [r["label"].split(" · ")[0] for r in log]
+        ylabels = [r["label"].split(" · ")[0] for r in log]
         cum_ocf = np.cumsum([r["ocf"] for r in log]).tolist()
 
         fig = go.Figure()
         fig.add_trace(go.Bar(
-            name="Revenue", x=qlabels, y=[r["revenue"] for r in log],
+            name="Revenue", x=ylabels, y=[r["revenue"] for r in log],
             marker_color=SUCCESS, opacity=0.75,
             text=[f"${r['revenue']:.1f}M" for r in log], textposition="outside",
             textfont=dict(size=10, color="#e0e2ea"),
         ))
         fig.add_trace(go.Bar(
-            name="Spend (cost+mkt+G&A)", x=qlabels,
+            name="Spend (cost+mkt+G&A)", x=ylabels,
             y=[-(r["cost"] + r["mkt"] + r["ga"]) for r in log],
             marker_color=DANGER, opacity=0.6,
         ))
         fig.add_trace(go.Scatter(
-            name="Quarterly OCF", x=qlabels, y=[r["ocf"] for r in log],
+            name="Annual OCF", x=ylabels, y=[r["ocf"] for r in log],
             mode="lines+markers", line=dict(color=ACCENT, width=2.5),
             marker=dict(size=9, color=[SUCCESS if r["ocf"] >= 0 else DANGER for r in log]),
         ))
         fig.add_trace(go.Scatter(
-            name="Cumulative OCF", x=qlabels, y=cum_ocf,
+            name="Cumulative OCF", x=ylabels, y=cum_ocf,
             mode="lines+markers", line=dict(color=ACCENT2, width=1.5, dash="dot"),
             marker=dict(size=6), opacity=0.7,
         ))
         fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.3)
-        fig.update_layout(**base_layout("Quarterly P&L ($M)", height=300), barmode="relative")
+        fig.update_layout(**base_layout("Annual P&L ($M)", height=300), barmode="relative")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # ── Cancelled shows this quarter ──────────────────────────────────────────
+    # ── Cancelled shows this year ──────────────────────────────────────────
     newly = [r for r in result["shows"] if r["status"] == "cancelled"]
     if newly:
         names = ", ".join(r["name"] for r in newly)
         st.markdown(
             f'<div style="font-size:11px;color:{WARN};font-family:DM Mono,monospace;margin-top:6px;">'
-            f'✂ Cancelled this quarter: {names}</div>', unsafe_allow_html=True)
+            f'✂ Cancelled this year: {names}</div>', unsafe_allow_html=True)
 
     st.divider()
 
     # ── Navigation ────────────────────────────────────────────────────────────
     nav1, nav2 = st.columns([1, 1])
     with nav1:
-        if st.button("← Redo This Quarter", use_container_width=True):
+        if st.button("← Redo This Year", use_container_width=True):
             new_cancel_ids = set(result.get("new_cancellations", []))
-            ss.monthly_log   = [r for r in ss.monthly_log if r["quarter"] != q]
+            ss.yearly_log      = [r for r in ss.yearly_log if r["year"] != year]
             ss.cancelled_shows = ss.cancelled_shows - new_cancel_ids
-            ss.sim_phase     = "decisions"
+            # Undo the performance-linked budget update End Year applied —
+            # result["budget"] is what was actually available *this* year,
+            # before that update projected next year's figure.
+            ss.level_budget    = result["budget"]
+            ss.sim_phase       = "decisions"
             st.rerun()
     with nav2:
-        if q < QUARTERS_PER_LEVEL:
-            next_qlabel = QUARTER_LABELS[q % 4]
-            if st.button(f"→ Start {next_qlabel}", type="primary", use_container_width=True):
-                ss.sim_month = q + 1
+        if year < YEARS_PER_LEVEL:
+            if st.button(f"→ Start Year {year + 1}", type="primary", use_container_width=True):
+                ss.year      = year + 1
                 ss.sim_phase = "decisions"
                 st.rerun()
         else:
@@ -522,14 +636,15 @@ def _results(ss, shows, net_info, year, q, team, net):
 
 # ── Complete phase ─────────────────────────────────────────────────────────────
 
-def _complete(ss, shows, net_info, year, team, net):
-    log = ss.monthly_log
+def _complete(ss, shows, net_info, team, net):
+    log = ss.yearly_log
     if not log:
         ss.sim_phase = "decisions"
-        ss.sim_month = 1
+        ss.year      = 1
         st.rerun()
         return
 
+    year       = ss.year   # final year of the level, used for the closing snapshot
     threshold  = net_info["pass_threshold"]
     total_rev  = sum(r["revenue"] for r in log)
     total_cost = sum(r["cost"]    for r in log)
@@ -539,8 +654,7 @@ def _complete(ss, shows, net_info, year, team, net):
 
     # Compute score
     active = _active_shows(shows, ss.cancelled_shows)
-    ann_mkt = total_mkt   # total mkt over the year ~ annual
-    per = ann_mkt / max(len(active), 1)
+    per = (total_mkt / YEARS_PER_LEVEL) / max(len(active), 1)   # avg annual mkt per show
     rois = [s.roi(year, per) for s in active]
     avg_roi = sum(rois) / len(rois) if rois else 0.0
     genre_costs = {}
@@ -560,14 +674,14 @@ def _complete(ss, shows, net_info, year, team, net):
     margin_c = SUCCESS if avg_margin >= threshold else (WARN if avg_margin >= 0 else DANGER)
     total_c  = SUCCESS if score_d["total"] >= 70 else (WARN if score_d["total"] >= 50 else DANGER)
 
-    # ── Season summary banner ─────────────────────────────────────────────────
+    # ── Level summary banner ──────────────────────────────────────────────────
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;
          border-left:4px solid {net_info['color']};
          border-radius:8px;padding:18px 22px;margin-bottom:20px;">
       <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
            text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;">
-        Full Season Results — {net_info['display_name']} · Year {year}
+        Full Level Results — {net_info['display_name']} · {YEARS_PER_LEVEL} Years
       </div>
       <div style="display:flex;gap:32px;flex-wrap:wrap;">
         <div>
@@ -596,27 +710,27 @@ def _complete(ss, shows, net_info, year, team, net):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Full season chart ─────────────────────────────────────────────────────
+    # ── Full level chart ───────────────────────────────────────────────────────
     chart_col, score_col = st.columns([3, 2])
 
     with chart_col:
-        st.markdown('<div class="section-title">Season P&L — All Quarters</div>', unsafe_allow_html=True)
-        qlabels = [r["label"].split(" · ")[0] for r in log]
+        st.markdown('<div class="section-title">Level P&L — All Years</div>', unsafe_allow_html=True)
+        ylabels = [r["label"].split(" · ")[0] for r in log]
         cum_ocf = np.cumsum([r["ocf"] for r in log]).tolist()
         fig = go.Figure()
-        fig.add_trace(go.Bar(name="Revenue", x=qlabels, y=[r["revenue"] for r in log],
+        fig.add_trace(go.Bar(name="Revenue", x=ylabels, y=[r["revenue"] for r in log],
                              marker_color=SUCCESS, opacity=0.75))
-        fig.add_trace(go.Bar(name="Spend", x=qlabels,
+        fig.add_trace(go.Bar(name="Spend", x=ylabels,
                              y=[-(r["cost"] + r["mkt"] + r["ga"]) for r in log],
                              marker_color=DANGER, opacity=0.6))
-        fig.add_trace(go.Scatter(name="Quarterly OCF", x=qlabels, y=[r["ocf"] for r in log],
+        fig.add_trace(go.Scatter(name="Annual OCF", x=ylabels, y=[r["ocf"] for r in log],
                                  mode="lines+markers", line=dict(color=ACCENT, width=2.5),
                                  marker=dict(size=9)))
-        fig.add_trace(go.Scatter(name="Cumulative OCF", x=qlabels, y=cum_ocf,
+        fig.add_trace(go.Scatter(name="Cumulative OCF", x=ylabels, y=cum_ocf,
                                  mode="lines+markers", line=dict(color=ACCENT2, width=1.5, dash="dot"),
                                  marker=dict(size=6)))
         fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.3)
-        fig.update_layout(**base_layout("Quarterly P&L ($M)", height=280), barmode="relative")
+        fig.update_layout(**base_layout("Annual P&L ($M)", height=280), barmode="relative")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with score_col:
@@ -660,6 +774,54 @@ def _complete(ss, shows, net_info, year, team, net):
         """, unsafe_allow_html=True)
 
     st.divider()
+
+    # ── Year-over-year performance vs. budget ─────────────────────────────────
+    # Budget is performance-linked as of 2026-07-24 (Zach Schlessel feedback:
+    # good year = more budget, poor year = a cut) — real mechanic now, not
+    # illustrative. r["budget"] on each yearly_log entry is what was actually
+    # available that year (utils/models.py::performance_linked_growth()).
+    # Plotted against a fixed-3%/yr baseline so the effect of performance is
+    # visible, not because the fixed line is real anymore.
+    if len(log) > 1:
+        st.markdown('<div class="section-title">Year-over-Year: Actual Margin vs. Budget</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+            'Gold bars = your actual OCF margin each year against the pass threshold. '
+            'The solid line is the real budget you actually played with — performance-linked, '
+            'not a flat raise. The dashed line shows what a flat 3%/yr would have given you instead, '
+            'for comparison only.</div>',
+            unsafe_allow_html=True)
+
+        base_budget    = net_info["budget_base"]
+        real_budget    = [r.get("budget", base_budget) for r in log]
+        flat_baseline  = [base_budget * (1.03 ** i) for i in range(len(log))]
+
+        ylabels = [r["label"].split(" · ")[0] for r in log]
+        fig_perf = go.Figure()
+        fig_perf.add_trace(go.Bar(
+            name="OCF Margin", x=ylabels, y=[r["margin"] for r in log],
+            marker_color=[SUCCESS if r["margin"] >= threshold else (WARN if r["margin"] >= 0 else DANGER) for r in log],
+            opacity=0.7, yaxis="y2",
+        ))
+        fig_perf.add_trace(go.Scatter(
+            name="Actual budget (performance-linked)", x=ylabels, y=[round(v, 1) for v in real_budget],
+            mode="lines+markers", line=dict(color=ACCENT, width=2.5), marker=dict(size=8),
+        ))
+        fig_perf.add_trace(go.Scatter(
+            name="Flat 3%/yr baseline (for comparison)", x=ylabels, y=[round(v, 1) for v in flat_baseline],
+            mode="lines+markers", line=dict(color=ACCENT2, width=2, dash="dash"), marker=dict(size=8),
+        ))
+        fig_perf.add_hline(y=threshold, yref="y2", line_dash="dot", line_color=TEXT2, opacity=0.4)
+        fig_perf.update_layout(
+            **base_layout("Budget ($M) vs. OCF Margin (%)", height=300),
+            yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                        title="OCF Margin (%)", tickfont=dict(size=10, color=TEXT2)),
+        )
+        st.plotly_chart(fig_perf, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Rule: margin ≥ threshold → +8%/yr, 0–threshold → +3%/yr, negative → −6%/yr. Real mechanic — this is what you actually played with.")
+
+        st.divider()
 
     # ── Submit & navigation ───────────────────────────────────────────────────
     act_col, restart_col = st.columns([2, 1])
@@ -716,21 +878,26 @@ def _complete(ss, shows, net_info, year, team, net):
                 if e["passed"] or can_advance(team, net, ss.school, ss.class_section):
                     if st.button(f"→ Advance to {next_info['display_name']}",
                                  use_container_width=True):
-                        ss.active_network  = next_net
-                        ss.submitted       = False
-                        ss.sim_month       = 1
-                        ss.sim_phase       = "decisions"
-                        ss.monthly_log     = []
-                        ss.cancelled_shows = set()
-                        ss.year            = 1
+                        ss.active_network    = next_net
+                        ss.submitted         = False
+                        ss.sim_phase         = "decisions"
+                        ss.yearly_log        = []
+                        ss.cancelled_shows   = set()
+                        ss.renewal_decisions = {}
+                        ss.research_revealed = {}
+                        ss.year              = 1
+                        ss.level_budget      = None   # re-derived from next_net's budget_base
                         st.rerun()
 
     with restart_col:
         if st.button("↺ Restart This Level", use_container_width=True):
-            ss.sim_month       = 1
-            ss.sim_phase       = "decisions"
-            ss.monthly_log     = []
-            ss.cancelled_shows = set()
-            ss.submitted       = False
-            ss.last_score      = None
+            ss.sim_phase         = "decisions"
+            ss.yearly_log        = []
+            ss.cancelled_shows   = set()
+            ss.renewal_decisions = {}
+            ss.research_revealed = {}
+            ss.submitted         = False
+            ss.last_score        = None
+            ss.year              = 1
+            ss.level_budget      = None   # re-derived from net_info's budget_base
             st.rerun()

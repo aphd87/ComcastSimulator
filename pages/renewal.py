@@ -7,8 +7,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from utils.models import (
     annual_budget, portfolio_ad_rev, portfolio_cost,
-    distribution_revenue, renewal_decision, CONTENT_COST_ESC
+    distribution_revenue, renewal_decision, CONTENT_COST_ESC,
+    performance_linked_growth,
 )
+from utils.game_state import NETWORK_INFO
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 
@@ -24,31 +26,135 @@ def render():
     if net == "peacock":
         shows += ss.get("peacock_shows", [])
 
-    next_year    = year + 1
-    budget_now   = annual_budget(year)
-    budget_next  = annual_budget(next_year)
-    budget_delta = budget_next - budget_now
+    next_year   = year + 1
+    threshold   = NETWORK_INFO[net]["pass_threshold"]
+    # Budget is performance-linked (2026-07-24) — next year's figure isn't
+    # knowable yet, since it depends on how THIS year's decisions play out.
+    # budget_now is real (pages/simulation.py sets ss.level_budget); the
+    # range below shows the best/worst case rather than a false-precision
+    # single number.
+    budget_now    = ss.get("level_budget") or NETWORK_INFO[net]["budget_base"]
+    budget_next_lo = budget_now * performance_linked_growth(-1, threshold)      # miss margin entirely
+    budget_next_hi = budget_now * performance_linked_growth(threshold, threshold)  # clear the target
 
-    st.markdown("""
+    st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;
          border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">Renewal Economics:</b> Each renewed show costs 5% more next year. 
-    Your budget grows only 3%. Cancel low-ROI shows to free capacity for new IP or marketing.
-    The IP Value score captures long-term franchise potential — sometimes a show worth renewing 
-    at a loss because it's building a franchise (e.g., Below Deck → 4 spinoffs).
+    💡 <b style="color:#e8eaf0;">Renewal Economics:</b> Each renewed show costs 5% more next year.
+    Your budget is performance-linked, not a flat raise — clear {threshold:.0f}% margin this year and
+    next year's budget grows faster; miss it and it shrinks. Cancel low-ROI shows to free capacity
+    for new IP or marketing. The IP Value score captures long-term franchise potential — sometimes a
+    show worth renewing at a loss because it's building a franchise (e.g., Below Deck → 4 spinoffs).
     </div>
     """, unsafe_allow_html=True)
 
     # ── Budget Bridge ─────────────────────────────────────────────────────────
     c1,c2,c3,c4 = st.columns(4)
     c1.metric(f"Budget Year {year}",    f"${budget_now:.1f}M")
-    c2.metric(f"Budget Year {next_year}", f"${budget_next:.1f}M", f"+${budget_delta:.1f}M (+3%)")
+    c2.metric(f"Est. Year {next_year} Budget", f"${budget_next_lo:.0f}–{budget_next_hi:.0f}M",
+              "depends on this year's margin")
     renewal_delta = sum(s.total_cost(next_year)-s.total_cost(year) for s in shows)
     c3.metric("Renewal Cost Increase",  f"+${renewal_delta:.1f}M", f"+{CONTENT_COST_ESC*100:.0f}% per show")
-    slots = max(0, int((budget_next - portfolio_cost(shows, next_year)) / 8))
-    c4.metric("New Show Capacity",       f"~{slots} shows",        "after renewals")
+    slots = max(0, int((budget_next_lo - portfolio_cost(shows, next_year)) / 8))
+    c4.metric("New Show Capacity",       f"~{slots} shows",        "worst-case budget")
 
     st.divider()
+
+    # ── Genre Decay Curves ────────────────────────────────────────────────────
+    # Ratings drift year over year via Show.projected_rating() (ip_score-driven
+    # maturation) — that math already existed but was never plotted anywhere,
+    # so decay was fully invisible to students. Surfacing it here, grouped by
+    # genre, answers "how visible should decay curves be?" from Zach
+    # Schlessel's feedback (DESIGN_NOTES.md) without changing the formula.
+    st.markdown('<div class="section-title">Genre Decay Curves — Rating Trajectory</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+        'Every show\'s rating drifts year over year based on its IP score — high-IP genres '
+        'compound upward (franchise value), low-IP genres decay. This is the same math behind '
+        'the "Proj Rating" column below, plotted forward so the trend is visible before you decide.</div>',
+        unsafe_allow_html=True)
+
+    active_for_decay = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
+    if active_for_decay:
+        genre_groups = {}
+        for s in active_for_decay:
+            genre_groups.setdefault(s.genre, []).append(s)
+
+        horizon = list(range(year, year + 6))
+        fig_decay = go.Figure()
+        palette = [ACCENT, ACCENT2, SUCCESS, WARN, DANGER, "#8e44ad", "#1a6bb5", "#c0392b"]
+        for i, (genre, gshows) in enumerate(sorted(genre_groups.items())):
+            avg_rating   = sum(s.rating for s in gshows) / len(gshows)
+            avg_ip       = sum(s.ip_score for s in gshows) / len(gshows)
+            maturation   = 1 + (avg_ip / 100) * 0.06 - 0.02
+            trajectory   = [avg_rating * (maturation ** (y - year)) for y in horizon]
+            fig_decay.add_trace(go.Scatter(
+                x=horizon, y=[round(v, 2) for v in trajectory],
+                name=f"{genre} (avg IP {avg_ip:.0f})",
+                mode="lines+markers",
+                line=dict(color=palette[i % len(palette)], width=2),
+                marker=dict(size=6),
+            ))
+        fig_decay.add_vline(x=year, line_dash="dot", line_color=TEXT2, opacity=0.4,
+                            annotation_text="You are here", annotation_font_color=TEXT2)
+        fig_decay.update_layout(**base_layout("Projected Rating by Genre — 6-Year Trajectory", height=280))
+        fig_decay.update_xaxes(title_text="Year", dtick=1)
+        st.plotly_chart(fig_decay, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Maturation = 1 + (avg IP score / 100) × 0.06 − 0.02 per year — genres above ~33 avg IP grow, below decay. Same formula as Show.projected_rating().")
+
+    st.divider()
+
+    # ── Research ───────────────────────────────────────────────────────────────
+    # Zach Schlessel's feedback: "Research Option: pay for a 1-5 star rating
+    # prediction... students balance risk: pay for research or gamble on
+    # instinct." Real stakes, not decorative — reveals the actual variance
+    # draw this year's Results phase will use (utils/models.py::
+    # preview_show_variance mirrors _compute_year()'s exact seeded RNG
+    # sequence), and costs real budget (deducted from ss.level_budget
+    # immediately, so it shows up in Financing's over-budget warning).
+    RESEARCH_FEE = 2.0  # $M per show
+    if "research_revealed" not in ss:
+        ss.research_revealed = {}
+
+    active_for_research = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
+    if active_for_research:
+        st.markdown('<div class="section-title">🔬 Research — Preview This Year\'s Variance</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+            f'${RESEARCH_FEE:.0f}M per show, deducted from this year\'s budget immediately. Reveals a real '
+            f'1-5 star signal for how that show\'s rating will actually move this year — not a decorative '
+            f'guess. Low stars mean brace for a rough year; high stars mean lean into it.</div>',
+            unsafe_allow_html=True)
+
+        with st.expander(f"🔬 Pay for Research (${RESEARCH_FEE:.0f}M/show)", expanded=False):
+            from utils.models import preview_show_variance, variance_to_stars
+            nc = 4
+            chunks = [active_for_research[i:i+nc] for i in range(0, len(active_for_research), nc)]
+            for chunk in chunks:
+                cols = st.columns(nc)
+                for col, s in zip(cols, chunk):
+                    with col:
+                        revealed = ss.research_revealed.get(s.id)
+                        if revealed and revealed.get("year") == year:
+                            stars = revealed["stars"]
+                            star_str = "⭐" * stars + "☆" * (5 - stars)
+                            hint_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
+                            st.markdown(
+                                f'<div style="font-size:12px;color:#e0e2ea;">{s.name[:18]}</div>'
+                                f'<div style="font-size:14px;color:{hint_c};">{star_str}</div>',
+                                unsafe_allow_html=True)
+                        else:
+                            if st.button(f"🔬 {s.name[:16]}", key=f"research_{s.id}_{year}",
+                                         help=f"${RESEARCH_FEE:.0f}M — reveal this year's variance signal"):
+                                v = preview_show_variance(ss.team_name, year, shows, s.id)
+                                ss.research_revealed[s.id] = {"year": year, "variance": v,
+                                                               "stars": variance_to_stars(v)}
+                                ss.level_budget = ss.get("level_budget", 0) - RESEARCH_FEE
+                                st.rerun()
+
+        st.divider()
 
     # ── Renewal Decision Table ────────────────────────────────────────────────
     st.markdown('<div class="section-title">Renewal Decision Matrix — Year {} → {}</div>'.format(year, next_year), unsafe_allow_html=True)
@@ -128,19 +234,19 @@ def render():
     renewed_cost  = sum(r["Renew Cost"] for r in renewed_shows)
     freed_budget  = sum(r["Renew Cost"] for r in cancelled)
     watch_cost    = sum(r["Renew Cost"] for r in watch_shows)
-    new_show_cap  = budget_next - renewed_cost - watch_cost - mkt
+    new_show_cap  = budget_next_lo - renewed_cost - watch_cost - mkt
     dev_shows_est = max(0, int(new_show_cap / 8))
 
     c1,c2,c3,c4 = st.columns(4)
     c1.metric("Shows Renewed",    str(len(renewed_shows)), f"${renewed_cost:.1f}M cost")
     c2.metric("Shows Cancelled",  str(len(cancelled)),     f"${freed_budget:.1f}M freed")
     c3.metric("Shows on Watch",   str(len(watch_shows)),   f"${watch_cost:.1f}M at risk")
-    c4.metric("New Show Capacity",f"~{dev_shows_est} shows", f"${new_show_cap:.1f}M available")
+    c4.metric("New Show Capacity",f"~{dev_shows_est} shows", f"${new_show_cap:.1f}M available (worst-case budget)")
 
     # Budget waterfall
-    wf_labels = ["Y{} Budget".format(next_year), "Renewed Shows", "Watch Shows",
+    wf_labels = ["Y{} Budget (worst-case)".format(next_year), "Renewed Shows", "Watch Shows",
                  "Marketing", "Available for Growth"]
-    wf_values = [budget_next, -renewed_cost, -watch_cost, -mkt, new_show_cap]
+    wf_values = [budget_next_lo, -renewed_cost, -watch_cost, -mkt, new_show_cap]
 
     fig_wf = go.Figure(go.Waterfall(
         x=wf_labels, y=[round(v,1) for v in wf_values],

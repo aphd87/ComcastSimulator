@@ -7,6 +7,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from utils.models import greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS
 from utils.charts import base_layout, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
+from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
+
+# Protected titles — every real show name already in this game's own data.
+# Zach Schlessel's feedback: "Risk = 0 score: take an existing show title
+# without permission (gets sued) — originality matters." Reuses existing
+# data rather than a separate hardcoded list, so it stays in sync if the
+# slates change.
+_PROTECTED_TITLES = {s.name.strip().lower() for s in (BRAVO_SLATE + OXYGEN_SLATE + PEACOCK_SLATE)}
 
 
 def render():
@@ -46,6 +54,24 @@ def render():
                                    format="%d", help="Affects amortization cash trough (see Schedule tab).")
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
                                          help="Price premium vs. baseline. Higher = more LTV per acquired sub.")
+
+    # ── Title / IP legal-risk check ─────────────────────────────────────────────
+    title_collision = show_name.strip().lower() in _PROTECTED_TITLES
+    if title_collision:
+        st.markdown(f"""
+        <div style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.4);
+             border-left:3px solid {DANGER};border-radius:6px;padding:14px 18px;margin-bottom:16px;">
+          <div style="font-size:13px;color:{DANGER};font-weight:600;margin-bottom:4px;">
+            🚫 Legal Risk — Title Already Exists
+          </div>
+          <div style="font-size:12px;color:#e0e2ea;">
+            "<b>{show_name}</b>" is already an existing title in this universe. Using it without
+            permission gets you sued — <b>Risk Score: 0</b>. Rename the concept to something
+            original before building a P&L on it.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
 
     # ── Calculate ─────────────────────────────────────────────────────────────
     linear = greenlight_linear(eps, ep_cost, rating, mkt_spend, year)
