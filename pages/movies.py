@@ -17,6 +17,7 @@ from utils.movie_models import (
     SCENARIO_MULTIPLIERS, CYCLES_TOTAL, risk_adjusted_npv, capital_efficiency,
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
+    CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
 )
 from utils.game_state import record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS
 from utils.charts import base_layout, waterfall_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -65,6 +66,7 @@ def _current_project(ss) -> MovieProject:
         screens=d.get("screens", 3000),
         cycle=ss.movie_cycle,
         release_strategy=d.get("release_strategy", "wide_theatrical"),
+        concept_type=d.get("concept_type", CONCEPT_TYPES[0]),
     )
 
 
@@ -134,10 +136,23 @@ def _greenlight(ss):
 
     with left:
         title = st.text_input("Working Title", d.get("title", f"Untitled Cycle {ss.movie_cycle} Release"))
-        genre = st.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
-                              help="Drives international box-office reach and Peacock streaming appeal.")
+        gc1, gc2 = st.columns(2)
+        genre = gc1.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
+                               help="Drives international box-office reach and Peacock streaming appeal.")
+        concept_type = gc2.selectbox(
+            "Concept Type", CONCEPT_TYPES,
+            index=CONCEPT_TYPES.index(d.get("concept_type", CONCEPT_TYPES[0])) if d.get("concept_type") in CONCEPT_TYPES else 0,
+            help="Sequel: built-in opening awareness that fades each cycle (franchise fatigue). "
+                 "New IP: no bonus — earns awareness through P&A instead. Family/Kids: softer "
+                 "opening, much stronger long-tail library value. Indie-Horror: budget capped, "
+                 "wider variance — huge outperformers on tiny budgets are the whole case for it.",
+        )
         c1, c2 = st.columns(2)
-        budget = c1.number_input("Production Budget ($M)", 10.0, 300.0, float(d.get("budget_m", 60.0)), step=5.0)
+        budget_cap = INDIE_HORROR_BUDGET_CAP_M if concept_type == "Indie-Horror" else 300.0
+        budget_default = min(float(d.get("budget_m", 60.0)), budget_cap)
+        budget = c1.number_input("Production Budget ($M)", 10.0, budget_cap, budget_default, step=5.0,
+                                  help=f"Capped at ${INDIE_HORROR_BUDGET_CAP_M:.0f}M for Indie-Horror — "
+                                       f"that's what makes it \"indie.\"" if concept_type == "Indie-Horror" else None)
         pa = c2.number_input("P&A / Marketing Spend ($M)", 5.0, 200.0, float(d.get("pa_spend_m", 40.0)), step=5.0,
                               help="Historically rivals or exceeds the production budget for a wide release.")
         c3, c4 = st.columns(2)
@@ -158,7 +173,7 @@ def _greenlight(ss):
             )
 
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
-                 release_strategy=d.get("release_strategy", "wide_theatrical"))
+                 release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type)
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -241,7 +256,7 @@ def _release(ss):
     with nav2:
         if st.button("▶  Lock Strategy  →  See Results", type="primary", use_container_width=True):
             project = _current_project(ss)
-            multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre)
+            multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre, project.concept_type)
             # Critical reception is drawn independently of box-office
             # performance — a movie can open huge and get panned, or open
             # modestly and find acclaim. Neither draw is known to the
@@ -252,7 +267,7 @@ def _release(ss):
                 "cycle":            ss.movie_cycle,
                 "project_kwargs":   dict(project.__dict__),
                 "multiplier":       multiplier,
-                "scenario_label":   nearest_scenario_label(multiplier, project.genre),
+                "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
                 "critical_score":   critical_score,
                 "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
                 "npv":              project.npv(multiplier, critical_score),
@@ -283,12 +298,13 @@ def _results(ss):
     npv_c = SUCCESS if npv_ok else DANGER
     title = result["project_kwargs"]["title"]
     strat = result["project_kwargs"]["release_strategy"]
+    concept_type = result["project_kwargs"].get("concept_type", "New IP")
 
     st.markdown(f"""
     <div class="rounded-lg p-5 mb-4" style="background:rgba({'102,187,106' if npv_ok else '239,83,80'},.07);
          border:1px solid rgba({'102,187,106' if npv_ok else '239,83,80'},.3);">
       <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-3">
-        "{title}" — {RELEASE_LABELS[strat]} — Actual Results (landed near your {result['scenario_label'].title()} Case)
+        "{title}" ({concept_type}) — {RELEASE_LABELS[strat]} — Actual Results (landed near your {result['scenario_label'].title()} Case)
       </div>
       <div class="flex gap-8 flex-wrap">
         <div><div class="text-[9px] text-muted font-mono">TOTAL REVENUE</div>

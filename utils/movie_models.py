@@ -89,6 +89,58 @@ def genre_scenario_multipliers(genre: str) -> dict:
     return {"bear": max(bear, 0.5), "base": base, "bull": bull}
 
 
+# ── Concept Type — a second axis alongside Genre ────────────────────────────
+# Franchise status + budget tier, layered on top of (not replacing) the
+# genre-driven economics above — added 2026-07-27 per Zach Schlessel's
+# "sequels/new-IP/kids/horror-indie" category rework ask. See
+# DESIGN_NOTES.md's "Day 2" section for the reasoning behind each effect.
+CONCEPT_TYPES = ["New IP", "Sequel", "Family/Kids", "Indie-Horror"]
+
+# Sequel: built-in franchise awareness lifts the opening independent of star
+# power/marketing — but the lift fades each successive cycle a team plays a
+# sequel (real franchise fatigue), decaying toward a flat, modest bonus by
+# cycle 3 rather than disappearing outright (a franchise never fully loses
+# its built-in audience, it just stops being a novelty).
+SEQUEL_OPENING_BONUS_BY_CYCLE = {1: 1.25, 2: 1.15, 3: 1.05}
+
+# New IP: the neutral baseline — no built-in awareness bonus (unlike
+# Sequel) and no long-tail bonus (unlike Family/Kids), so it carries zero
+# adjustment of its own. That absence *is* the "leans harder on marketing"
+# story: relative to Sequel's boosted opening, New IP has to earn every
+# dollar of awareness through P&A rather than starting from a franchise
+# head start. Also means every project built before this feature existed
+# (default concept_type) keeps its exact original calibrated economics.
+
+# Family/Kids: softer opening (family audiences build over weeks, not a
+# single weekend) but a materially stronger long-tail — the real "vault"
+# effect of family content's shelf life.
+KIDS_OPENING_MULT  = 0.85
+KIDS_LONGTAIL_MULT = 1.6
+
+# Indie-Horror: budget-capped by design (that's what makes it "indie" — see
+# INDIE_HORROR_BUDGET_CAP_M, enforced in the UI), and variance widens
+# further on top of Horror-the-genre's already-wide spread — huge
+# outperformers on tiny budgets are the entire economic case for the
+# category. The model assumes the cap is respected; it doesn't enforce it.
+INDIE_HORROR_BUDGET_CAP_M  = 25.0
+INDIE_HORROR_VARIANCE_MULT = 1.3
+
+
+def scenario_multipliers_for(genre: str, concept_type: str = "New IP") -> dict:
+    """Bear/base/bull box-office multipliers adjusted for genre AND concept
+    type. Concept type only ever widens/narrows further on top of the
+    genre-level spread from genre_scenario_multipliers() — Indie-Horror is
+    the only concept type that currently changes variance; everything else
+    passes the genre bounds through unchanged."""
+    bounds = genre_scenario_multipliers(genre)
+    if concept_type != "Indie-Horror":
+        return bounds
+    base = bounds["base"]
+    bear = base - (base - bounds["bear"]) * INDIE_HORROR_VARIANCE_MULT
+    bull = base + (bounds["bull"] - base) * INDIE_HORROR_VARIANCE_MULT
+    return {"bear": max(bear, 0.3), "base": base, "bull": bull}
+
+
 # ── Critical reception / awards season ─────────────────────────────────────────
 # Deliberately a *separate* risk axis from box-office performance, drawn off
 # its own seed — a movie can open huge and get panned (box office good,
@@ -133,6 +185,7 @@ class MovieProject:
     screens: int             # opening domestic screen count
     cycle: int                # 1, 2, or 3
     release_strategy: str = "wide_theatrical"   # "wide_theatrical" | "platform" | "day_and_date"
+    concept_type: str = "New IP"                # "New IP" | "Sequel" | "Family/Kids" | "Indie-Horror"
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives."""
@@ -147,6 +200,17 @@ class MovieProject:
     def awareness_lift(self) -> float:
         return 1 + self.pa_spend_m * MKT_LIFT_PER_M
 
+    def concept_opening_boost(self) -> float:
+        """Sequel/Family-Kids adjustment to opening intensity — see
+        SEQUEL_OPENING_BONUS_BY_CYCLE and KIDS_OPENING_MULT. New IP and
+        Indie-Horror carry no opening-weekend adjustment of their own
+        (Indie-Horror's effect is on variance, not the base opening)."""
+        if self.concept_type == "Sequel":
+            return SEQUEL_OPENING_BONUS_BY_CYCLE.get(self.cycle, 1.05)
+        if self.concept_type == "Family/Kids":
+            return KIDS_OPENING_MULT
+        return 1.0
+
     def opening_weekend(self) -> float:
         """$M opening weekend — scales with screen count off a fixed
         per-screen baseline, moderately boosted by star power and P&A
@@ -158,7 +222,7 @@ class MovieProject:
         cannibalization_factor)."""
         screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
-        return BASE_PER_SCREEN_M * screens * star_boost * self.awareness_lift()
+        return BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost() * self.awareness_lift()
 
     def cannibalization_factor(self) -> float:
         """Theatrical box-office suppression from the release-strategy
@@ -176,7 +240,7 @@ class MovieProject:
         other revenue/NPV/IRR method forwards its `scenario` argument here,
         so both call styles work everywhere without duplicating formulas."""
         if isinstance(scenario, str):
-            multiplier = genre_scenario_multipliers(self.genre)[scenario]
+            multiplier = scenario_multipliers_for(self.genre, self.concept_type)[scenario]
         else:
             multiplier = scenario
         return self.opening_weekend() * multiplier * self.cannibalization_factor()
@@ -220,8 +284,12 @@ class MovieProject:
         a critical_score is supplied (i.e. the outcome has actually been
         resolved — see draw_critical_reception), scales the tail 0.7x-1.8x:
         critical reception has real, measurable effect on a film's enduring
-        library value, independent of how it did theatrically."""
+        library value, independent of how it did theatrically. Family/Kids
+        content carries an extra long-tail multiplier — the real "vault"
+        shelf-life effect (see KIDS_LONGTAIL_MULT)."""
         base = self.theatrical_studio_net(scenario) * 0.06
+        if self.concept_type == "Family/Kids":
+            base *= KIDS_LONGTAIL_MULT
         if critical_score is None:
             return base
         quality_mult = 0.7 + (critical_score / 100) * 1.1
@@ -347,27 +415,30 @@ def strategic_fit_score(project: MovieProject, critical_score: Optional[float] =
     return float(min(max(50 + delta_pct * 100, 0), 100))
 
 
-def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama") -> float:
+def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama",
+                            concept_type: str = "New IP") -> float:
     """Resolves the real box-office multiplier at 'release' time — a
     continuous draw (not just one of 3 buckets), seeded off team+cycle the
     same way pages/simulation.py seeds its quarterly rating variance, so a
     given team's outcome for a given cycle is reproducible but not
     guessable in advance. Triangular distribution peaked at 'base', bounded
-    by this genre's own bear/bull spread (see GENRE_VARIANCE_SPREAD) —
-    smoother than a 3-way coin flip, and a horror movie's draw genuinely
-    swings wider than an awards drama's."""
-    bounds = genre_scenario_multipliers(genre)
+    by this genre+concept-type's own bear/bull spread (see
+    GENRE_VARIANCE_SPREAD, INDIE_HORROR_VARIANCE_MULT) — smoother than a
+    3-way coin flip, and a horror movie's draw genuinely swings wider than
+    an awards drama's (and an indie-horror one wider still)."""
+    bounds = scenario_multipliers_for(genre, concept_type)
     seed = (abs(hash(team_name)) + cycle * 4201) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return float(rng.triangular(bounds["bear"], bounds["base"], bounds["bull"]))
 
 
-def nearest_scenario_label(multiplier: float, genre: str = "Drama") -> str:
+def nearest_scenario_label(multiplier: float, genre: str = "Drama",
+                            concept_type: str = "New IP") -> str:
     """Which named scenario the actual drawn outcome reads closest to, for
     narrative framing in the results screen (e.g. 'landed close to your Base
-    Case') — compared against this genre's own adjusted bounds, not the
-    flat global ones."""
-    bounds = genre_scenario_multipliers(genre)
+    Case') — compared against this genre+concept-type's own adjusted
+    bounds, not the flat global ones."""
+    bounds = scenario_multipliers_for(genre, concept_type)
     return min(bounds, key=lambda k: abs(bounds[k] - multiplier))
 
 

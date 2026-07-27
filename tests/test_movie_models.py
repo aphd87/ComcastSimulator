@@ -14,10 +14,11 @@ import pytest
 from utils.movie_models import (
     MovieProject, risk_adjusted_npv, capital_efficiency, strategic_fit_score,
     compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
-    genre_scenario_multipliers, SCENARIO_MULTIPLIERS, GENRE_VARIANCE_SPREAD,
-    WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS,
+    genre_scenario_multipliers, scenario_multipliers_for, SCENARIO_MULTIPLIERS,
+    GENRE_VARIANCE_SPREAD, WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
-    CRITICAL_RECEPTION_BOUNDS,
+    CRITICAL_RECEPTION_BOUNDS, CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
+    SEQUEL_OPENING_BONUS_BY_CYCLE, KIDS_OPENING_MULT, KIDS_LONGTAIL_MULT,
 )
 
 
@@ -252,3 +253,73 @@ class TestScoring:
         # should score at (or extremely near) the neutral midpoint.
         p = _tentpole(release_strategy="wide_theatrical")
         assert strategic_fit_score(p) == pytest.approx(50.0, abs=1.0)
+
+
+# ── Concept Type (sequel/new-IP/kids/indie-horror) ──────────────────────────
+class TestConceptType:
+    """Concept type is a second axis layered on top of genre, added
+    2026-07-27. New IP must stay the exact zero-effect baseline (every
+    project built before this feature existed defaults to it) — the other
+    three tests check each category's specific real-world tradeoff actually
+    moves the numbers in the intended direction."""
+
+    def test_new_ip_is_the_untouched_baseline(self):
+        # A MovieProject with no concept_type specified must behave
+        # identically to one explicitly built as "New IP" -- the dataclass
+        # default and the neutral category must be the same thing.
+        default = _tentpole()
+        explicit = MovieProject(**{**default.__dict__, "concept_type": "New IP"})
+        assert default.opening_weekend() == explicit.opening_weekend()
+        assert default.npv("base") == pytest.approx(explicit.npv("base"))
+
+    def test_sequel_opens_bigger_than_new_ip_but_fatigue_shrinks_the_bonus(self):
+        new_ip = MovieProject(title="Original", genre="Action/Tentpole", budget_m=120,
+                               pa_spend_m=80, star_power=75, screens=3500, cycle=1,
+                               concept_type="New IP")
+        sequel_c1 = MovieProject(**{**new_ip.__dict__, "concept_type": "Sequel"})
+        sequel_c3 = MovieProject(**{**new_ip.__dict__, "concept_type": "Sequel", "cycle": 3})
+
+        assert sequel_c1.opening_weekend() > new_ip.opening_weekend()
+        # Fatigue: the same sequel's bonus at cycle 3 is smaller than at cycle 1.
+        assert sequel_c1.opening_weekend() > sequel_c3.opening_weekend()
+        # But franchise recognition never fully disappears -- still ahead of New IP.
+        assert sequel_c3.opening_weekend() > new_ip.opening_weekend()
+
+    def test_kids_softer_opening_but_stronger_longtail(self):
+        new_ip = MovieProject(title="Family Film", genre="Animated", budget_m=90,
+                               pa_spend_m=50, star_power=40, screens=3000, cycle=1,
+                               concept_type="New IP")
+        kids = MovieProject(**{**new_ip.__dict__, "concept_type": "Family/Kids"})
+
+        assert kids.opening_weekend() == pytest.approx(new_ip.opening_weekend() * KIDS_OPENING_MULT)
+        # Kids' long-tail bonus compounds on top of its own smaller theatrical
+        # base (softer opening flows through theatrical_studio_net first),
+        # not on New IP's base -- so the combined factor is both multipliers.
+        assert kids.library_longtail("base") == pytest.approx(
+            new_ip.library_longtail("base") * KIDS_OPENING_MULT * KIDS_LONGTAIL_MULT
+        )
+
+    def test_indie_horror_widens_variance_beyond_horror_genre_alone(self):
+        genre_only = genre_scenario_multipliers("Horror")
+        indie_horror = scenario_multipliers_for("Horror", "Indie-Horror")
+        # Base case unchanged; bear goes lower, bull goes higher.
+        assert indie_horror["base"] == genre_only["base"]
+        assert indie_horror["bear"] < genre_only["bear"]
+        assert indie_horror["bull"] > genre_only["bull"]
+
+    def test_indie_horror_actual_draw_respects_its_own_wider_bounds(self):
+        bounds = scenario_multipliers_for("Horror", "Indie-Horror")
+        for cycle in (1, 2, 3):
+            m = draw_actual_multiplier("Team Indie", cycle, "Horror", "Indie-Horror")
+            assert bounds["bear"] <= m <= bounds["bull"]
+
+    def test_all_concept_types_produce_a_valid_project(self):
+        # Smoke test: every listed concept type runs end-to-end without
+        # producing NaN/inf or throwing, for a mid-range project.
+        for ct in CONCEPT_TYPES:
+            budget = min(60.0, INDIE_HORROR_BUDGET_CAP_M) if ct == "Indie-Horror" else 60.0
+            p = MovieProject(title=f"{ct} Test", genre="Horror" if ct == "Indie-Horror" else "Drama",
+                              budget_m=budget, pa_spend_m=30, star_power=50, screens=2000,
+                              cycle=1, concept_type=ct)
+            npv = p.npv("base")
+            assert math.isfinite(npv)

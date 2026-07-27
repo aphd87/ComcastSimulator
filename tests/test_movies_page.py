@@ -74,7 +74,7 @@ def test_greenlight_phase_starts_at_cycle_1():
 def test_greenlight_phase_has_expected_widgets():
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
-    assert len(at.selectbox) == 1      # genre
+    assert len(at.selectbox) == 2      # genre, concept type (added 2026-07-27)
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert any("Commit Capital" in b.label for b in at.button)
