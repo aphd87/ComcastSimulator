@@ -231,3 +231,185 @@ def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     assert at.session_state["sim_phase"] == "results"
     assert len(at.session_state["yearly_log"]) == 1
     assert at.session_state["yearly_log"][0]["year"] == 1
+
+
+def test_clicking_research_button_reveals_signal_and_charges_budget():
+    # Research (pages/renewal.py) is one of the sections that now always
+    # renders alongside Financing/Greenlighting/Scheduling on the same
+    # page, rather than only when its own wizard step was on screen --
+    # exactly the kind of newly-always-mounted widget that turned up the
+    # two bugs above, so it gets its own direct click test.
+    at = _decisions_sim_app()
+    research_button = next(b for b in at.button if b.key == "research_1_1")
+    budget_before = at.session_state["level_budget"]
+    research_button.click().run()
+    assert not at.exception, f"Research click raised: {list(at.exception)}"
+    assert 1 in at.session_state["research_revealed"]
+    assert at.session_state["research_revealed"][1]["year"] == 1
+    assert at.session_state["level_budget"] == budget_before - 2.0   # RESEARCH_FEE
+
+
+def test_clicking_greenlight_button_adds_show_to_roster_and_charges_budget():
+    at = _decisions_sim_app()
+    shows_before = len(at.session_state["oxygen_shows"])
+    budget_before = at.session_state["level_budget"]
+    greenlight_button = next(b for b in at.button if "Greenlight" in b.label and "🎬" in b.label)
+    greenlight_button.click().run()
+    assert not at.exception, f"Greenlight click raised: {list(at.exception)}"
+    assert len(at.session_state["oxygen_shows"]) == shows_before + 1
+    assert at.session_state["level_budget"] < budget_before
+    assert at.session_state["total_shows_greenlit"] == 1
+
+
+def _results_sim_app() -> AppTest:
+    """Year 1 already simulated, sitting on the Results page -- exercises
+    the Redo-This-Year button, a real interactive path this rewrite
+    touched (it now also undoes any shows greenlit that year via
+    _remove_greenlit_shows) that no click test had exercised yet."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+                Show(id=51, name="New Show", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [{
+                "year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0,
+                "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0,
+                "ocf": 7.0, "margin": 35.0, "new_cancellations": [],
+                "shows": [{"id": 1, "name": "Show A", "network": "Oxygen",
+                           "genre": "Reality", "status": "active", "cost": 5.0,
+                           "rating_base": 1.0, "rating_adj": 1.05, "variance": 1.05,
+                           "revenue": 15.0}],
+                "budget": 220.0,
+            }],
+            "year": 1,
+            "sim_phase": "results",
+            "level_budget": 215.0,
+            "mkt_budget": 5.0,
+            "greenlit_ids_this_year": {51},
+            "greenlit_ids_this_level": {51},
+            "total_shows_greenlit": 1,
+            "next_show_id": 52,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Results phase raised: {list(at.exception)}"
+    return at
+
+
+def test_clicking_redo_this_year_removes_the_greenlit_show_and_returns_to_decisions():
+    at = _results_sim_app()
+    redo_button = next(b for b in at.button if "Redo This Year" in b.label)
+    redo_button.click().run()
+    assert not at.exception, f"Redo click raised: {list(at.exception)}"
+    assert at.session_state["sim_phase"] == "decisions"
+    assert at.session_state["yearly_log"] == []
+    assert [s.id for s in at.session_state["oxygen_shows"]] == [1]   # show 51 removed
+    assert at.session_state["total_shows_greenlit"] == 0
+
+
+def _complete_sim_app_submitted() -> AppTest:
+    """Complete phase, already submitted and passed -- exercises the
+    Restart This Level and Advance to Next Network buttons. Only the
+    ss.decision_step = 1 line was removed from these two handlers by
+    this rewrite (pure deletion, not a restructuring), so this is lower
+    risk than the Decisions-page tests above, but still a real click
+    path nothing had exercised before."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+                Show(id=51, name="New Show", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "total_shows_greenlit": 1,
+            "greenlit_ids_this_year": set(),
+            "greenlit_ids_this_level": {51},
+            "yearly_log": [
+                {"year": y, "label": f"Year {y}", "revenue": 20.0, "ad_rev": 15.0,
+                 "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0,
+                 "ocf": 6.0, "margin": 30.0, "new_cancellations": [],
+                 "shows": [{"id": 1, "name": "Show A", "network": "Oxygen", "genre": "Reality",
+                            "status": "active", "cost": 5.0}],
+                 "budget": 25.0}
+                for y in range(1, 6)
+            ],
+            "year": 5,
+            "sim_phase": "complete",
+            "level_budget": 25.0,
+            "submitted": True,
+            "last_score": {"passed": True, "score": 85.0},
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Complete (submitted) phase raised: {list(at.exception)}"
+    return at
+
+
+def test_clicking_restart_this_level_removes_greenlit_shows_and_resets():
+    at = _complete_sim_app_submitted()
+    restart_button = next(b for b in at.button if "Restart This Level" in b.label)
+    restart_button.click().run()
+    assert not at.exception, f"Restart click raised: {list(at.exception)}"
+    assert at.session_state["sim_phase"] == "decisions"
+    assert at.session_state["yearly_log"] == []
+    assert [s.id for s in at.session_state["oxygen_shows"]] == [1]   # show 51 removed
+    assert at.session_state["total_shows_greenlit"] == 0
+    assert at.session_state["submitted"] is False
+
+
+def test_clicking_advance_to_next_network_switches_network_and_keeps_greenlit_show():
+    at = _complete_sim_app_submitted()
+    advance_button = next(b for b in at.button if "Advance to" in b.label)
+    advance_button.click().run()
+    assert not at.exception, f"Advance click raised: {list(at.exception)}"
+    assert at.session_state["active_network"] == "bravo"
+    assert at.session_state["sim_phase"] == "decisions"
+    assert at.session_state["year"] == 1
+    # Shows greenlit during the level just passed stay in the roster --
+    # only Restart (tested above) removes them.
+    assert [s.id for s in at.session_state["oxygen_shows"]] == [1, 51]
+    assert at.session_state["total_shows_greenlit"] == 0

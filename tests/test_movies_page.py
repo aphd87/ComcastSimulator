@@ -114,6 +114,53 @@ def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     assert at.session_state["movie_log"][0]["cycle"] == 1
 
 
+def _movies_app_at_cycle_3() -> AppTest:
+    """Cycle 3 -- windowing unlocks here (WINDOWING_UNLOCK_CYCLE=3), so
+    the "Choose <strategy>" cards become real clickable buttons instead
+    of a locked info banner. Guards every seed line (`if key not in
+    st.session_state`) rather than unconditional assignment -- a real
+    test-harness bug caught while writing tests/test_simulation.py's
+    equivalent: st.rerun() inside a click handler makes AppTest
+    re-execute this whole script() closure, so an unconditional seed
+    would silently clobber whatever the click just changed."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        defaults = {
+            "team_name": "AppTest Team",
+            "movie_cycle": 3,
+            "movie_phase": "decisions",
+            "movie_log": [],
+            "movie_draft": {},
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+        import pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Cycle 3 decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_windowing_unlocked_at_cycle_3_shows_choose_strategy_buttons():
+    at = _movies_app_at_cycle_3()
+    choose_buttons = [b for b in at.button if b.key and b.key.startswith("pick_")]
+    assert len(choose_buttons) == 3   # wide_theatrical, platform, day_and_date
+
+
+def test_clicking_choose_strategy_updates_the_draft_with_no_exceptions():
+    at = _movies_app_at_cycle_3()
+    day_and_date_button = next(b for b in at.button if b.key == "pick_day_and_date")
+    day_and_date_button.click().run()
+    assert not at.exception, f"Choose-strategy click raised: {list(at.exception)}"
+    assert at.session_state["movie_draft"]["release_strategy"] == "day_and_date"
+    assert at.session_state["movie_phase"] == "decisions"   # no phase transition, just a selection
+
+
 def _complete_movies_app() -> AppTest:
     """Seeds movie_log/movie_phase directly (session_state set before the
     first .run(), no button interaction) rather than clicking through
