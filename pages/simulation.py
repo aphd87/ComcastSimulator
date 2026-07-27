@@ -989,6 +989,11 @@ def _complete(ss, shows, net_info, team, net):
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
             btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score_d['total']:.0f} pts)"
             if st.button(f"{btn_lbl}", use_container_width=True):
+                slate_summary = [
+                    {"name": s.name, "genre": s.genre, "network": s.network,
+                     "rating": round(s.rating, 2)}
+                    for s in active
+                ]
                 entry = record_attempt(
                     team_name=team, network=net,
                     attempt_num=attempts + 1,
@@ -996,6 +1001,7 @@ def _complete(ss, shows, net_info, team, net):
                     passed=score_d["passed"],
                     details=score_d,
                     school=ss.school, class_section=ss.class_section,
+                    slate_summary=slate_summary,
                 )
                 ss.last_score = entry
                 ss.submitted  = True

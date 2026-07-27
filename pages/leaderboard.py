@@ -33,6 +33,22 @@ RANK_COLORS = {1: "#e8c547", 2: "#c0c0c0", 3: "#cd7f32"}
 MOVIES_INFO = {"emoji": "🎬", "display_name": "Universal Pictures", "color": "#1a6bb5", "color2": "#4fc3f7"}
 
 
+def _format_slate_item(item: dict) -> str:
+    """One compact line per show/movie in a team's slate_summary — TV and
+    Movies entries carry different fields (see the two record_attempt()
+    call sites in pages/simulation.py and pages/movies.py), so this just
+    renders whichever fields are actually present, in a sensible order,
+    rather than assuming one fixed shape."""
+    parts = [str(item.get("name", "?"))]
+    for key, fmt in (
+        ("genre", "{}"), ("network", "{}"), ("rating", "rating {}"),
+        ("concept_type", "{}"), ("release_strategy", "{}"), ("npv", "NPV ${:+.1f}M"),
+    ):
+        if key in item and item[key] is not None:
+            parts.append(fmt.format(item[key]))
+    return " · ".join(parts)
+
+
 def _render_board_tab(team: str, net: str, info: dict,
                        scope_school, scope_class, show_school_col: bool):
     """One network's full leaderboard tab body — shared by the TV networks
@@ -133,6 +149,25 @@ def _render_board_tab(team: str, net: str, info: dict,
            '</div>' if details else ''}
         </div>
         """, unsafe_allow_html=True)
+
+        # ── View this team's slate — comparative analysis, added 2026-07-27 ──
+        # Older entries (submitted before slate_summary existed) fall back to
+        # a plain "not available" note rather than a blank/broken expander.
+        # No `key=` param on st.expander in this Streamlit version — a
+        # timestamp in the label (unique per submission) is enough to keep
+        # two teams that happen to share a pseudonym from rendering
+        # identical expander labels.
+        slate = entry.get("slate_summary")
+        ts_short = datetime.fromtimestamp(entry["timestamp"]).strftime("%H:%M:%S")
+        with st.expander(f"📋 View {entry['team_name']}'s slate ({ts_short})", expanded=False):
+            if slate:
+                for item in slate:
+                    st.markdown(
+                        f'<div style="font-size:11px;color:#e0e2ea;padding:3px 0;'
+                        f'border-bottom:1px solid rgba(37,40,54,.4);">{_format_slate_item(item)}</div>',
+                        unsafe_allow_html=True)
+            else:
+                st.caption("Slate details aren't available for this entry (submitted before this feature existed).")
 
     # Score distribution chart
     if len(board) >= 3:

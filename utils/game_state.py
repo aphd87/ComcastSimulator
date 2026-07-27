@@ -112,7 +112,8 @@ def save_leaderboard(board: list[dict]) -> None:
 
 def record_attempt(team_name: str, network: str, attempt_num: int,
                    score: float, passed: bool, details: dict,
-                   school: str = "", class_section: str = "") -> dict:
+                   school: str = "", class_section: str = "",
+                   slate_summary: Optional[list[dict]] = None) -> dict:
     """
     Record one attempt. First attempt is always official.
     FERPA note: team_name is a student-chosen pseudonym — no PII stored.
@@ -125,6 +126,14 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
     triple (school, class_section, team_name), not team_name alone — two
     different classes (or schools) both having a "Team Alpha" must not
     share attempt history. See get_team_attempts.
+
+    slate_summary (added 2026-07-27, for the Leaderboard's "view a
+    competitor's slate" comparison feature): an optional lightweight list
+    of plain dicts (show/movie name + a few headline fields) describing
+    what the team actually submitted. Kept as its own top-level field,
+    separate from `details` — `details` is iterated and number-formatted
+    wholesale by pages/leaderboard.py's score-badge rendering, so a list
+    value there would break that loop.
     """
     board = load_leaderboard()
 
@@ -139,6 +148,7 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
         "timestamp":     int(time.time()),
         "is_official":   attempt_num == 1,   # first attempt locked as official
         "details":       details,
+        "slate_summary": slate_summary or [],
     }
     board.append(entry)
     save_leaderboard(board)

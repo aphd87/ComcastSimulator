@@ -22,6 +22,15 @@ class ShowConceptGrade(BaseModel):
     feedback:  str       = Field(description="2-3 sentence overall assessment, written directly to the student.")
     strengths: list[str] = Field(description="1-3 short bullet points on what's working in the pitch.")
     risks:     list[str] = Field(description="1-3 short bullet points on what could sink this concept.")
+    research_recommended: bool = Field(
+        description="True if the concept is risky or uncertain enough (weak feasibility, "
+                     "unclear market fit, or genuinely novel/unproven territory) that paying "
+                     "for Research on this show once it's in the portfolio would be worth it. "
+                     "False if the concept is solid and predictable enough that Research "
+                     "would likely just confirm what's already obvious.")
+    research_rationale: str = Field(
+        description="1 sentence explaining the research_recommended call — what specifically "
+                     "makes this concept worth (or not worth) paying to de-risk.")
 
 
 def api_key_configured() -> bool:
@@ -56,7 +65,11 @@ def grade_show_concept(show_name: str, genre: str, pitch: str) -> ShowConceptGra
                     "concept pitch for a portfolio-simulation exercise.\n\n"
                     f"Show name: {show_name}\nGenre: {genre}\nPitch:\n{pitch}\n\n"
                     "Score it on originality, market fit, feasibility, and presentation "
-                    "(0-25 each), and give brief, constructive feedback aimed at the student."
+                    "(0-25 each), and give brief, constructive feedback aimed at the student. "
+                    "Also judge whether this concept is risky/uncertain enough that it would be "
+                    "worth the student paying for the in-game Research feature on this show once "
+                    "it's in their portfolio, versus solid enough that Research would likely just "
+                    "confirm the obvious."
                 ),
             }],
             output_format=ShowConceptGrade,

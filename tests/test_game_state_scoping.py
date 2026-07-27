@@ -102,3 +102,30 @@ class TestSchoolRollup:
 
     def test_empty_board_returns_empty_rollup(self):
         assert gs.get_school_rollup("oxygen") == []
+
+
+class TestSlateSummary:
+    """slate_summary, added 2026-07-27 for the Leaderboard's competitor-
+    slate comparison feature — stored as its own top-level field on the
+    entry, deliberately separate from `details` (which pages/leaderboard.py
+    iterates and number-formats wholesale; a list value there would break
+    that loop)."""
+
+    def test_slate_summary_round_trips_through_the_leaderboard(self):
+        slate = [{"name": "Snapped", "genre": "True Crime", "network": "Oxygen", "rating": 0.8}]
+        entry = gs.record_attempt(
+            team_name="Team Alpha", network="oxygen", attempt_num=1,
+            score=80, passed=True, details={"total": 80},
+            school="Kellogg", class_section="Sec A", slate_summary=slate,
+        )
+        assert entry["slate_summary"] == slate
+        stored = gs.get_team_attempts("Team Alpha", "oxygen", "Kellogg", "Sec A")[0]
+        assert stored["slate_summary"] == slate
+
+    def test_omitted_slate_summary_defaults_to_empty_list_not_none(self):
+        # Older-entry compatibility: pages/leaderboard.py checks truthiness
+        # of this field to decide whether to show a real slate or a
+        # "not available" fallback -- must never be None (which is also
+        # falsy but a different failure mode if something unwraps it).
+        entry = _record("Team Bravo", "Kellogg", "Sec A", 70, False)
+        assert entry["slate_summary"] == []

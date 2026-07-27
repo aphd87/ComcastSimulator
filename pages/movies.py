@@ -17,7 +17,7 @@ from utils.movie_models import (
     SCENARIO_MULTIPLIERS, CYCLES_TOTAL, risk_adjusted_npv, capital_efficiency,
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
-    CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
+    CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
 )
 from utils.game_state import record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS
 from utils.charts import base_layout, waterfall_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -214,15 +214,35 @@ def _release(ss):
     project_base = _current_project(ss)
 
     st.markdown('<div class="section-title">Decision 2 — Release Strategy</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="text-xs text-ink2 mb-3">The direct extension of Day 1\'s linear-vs-SVOD Green Light call — '
-        'day-and-date trades theatrical box office for immediate, dollarized Peacock subscriber value. '
-        'Ground truth: 2021\'s WarnerMedia/HBO Max day-and-date experiment, and Universal\'s post-2020 '
-        'shortened theatrical window with AMC.</p>', unsafe_allow_html=True)
 
-    cols = st.columns(3)
+    # Progressive windowing — Zach Schlessel's brief: the theatrical vs.
+    # streaming vs. PVOD tradeoff is a "Year 3 Introduction," not available
+    # from the start. Cycles before WINDOWING_UNLOCK_CYCLE are wide-
+    # theatrical only; the strategy choice itself doesn't exist yet.
+    windowing_unlocked = ss.movie_cycle >= WINDOWING_UNLOCK_CYCLE
+    if not windowing_unlocked:
+        ss.movie_draft["release_strategy"] = "wide_theatrical"   # defensive — no other choice is reachable
+        st.markdown(f"""
+        <div class="rounded-lg border border-line bg-surface2 p-4 mb-3" style="border-left:3px solid #ffa726;">
+          <div class="text-xs" style="color:#ffb74d;font-weight:600;margin-bottom:4px;">
+            🔒 Windowing strategy unlocks at Cycle {WINDOWING_UNLOCK_CYCLE}
+          </div>
+          <div class="text-xs text-ink2">This early, every release is Wide Theatrical — the platform/
+          day-and-date tradeoff (and the streaming infrastructure that makes it viable) isn't part of
+          the studio's playbook yet. You'll get the full choice starting Cycle {WINDOWING_UNLOCK_CYCLE}.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<p class="text-xs text-ink2 mb-3">The direct extension of Day 1\'s linear-vs-SVOD Green Light call — '
+            'day-and-date trades theatrical box office for immediate, dollarized Peacock subscriber value. '
+            'Ground truth: 2021\'s WarnerMedia/HBO Max day-and-date experiment, and Universal\'s post-2020 '
+            'shortened theatrical window with AMC.</p>', unsafe_allow_html=True)
+
+    strategies_shown = RELEASE_STRATEGIES if windowing_unlocked else ["wide_theatrical"]
+    cols = st.columns(len(strategies_shown))
     previews = {}
-    for i, strat in enumerate(RELEASE_STRATEGIES):
+    for i, strat in enumerate(strategies_shown):
         p = MovieProject(**{**project_base.__dict__, "release_strategy": strat})
         ra_npv = risk_adjusted_npv(p)
         previews[strat] = (p, ra_npv)
@@ -239,9 +259,10 @@ def _release(ss):
                 {'(skipped — straight to Peacock)' if strat == 'day_and_date' else ''}</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Choose {RELEASE_LABELS[strat]}", key=f"pick_{strat}", use_container_width=True):
-                ss.movie_draft["release_strategy"] = strat
-                st.rerun()
+            if windowing_unlocked:
+                if st.button(f"Choose {RELEASE_LABELS[strat]}", key=f"pick_{strat}", use_container_width=True):
+                    ss.movie_draft["release_strategy"] = strat
+                    st.rerun()
 
     st.divider()
     chosen = ss.movie_draft.get("release_strategy", "wide_theatrical")
@@ -279,6 +300,7 @@ def _release(ss):
                 "sub_value":        project.subscriber_value(multiplier),
                 "longtail":         project.library_longtail(multiplier, critical_score),
                 "awards_bump":      project.awards_season_bump(multiplier, critical_score),
+                "theme_park":       project.theme_park_value(multiplier),
                 "capital_at_risk":  project.capital_at_risk(),
             }
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
@@ -357,6 +379,9 @@ def _results(ss):
     if result["awards_bump"] > 0:
         labels.append("Awards Rerelease")
         vals.append(result["awards_bump"])
+    if result.get("theme_park", 0) > 0:
+        labels.append("Theme Park/Merch")
+        vals.append(result["theme_park"])
     labels.append("Total Revenue")
     vals.append(result["total_revenue"])
     fig = waterfall_chart(labels, vals, title="Revenue by Window ($M)", height=300)
@@ -485,10 +510,18 @@ def _complete(ss):
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
             btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score['total']:.0f} pts)"
             if st.button(btn_lbl, use_container_width=True):
+                slate_summary = [
+                    {"name": r["project_kwargs"]["title"], "genre": r["project_kwargs"]["genre"],
+                     "concept_type": r["project_kwargs"].get("concept_type", "New IP"),
+                     "release_strategy": RELEASE_LABELS[r["project_kwargs"]["release_strategy"]],
+                     "npv": round(r["npv"], 1)}
+                    for r in sorted_log
+                ]
                 entry = record_attempt(
                     team_name=ss.team_name, network=MOVIE_NETWORK_KEY,
                     attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
                     school=ss.school, class_section=ss.class_section,
+                    slate_summary=slate_summary,
                 )
                 ss.movie_last_score = entry
                 ss.movie_submitted = True

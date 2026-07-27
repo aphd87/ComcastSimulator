@@ -19,6 +19,8 @@ from utils.movie_models import (
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
     CRITICAL_RECEPTION_BOUNDS, CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
     SEQUEL_OPENING_BONUS_BY_CYCLE, KIDS_OPENING_MULT, KIDS_LONGTAIL_MULT,
+    WINDOWING_UNLOCK_CYCLE, CYCLES_TOTAL,
+    THEME_PARK_ELIGIBLE_GENRES, THEME_PARK_REVENUE_RATE,
 )
 
 
@@ -323,3 +325,55 @@ class TestConceptType:
                               cycle=1, concept_type=ct)
             npv = p.npv("base")
             assert math.isfinite(npv)
+
+
+# ── Progressive windowing (Cycle 3+ only) ────────────────────────────────────
+class TestProgressiveWindowing:
+    """Zach Schlessel's brief: windowing (theatrical vs. platform vs.
+    day-and-date) is a "Year 3 Introduction," not available from Cycle 1.
+    The UI gate itself lives in pages/movies.py::_release() (not unit-
+    testable in isolation the way the pure financial engine is -- covered
+    by the standing "needs a real browser click-through" gap tracked in
+    DESIGN_NOTES.md); this pins the constant the gate reads."""
+
+    def test_unlock_cycle_is_within_the_total_cycle_count(self):
+        assert 1 < WINDOWING_UNLOCK_CYCLE <= CYCLES_TOTAL
+
+    def test_unlock_cycle_matches_the_briefs_year_3_framing(self):
+        assert WINDOWING_UNLOCK_CYCLE == 3
+
+
+# ── Theme park / merchandise revenue stream ──────────────────────────────────
+class TestThemeParkRevenue:
+    """Zach Schlessel's brief: "theme park/merchandise opportunities,
+    Universal licensing deals... genre determines theme park eligibility."
+    A real eligibility gate (zero for ineligible genres), not a soft
+    discount -- an awards drama or a comedy doesn't get a ride."""
+
+    def test_eligible_genre_gets_nonzero_theme_park_value(self):
+        p = MovieProject(title="Tentpole", genre="Action/Tentpole", budget_m=150,
+                          pa_spend_m=90, star_power=80, screens=4000, cycle=1)
+        assert p.theme_park_value("base") > 0
+        assert p.theme_park_value("base") == pytest.approx(
+            p.domestic_box_office("base") * THEME_PARK_REVENUE_RATE
+        )
+
+    def test_ineligible_genre_gets_exactly_zero(self):
+        p = MovieProject(title="Prestige Drama", genre="Awards/Prestige", budget_m=30,
+                          pa_spend_m=15, star_power=60, screens=1200, cycle=1)
+        assert p.theme_park_value("base") == 0.0
+
+    def test_all_eligible_genres_are_the_intended_three(self):
+        assert THEME_PARK_ELIGIBLE_GENRES == {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
+
+    def test_theme_park_value_flows_into_total_revenue_and_npv(self):
+        # A genre-eligible project's total revenue/NPV must be strictly
+        # higher than an otherwise-identical ineligible-genre project would
+        # be at the same box office -- confirms the cashflow is actually
+        # wired into windowed_cashflows(), not just a standalone method
+        # nobody calls.
+        eligible = MovieProject(title="A", genre="Sci-Fi/Fantasy", budget_m=150,
+                                 pa_spend_m=90, star_power=80, screens=4000, cycle=1)
+        ineligible = MovieProject(**{**eligible.__dict__, "genre": "Drama", "title": "B"})
+        assert eligible.total_revenue("base") > ineligible.total_revenue("base")
+        assert eligible.npv("base") > ineligible.npv("base")

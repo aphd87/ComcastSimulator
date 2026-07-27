@@ -35,6 +35,8 @@ BASE_WINDOW_DAYS      = 90     # 2012-era theatrical exclusivity norm
 WINDOW_SHRINK_PER_CYCLE_DAYS = 15   # real-world post-2012 compression, applied per cycle (1->2->3)
 CYCLES_TOTAL          = 3
 YEARS_PER_CYCLE        = 2
+WINDOWING_UNLOCK_CYCLE = 3   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" —
+                              # cycles before this are wide-theatrical only, no strategy choice yet
 
 GENRES = ["Action/Tentpole", "Sci-Fi/Fantasy", "Animated", "Horror", "Comedy", "Drama", "Awards/Prestige"]
 
@@ -163,6 +165,13 @@ CRITICAL_RECEPTION_BOUNDS = {
 # matter how well it's reviewed.
 AWARDS_ELIGIBLE_GENRES = {"Awards/Prestige", "Drama"}
 AWARDS_CONTENDER_THRESHOLD = 72   # critical score needed to trigger the rerelease bump
+
+# Theme park / merchandise / Universal licensing — Zach Schlessel's brief:
+# "genre determines theme park eligibility." Only genres with the scale and
+# durability to support a themed attraction or a real merchandise line
+# qualify; an awards drama or a comedy doesn't get a ride or a toy line.
+THEME_PARK_ELIGIBLE_GENRES = {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
+THEME_PARK_REVENUE_RATE    = 0.03   # fraction of domestic box office
 
 
 def draw_critical_reception(team_name: str, cycle: int, genre: str) -> float:
@@ -295,6 +304,21 @@ class MovieProject:
         quality_mult = 0.7 + (critical_score / 100) * 1.1
         return base * quality_mult
 
+    def theme_park_value(self, scenario) -> float:
+        """Theme park attraction / merchandise / Universal licensing value —
+        Zach Schlessel's brief: "theme park/merchandise opportunities,
+        Universal licensing deals ('pay yourself' model)... genre
+        determines theme park eligibility." Only genres with the cultural
+        footprint and IP durability to support a themed attraction or a
+        real merchandise line qualify (see THEME_PARK_ELIGIBLE_GENRES) — an
+        awards drama doesn't get a ride. Sized off domestic box office as a
+        rough proxy for how big the IP actually landed; zero for
+        ineligible genres, not a smaller fraction — this is a real
+        eligibility gate, not a soft discount."""
+        if self.genre not in THEME_PARK_ELIGIBLE_GENRES:
+            return 0.0
+        return self.domestic_box_office(scenario) * THEME_PARK_REVENUE_RATE
+
     def awards_season_bump(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """A limited theatrical rerelease during awards season (For-Your-
         Consideration campaigns, expanded runs after nominations) — only
@@ -326,6 +350,7 @@ class MovieProject:
         sub_value  = self.subscriber_value(scenario)
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
+        theme_park = self.theme_park_value(scenario)
         window_mo  = self.window_days() / 30.0
         flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
@@ -335,6 +360,8 @@ class MovieProject:
         ]
         if bump > 0:
             flows.append((11.0, bump))   # awards season (~Jan-Feb), roughly 11 months after release
+        if theme_park > 0:
+            flows.append((30.0, theme_park))   # attractions/merchandise take real time to develop and license
         return flows
 
     def npv(self, scenario: str, critical_score: Optional[float] = None,

@@ -100,6 +100,14 @@ def render():
                         st.markdown("**Risks**")
                         for r in grade.risks:
                             st.markdown(f"- {r}")
+                    if grade.research_recommended:
+                        st.info(
+                            f"🔬 **Worth paying for Research on this one** once it's in your "
+                            f"portfolio — {grade.research_rationale}",
+                        )
+                    else:
+                        st.caption(f"🔬 Probably not worth paying for Research on this one — "
+                                   f"{grade.research_rationale}")
 
     st.divider()
 
