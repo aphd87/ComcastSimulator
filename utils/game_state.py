@@ -17,6 +17,12 @@ from pathlib import Path
 # ── Constants ────────────────────────────────────────────────────────────────
 LEADERBOARD_FILE = Path("leaderboard.json")
 MAX_ATTEMPTS     = 3          # After 3 fails, still unlock next level
+YEARS_PER_LEVEL  = 5          # Each network runs a real 5-calendar-year era — see LEVEL_START_YEAR
+LEVEL_START_YEAR = {           # First in-game year of each network's era (2026-07-27, per user request)
+    "oxygen":  2012,          # 2012-2016 — saving a sinking channel
+    "bravo":   2017,          # 2017-2021
+    "peacock": 2022,          # 2022-2026 — clean handoff from Bravo, no calendar overlap
+}
 PASS_THRESHOLD   = {          # Minimum OCF margin % to pass each level
     "bravo":   15.0,          # 15% OCF margin to pass Bravo
     "oxygen":  12.0,          # Slightly lower — tighter budget

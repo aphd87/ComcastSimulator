@@ -28,7 +28,8 @@ from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
-    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS, SCHOOL_PRESETS
+    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS, SCHOOL_PRESETS,
+    YEARS_PER_LEVEL, LEVEL_START_YEAR,
 )
 from utils.models import annual_budget, cable_subs, distribution_revenue
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
@@ -91,7 +92,7 @@ def init_state():
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
         "oxygen_shows":    copy.deepcopy(OXYGEN_SLATE),
         "peacock_shows":   copy.deepcopy(PEACOCK_SLATE),
-        "year":            1,   # real turn counter within a level as of 2026-07-24 (1-4 years), not frozen
+        "year":            1,   # real turn counter within a level (1-YEARS_PER_LEVEL), not frozen — see utils/game_state.py
         "level_budget":    None,   # re-derived from net_info["budget_base"] on first render (pages/simulation.py::_init)
         "mkt_budget":      5.0,
         "renewal_decisions": {},
@@ -467,13 +468,19 @@ else:
         """, unsafe_allow_html=True)
 
     # ── Level Brief ──────────────────────────────────────────────────────────
+    # Calendar spans read from utils.game_state.LEVEL_START_YEAR/YEARS_PER_LEVEL
+    # (single source of truth, also drives pages/simulation.py's year engine) —
+    # reshaped 2026-07-27 to real per-network eras (Oxygen 2012-2016, Bravo
+    # 2017-2021, Peacock 2022-2026) rather than every network resetting to 2012.
+    _end_year = {n: LEVEL_START_YEAR[n] + YEARS_PER_LEVEL - 1 for n in NETWORK_ORDER}
     LEVEL_BRIEFS = {
         "oxygen": {
             "color": "#8e44ad",
-            "objective": "Level 1 — Your first assignment.",
+            "objective": f"Level 1 — {LEVEL_START_YEAR['oxygen']}–{_end_year['oxygen']}. Save a sinking channel.",
             "mission": (
-                "You run Oxygen: 20 true crime & reality shows, $95M budget. "
-                "Content uses a <b style='color:#e8eaf0;'>3-year amortization curve</b> — "
+                f"It's {LEVEL_START_YEAR['oxygen']}. Oxygen is bleeding — 20 true crime & reality shows, "
+                f"$95M budget, and a network on the edge of cancellation. Your mandate: turn it around "
+                f"before {_end_year['oxygen']}. Content uses a <b style='color:#e8eaf0;'>3-year amortization curve</b> — "
                 "your annual expense is 1/3 of production cost, giving you more breathing room than Bravo. "
                 "Hit a <b style='color:#e8eaf0;'>12% OCF margin</b> to pass."
             ),
@@ -482,16 +489,17 @@ else:
                 "🔄 <b>Renewal</b> — renew, watch, or cancel; pay for research if unsure",
                 "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
                 "📅 <b>Scheduling</b> — check premiere timing and amortization impact",
-                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
+                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                f"({LEVEL_START_YEAR['oxygen']}–{_end_year['oxygen']}), then submit your score",
             ],
         },
         "bravo": {
             "color": "#c0392b",
-            "objective": "Level 2 — You've earned Bravo.",
+            "objective": f"Level 2 — {LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}. You've earned Bravo.",
             "mission": (
-                "You now run both Oxygen and Bravo: 40 shows, ~$315M combined budget. "
-                "Bravo uses a <b style='color:#e8eaf0;'>12-month amortization</b> — costs hit harder each year. "
-                "Real Housewives and Top Chef are your cash cows. "
+                f"It's {LEVEL_START_YEAR['bravo']}. You now run both Oxygen and Bravo: 40 shows, "
+                "~$315M combined budget. Bravo uses a <b style='color:#e8eaf0;'>12-month amortization</b> — "
+                "costs hit harder each year. Real Housewives and Top Chef are your cash cows. "
                 "Hit a <b style='color:#e8eaf0;'>15% OCF margin</b> to pass."
             ),
             "steps": [
@@ -499,14 +507,15 @@ else:
                 "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
                 "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
                 "📅 <b>Scheduling</b> — watch the dual-network cost structure",
-                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
+                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                f"({LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}), then submit your score",
             ],
         },
         "peacock": {
             "color": "#1a6bb5",
-            "objective": "Level 3 — Launch Peacock.",
+            "objective": f"Level 3 — {LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}. Launch Peacock.",
             "mission": (
-                "Add SVOD to your portfolio. Peacock content uses "
+                f"It's {LEVEL_START_YEAR['peacock']}. Add SVOD to your portfolio. Peacock content uses "
                 "<b style='color:#e8eaf0;'>36-month amortization</b> and earns subscription LTV instead of ad revenue. "
                 "Linear revenue will keep eroding — Peacock is your hedge. "
                 "Hit a <b style='color:#e8eaf0;'>10% OCF margin</b> across all three networks to pass."
@@ -516,7 +525,8 @@ else:
                 "💰 <b>Financing</b> — check the linear-vs-streaming economics chart",
                 "🔄 <b>Renewal</b> — decide which linear shows to wind down",
                 "📅 <b>Scheduling</b> — track the cannibalization impact on Bravo & Oxygen",
-                "🎯 <b>End Year → Results</b> — repeat for 4 years, then submit your score",
+                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                f"({LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}), then submit your score",
             ],
         },
     }

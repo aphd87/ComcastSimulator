@@ -1,11 +1,16 @@
 """
 Simulation tab — annual turn engine.
-Decisions → Results → repeat for 4 years, then submit final score.
+Decisions → Results → repeat for YEARS_PER_LEVEL years, then submit final score.
 
 Restructured 2026-07-24 from a quarterly engine (4 quarters within a single
-frozen "year 1") to a genuine annual engine (4 real years per level) per
-Zach Schlessel's (NBCUniversal) feedback — see DESIGN_NOTES.md. ss.year is
-now the actual turn counter driving all financial math, not a fixed value.
+frozen "year 1") to a genuine annual engine per Zach Schlessel's (NBCUniversal)
+feedback — see DESIGN_NOTES.md. ss.year is the actual turn counter driving
+all financial math, not a fixed value.
+
+Reshaped 2026-07-27 to real calendar eras per network (Oxygen 2012-2016,
+Bravo 2017-2021, Peacock 2022-2026) — YEARS_PER_LEVEL and LEVEL_START_YEAR
+now live in utils/game_state.py as the single source of truth (app.py's
+LEVEL_BRIEFS mission text reads the same constants), not duplicated here.
 """
 import streamlit as st
 import pandas as pd
@@ -20,16 +25,15 @@ from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
+    YEARS_PER_LEVEL, LEVEL_START_YEAR,
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
-
-YEARS_PER_LEVEL = 4
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _year_label(year: int) -> str:
-    return f"Year {year} · {2011 + year}"
+def _year_label(year: int, net: str) -> str:
+    return f"Year {year} · {LEVEL_START_YEAR[net] + (year - 1)}"
 
 
 def _active_shows(shows, cancelled: set):
@@ -69,7 +73,7 @@ def _preview_pnl(shows, year: int, mkt: float,
             "cost": cost, "ga": ga, "ocf": ocf, "margin": margin}
 
 
-def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set) -> dict:
+def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -> dict:
     """Apply seeded ±7% rating variance and compute the year's actual P&L."""
     seed = (abs(hash(ss.team_name)) + year * 1337) % (2 ** 31)
     rng  = np.random.default_rng(seed)
@@ -115,7 +119,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set) -> dict:
 
     return {
         "year":    year,
-        "label":   _year_label(year),
+        "label":   _year_label(year, net),
         "revenue": round(total_rev, 2),
         "ad_rev":  round(adj_ad_rev, 2),
         "dist_rev":round(dist_rev, 2),
@@ -150,7 +154,7 @@ def _init(ss, net_info):
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
 
-def _progress_bar(ss, net_info, year, phase):
+def _progress_bar(ss, net_info, year, phase, net):
     dot_items = []
     for i in range(1, YEARS_PER_LEVEL + 1):
         done    = any(r["year"] == i for r in ss.yearly_log)
@@ -174,7 +178,7 @@ def _progress_bar(ss, net_info, year, phase):
     phase_label = {"decisions": "▶ Decision Phase",
                    "results":   "📊 Year Results",
                    "complete":  "✅ Level Complete"}[phase]
-    y_label = _year_label(year) if phase != "complete" else f"{net_info['display_name']} — Level Complete"
+    y_label = _year_label(year, net) if phase != "complete" else f"{net_info['display_name']} — Level Complete"
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
@@ -210,7 +214,7 @@ def render():
 
     phase = ss.sim_phase
 
-    _progress_bar(ss, net_info, year, phase)
+    _progress_bar(ss, net_info, year, phase, net)
 
     if phase == "decisions":
         _decisions(ss, shows, net_info, year)
@@ -530,7 +534,7 @@ def _decisions(ss, shows, net_info, year):
         else:
             if st.button(f"▶  End Year {year}  →  See Results",
                          type="primary", use_container_width=True):
-                result           = _compute_year(ss, shows, year, mkt, new_cancel)
+                result           = _compute_year(ss, shows, year, mkt, new_cancel, net)
                 result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
                 ss.yearly_log.append(result)
                 ss.cancelled_shows = ss.cancelled_shows | new_cancel
