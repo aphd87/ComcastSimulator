@@ -233,16 +233,17 @@ with st.sidebar:
 
                 if not locked:
                     if st.button(label, key=f"net_{net}", use_container_width=True):
-                        ss.active_network    = net
-                        ss.submitted         = False
-                        ss.sim_phase         = "decisions"
-                        ss.yearly_log        = []
-                        ss.cancelled_shows   = set()
-                        ss.renewal_decisions = {}
-                        ss.research_revealed = {}
-                        ss.year              = 1
-                        ss.level_budget      = None   # re-derived from the new network's budget_base
-                        ss.decision_step     = 1
+                        ss.active_network       = net
+                        ss.submitted            = False
+                        ss.sim_phase            = "decisions"
+                        ss.yearly_log           = []
+                        ss.cancelled_shows      = set()
+                        ss.renewal_decisions    = {}
+                        ss.research_revealed    = {}
+                        ss.emergency_shock_years = set()
+                        ss.year                 = 1
+                        ss.level_budget         = None   # re-derived from the new network's budget_base
+                        ss.decision_step        = 1
                         st.rerun()
                 else:
                     st.markdown(

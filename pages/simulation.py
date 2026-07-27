@@ -20,6 +20,8 @@ import plotly.graph_objects as go
 from utils.models import (
     distribution_revenue, portfolio_ad_rev,
     greenlight_linear, greenlight_svod, performance_linked_growth,
+    MIN_MARKETING_PER_SHOW_M, draw_production_risk_event,
+    draw_emergency_budget_shock,
 )
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
@@ -88,6 +90,14 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
 
     for s in shows:
         v = float(rng.uniform(0.93, 1.08))   # always consume an RNG value for reproducibility
+        # Production-risk event — an independent risk axis from rating
+        # variance (own seed, drawn regardless of branch below so it never
+        # perturbs the `rng` sequence preview_show_variance() replicates).
+        # Only rolled for shows the student didn't already choose to drop.
+        risk_reason = None
+        if s.id not in prev_cancelled and s.id not in new_cancel:
+            risk_reason = draw_production_risk_event(ss.team_name, year, s.id)
+
         if s.id in prev_cancelled:
             show_rows.append({"id": s.id, "name": s.name, "network": s.network,
                                "status": "prev_cancelled",
@@ -96,6 +106,17 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
         elif s.id in new_cancel:
             show_rows.append({"id": s.id, "name": s.name, "network": s.network,
                                "status": "cancelled",
+                               "rating_base": s.rating, "rating_adj": 0.0,
+                               "variance": round(v, 3), "revenue": 0.0,
+                               "cost": round(s.annual_amort_expense(year) * 0.25, 2)})
+        elif risk_reason:
+            # A real, involuntary setback — not a student decision. Same
+            # sunk-cost treatment as a mid-year cancellation (production
+            # already committed), but the show stays in the roster for
+            # next year's Renewal decision rather than being permanently
+            # dropped — one bad year, not a career-ending one.
+            show_rows.append({"id": s.id, "name": s.name, "network": s.network,
+                               "status": "risk_event", "reason": risk_reason,
                                "rating_base": s.rating, "rating_adj": 0.0,
                                "variance": round(v, 3), "revenue": 0.0,
                                "cost": round(s.annual_amort_expense(year) * 0.25, 2)})
@@ -284,6 +305,34 @@ def _step_bar(step: int):
 def _step_financing(ss, shows, year, net_info, level_budget):
     st.markdown('<div class="section-title">💰 Financing</div>', unsafe_allow_html=True)
 
+    # ── Mid-year emergency budget shock ─────────────────────────────────────
+    # Rare, automated, seeded per team+year (see draw_emergency_budget_shock)
+    # — answers one of Zach Schlessel's brief's own never-resolved "Open
+    # Simulation Decisions" questions. Applied at most once per year:
+    # ss.emergency_shock_years tracks which years have already had the cut
+    # deducted, so re-rendering this step (every Streamlit rerun) doesn't
+    # re-subtract it repeatedly.
+    if "emergency_shock_years" not in ss:
+        ss.emergency_shock_years = set()
+    shock = draw_emergency_budget_shock(ss.team_name, year)
+    if shock is not None:
+        if year not in ss.emergency_shock_years:
+            ss.level_budget -= level_budget * shock
+            level_budget = ss.level_budget
+            ss.emergency_shock_years.add(year)
+        st.markdown(f"""
+        <div style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.35);
+             border-left:3px solid {DANGER};border-radius:6px;padding:12px 16px;margin-bottom:14px;">
+          <div style="font-size:12px;color:{DANGER};font-weight:600;margin-bottom:4px;">
+            ⚠️ Mid-Year Emergency Budget Cut — {shock*100:.0f}%
+          </div>
+          <div style="font-size:11px;color:#e0e2ea;">
+            Corporate pulled back this year's budget mid-cycle — real and permanent, not a
+            preview. Adjust marketing and Renewal decisions to fit the new number below.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # Budget is performance-linked as of 2026-07-24 (Zach Schlessel
     # feedback: good year = more budget, poor year = a cut), not a flat
     # 3%/yr — see performance_linked_growth() in utils/models.py.
@@ -368,6 +417,20 @@ def _step_financing(ss, shows, year, net_info, level_budget):
     # bug the old per-year-keyed slider had, fixed incidentally here).
     st.slider("Marketing ($M this year)", 0.0, 24.0, step=0.5, key="mkt_budget")
 
+    # Zach Schlessel's feedback: shows below a per-show marketing floor
+    # aren't realistically viable. Soft warning, not a hard block — the
+    # math still runs either way, same posture as the screens-realism
+    # warning in Greenlighting.
+    active_count = len(_active_shows(shows, ss.cancelled_shows))
+    per_show_mkt = ss.get("mkt_budget", 5.0) / max(active_count, 1)
+    if active_count and per_show_mkt < MIN_MARKETING_PER_SHOW_M:
+        st.warning(
+            f"⚠ ${per_show_mkt:.1f}M/show is below the ${MIN_MARKETING_PER_SHOW_M:.0f}M/show "
+            f"realistic minimum for a show to be marketed viably ({active_count} active shows "
+            f"splitting ${ss.get('mkt_budget', 5.0):.1f}M). The math will still run, but consider "
+            f"raising marketing or cancelling more shows in Renewal to concentrate spend."
+        )
+
     if ss.cancelled_shows:
         already = [s.name for s in shows if s.id in ss.cancelled_shows]
         st.markdown(
@@ -400,6 +463,11 @@ def _decisions(ss, shows, net_info, year):
         if step == 1:
             _step_financing(ss, shows, year, net_info, level_budget)
             mkt = ss.get("mkt_budget", 5.0)
+            # Re-read: an emergency budget shock (see draw_emergency_budget_shock)
+            # may have just mutated ss.level_budget inside _step_financing —
+            # refresh the local var so the right-panel over-budget check below
+            # isn't stale on the same render.
+            level_budget = ss.level_budget
         elif step == 2:
             # Renewal is the real cancellation mechanism (2026-07-24) — its
             # Renew/Watch/Cancel choices, written into ss.renewal_decisions
@@ -670,6 +738,19 @@ def _results(ss, shows, net_info, year, team, net):
         st.markdown(
             f'<div style="font-size:11px;color:{WARN};font-family:DM Mono,monospace;margin-top:6px;">'
             f'✂ Cancelled this year: {names}</div>', unsafe_allow_html=True)
+
+    # ── Production-risk events — a real, involuntary setback, not a choice ────
+    risk_events = [r for r in result["shows"] if r["status"] == "risk_event"]
+    if risk_events:
+        st.markdown('<div class="section-title" style="margin-top:14px;">🎲 Production Risk</div>',
+                    unsafe_allow_html=True)
+        for r in risk_events:
+            st.markdown(
+                f'<div style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.3);'
+                f'border-radius:6px;padding:10px 14px;margin-bottom:6px;font-size:12px;color:#e0e2ea;">'
+                f'<b style="color:{DANGER};">{r["name"]}</b> — {r["reason"]}. No revenue this year, '
+                f'25% sunk-cost still owed — but it stays on your slate for next year\'s Renewal call.'
+                f'</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -945,28 +1026,30 @@ def _complete(ss, shows, net_info, team, net):
                 if e["passed"] or can_advance(team, net, ss.school, ss.class_section):
                     if st.button(f"→ Advance to {next_info['display_name']}",
                                  use_container_width=True):
-                        ss.active_network    = next_net
-                        ss.submitted         = False
-                        ss.sim_phase         = "decisions"
-                        ss.yearly_log        = []
-                        ss.cancelled_shows   = set()
-                        ss.renewal_decisions = {}
-                        ss.research_revealed = {}
-                        ss.year              = 1
-                        ss.level_budget      = None   # re-derived from next_net's budget_base
-                        ss.decision_step     = 1
+                        ss.active_network       = next_net
+                        ss.submitted            = False
+                        ss.sim_phase            = "decisions"
+                        ss.yearly_log           = []
+                        ss.cancelled_shows      = set()
+                        ss.renewal_decisions    = {}
+                        ss.research_revealed    = {}
+                        ss.emergency_shock_years = set()
+                        ss.year                 = 1
+                        ss.level_budget         = None   # re-derived from next_net's budget_base
+                        ss.decision_step        = 1
                         st.rerun()
 
     with restart_col:
         if st.button("↺ Restart This Level", use_container_width=True):
-            ss.sim_phase         = "decisions"
-            ss.yearly_log        = []
-            ss.cancelled_shows   = set()
-            ss.renewal_decisions = {}
-            ss.research_revealed = {}
-            ss.submitted         = False
-            ss.last_score        = None
-            ss.year              = 1
-            ss.level_budget      = None   # re-derived from net_info's budget_base
-            ss.decision_step     = 1
+            ss.sim_phase            = "decisions"
+            ss.yearly_log           = []
+            ss.cancelled_shows      = set()
+            ss.renewal_decisions    = {}
+            ss.research_revealed    = {}
+            ss.emergency_shock_years = set()
+            ss.submitted            = False
+            ss.last_score           = None
+            ss.year                 = 1
+            ss.level_budget         = None   # re-derived from net_info's budget_base
+            ss.decision_step        = 1
             st.rerun()

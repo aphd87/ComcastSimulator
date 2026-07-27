@@ -125,11 +125,12 @@ def render():
             f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
             f'${RESEARCH_FEE:.0f}M per show, deducted from this year\'s budget immediately. Reveals a real '
             f'1-5 star signal for how that show\'s rating will actually move this year — not a decorative '
-            f'guess. Low stars mean brace for a rough year; high stars mean lean into it.</div>',
+            f'guess. Low stars mean brace for a rough year; high stars mean lean into it. Sometimes also '
+            f'flags 1-2 regions the show may play well in, with a basic demo profile.</div>',
             unsafe_allow_html=True)
 
         with st.expander(f"🔬 Pay for Research (${RESEARCH_FEE:.0f}M/show)", expanded=False):
-            from utils.models import preview_show_variance, variance_to_stars
+            from utils.models import preview_show_variance, variance_to_stars, preview_regional_signal
             nc = 4
             chunks = [active_for_research[i:i+nc] for i in range(0, len(active_for_research), nc)]
             for chunk in chunks:
@@ -141,16 +142,28 @@ def render():
                             stars = revealed["stars"]
                             star_str = "⭐" * stars + "☆" * (5 - stars)
                             hint_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
+                            regional_html = ""
+                            for r in revealed.get("regions") or []:
+                                fit_c = SUCCESS if r["fit"] == "strong" else TEXT2
+                                regional_html += (
+                                    f'<div style="font-size:9px;color:{fit_c};font-family:DM Mono,monospace;'
+                                    f'margin-top:3px;">🌍 {r["region"]} ({r["fit"]} fit)<br>'
+                                    f'Median age {r["median_age"]} · HH income ${r["household_income_k"]}K</div>'
+                                )
                             st.markdown(
                                 f'<div style="font-size:12px;color:#e0e2ea;">{s.name[:18]}</div>'
-                                f'<div style="font-size:14px;color:{hint_c};">{star_str}</div>',
+                                f'<div style="font-size:14px;color:{hint_c};">{star_str}</div>'
+                                f'{regional_html}',
                                 unsafe_allow_html=True)
                         else:
                             if st.button(f"🔬 {s.name[:16]}", key=f"research_{s.id}_{year}",
-                                         help=f"${RESEARCH_FEE:.0f}M — reveal this year's variance signal"):
+                                         help=f"${RESEARCH_FEE:.0f}M — reveal this year's variance signal "
+                                              f"(and sometimes a regional fit hint)"):
                                 v = preview_show_variance(ss.team_name, year, shows, s.id)
-                                ss.research_revealed[s.id] = {"year": year, "variance": v,
-                                                               "stars": variance_to_stars(v)}
+                                ss.research_revealed[s.id] = {
+                                    "year": year, "variance": v, "stars": variance_to_stars(v),
+                                    "regions": preview_regional_signal(ss.team_name, year, s),
+                                }
                                 ss.level_budget = ss.get("level_budget", 0) - RESEARCH_FEE
                                 st.rerun()
 

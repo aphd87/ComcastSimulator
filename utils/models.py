@@ -19,10 +19,12 @@ CONTENT_COST_ESC     = 0.05       # Per-show renewal escalation
 BUDGET_GROWTH_RATE   = 0.03       # Annual total budget growth
 BASE_BUDGET          = 220.0      # $M year-1 budget (Bravo base; Oxygen uses network_info)
 MKT_ROI_PER_M        = 0.015      # Rating lift per $1M marketing
+MIN_MARKETING_PER_SHOW_M = 3.0    # Zach Schlessel's feedback: "$3M marketing minimum for show viability"
 SVOD_SUB_LTV_MO      = 8.0        # SVOD ARPU $/month
 SVOD_MARGIN          = 0.15       # SVOD contribution margin
 AMORT_MONTHS_LINEAR  = 12
 AMORT_MONTHS_SVOD    = 36
+TRUE_CRIME_AMORT_MONTHS = 24   # Zach Schlessel's feedback: True Crime gets its own, longer curve
 
 MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
@@ -39,7 +41,20 @@ class Show:
     air_month: int            # Month premiere airs (1-12)
     network: str = "Bravo"
     status: str = "Active"
-    amort_months: int = 12    # 12 for linear (Bravo), 36 for Oxygen/Peacock
+
+    def effective_amort_months(self) -> int:
+        """Amortization window — genre-based for linear content (Zach
+        Schlessel's feedback, 2026-07-27: True Crime gets a longer curve
+        than everything else, regardless of which linear network airs it —
+        replaces the old network-based split, Oxygen=36mo/Bravo=12mo).
+        Peacock/SVOD content keeps a uniform 36-month window: that's a
+        distinct subscription-content accounting convention (matches
+        AMORT_MONTHS_SVOD, the same constant Day 1's greenlight SVOD path
+        uses), not a genre distinction, so it doesn't participate in the
+        True-Crime split."""
+        if self.network == "Peacock":
+            return AMORT_MONTHS_SVOD
+        return TRUE_CRIME_AMORT_MONTHS if self.genre == "True Crime" else AMORT_MONTHS_LINEAR
 
     def total_cost(self, year: int = 1) -> float:
         """Full production cost for the season in $M, with 5% annual escalation."""
@@ -48,10 +63,10 @@ class Show:
 
     def annual_amort_expense(self, year: int = 1) -> float:
         """Annual P&L expense: production cost spread over the amortization period."""
-        return self.total_cost(year) * 12 / self.amort_months
+        return self.total_cost(year) * 12 / self.effective_amort_months()
 
     def monthly_amort(self, year: int = 1) -> float:
-        return self.total_cost(year) / self.amort_months
+        return self.total_cost(year) / self.effective_amort_months()
 
     def ad_revenue(self, year: int = 1, mkt_boost_m: float = 0.0) -> float:
         """Ad revenue in $M for a season."""
@@ -176,6 +191,113 @@ def variance_to_stars(v: float) -> int:
     example numbers verbatim, since our variance range is narrower)."""
     frac = (v - 0.93) / (1.08 - 0.93)
     return min(5, max(1, int(frac * 5) + 1))
+
+
+# ── Regional / demographic research signal ──────────────────────────────────
+# Zach Schlessel's feedback, added 2026-07-27: research should sometimes
+# also reveal which region a show may play well in, with a basic illustrative
+# demo profile (age, household income) — not a full market-research report,
+# and deliberately only a few curated regions, never all of them. Fully
+# automated: seeded per team+show+year, nothing hand-authored per show.
+# Seeded independently of preview_show_variance() above (its own hash
+# offset) so the regional signal is uncorrelated with the numeric rating
+# draw — same reasoning as Day 2's critical-reception draw being
+# independent of box office (see utils/movie_models.py).
+REGIONS = {
+    "Northeast US":  {"median_age": 41, "household_income_k": 78, "affinity": ["True Crime", "Drama", "Talk"]},
+    "Southeast US":  {"median_age": 38, "household_income_k": 58, "affinity": ["Reality", "Competition", "True Crime"]},
+    "West Coast US": {"median_age": 37, "household_income_k": 84, "affinity": ["Scripted", "Competition", "Comedy"]},
+    "UK/Ireland":    {"median_age": 40, "household_income_k": 62, "affinity": ["True Crime", "Talk", "Drama"]},
+    "Latin America": {"median_age": 33, "household_income_k": 34, "affinity": ["Reality", "Competition", "Comedy"]},
+    "APAC":          {"median_age": 35, "household_income_k": 46, "affinity": ["Scripted", "Reality", "Drama"]},
+}
+REGIONAL_SIGNAL_CHANCE  = 0.5   # only sometimes reveals a regional signal, not every research buy
+REGIONS_PER_SIGNAL_MAX  = 2     # 1-2 regions max, deliberately kept small
+
+
+# ── Production-risk event ────────────────────────────────────────────────────
+# Zach Schlessel's feedback: "Shows can fail for legitimate reasons (talent
+# departure, poor script, etc.)" — a real, independent risk axis from the
+# numeric rating variance above, same reasoning as Day 2's critical
+# reception being drawn independently of box office (see
+# utils/movie_models.py). Only applies to shows the student is actively
+# running this year (not ones already cancelled) — see
+# pages/simulation.py::_compute_year.
+PRODUCTION_RISK_CHANCE  = 0.04   # ~4% per show per year — rare, but real
+PRODUCTION_RISK_REASONS = [
+    "Lead talent departed mid-production",
+    "Scripts fell apart in the writers' room",
+    "A key creative left for a competing project",
+    "Post-production delays blew the release window",
+    "A budget dispute halted production",
+]
+
+
+def draw_production_risk_event(team_name: str, year: int, show_id: int) -> Optional[str]:
+    """Rare, independent draw — seeded on its own hash offset so it never
+    perturbs the rating-variance RNG sequence preview_show_variance()
+    replicates for the Research feature. Returns None almost all the time;
+    when it doesn't, the reason string is what actually happened, not a
+    generic "bad year" label."""
+    seed = (abs(hash(team_name)) + show_id * 8191 + year * 613) % (2 ** 31)
+    rng  = np.random.default_rng(seed)
+    if rng.random() > PRODUCTION_RISK_CHANCE:
+        return None
+    return PRODUCTION_RISK_REASONS[int(rng.integers(0, len(PRODUCTION_RISK_REASONS)))]
+
+
+# ── Mid-year emergency budget shift ──────────────────────────────────────────
+# One of Zach Schlessel's brief's own "Open Simulation Decisions," never
+# actually answered until now: "Should budget constraints shift mid-year
+# (emergency cancellations)?" Implemented as a rare, automated, network-
+# level shock (not per-show — corporate belt-tightening hits the whole
+# level's budget, not one show at a time).
+EMERGENCY_BUDGET_CHANCE     = 0.15          # per team+year
+EMERGENCY_BUDGET_CUT_RANGE  = (0.10, 0.25)  # 10-25% cut when it fires
+
+
+def draw_emergency_budget_shock(team_name: str, year: int) -> Optional[float]:
+    """Returns None most years, or the fraction of this year's budget
+    that's been cut (e.g. 0.15 = a 15% cut) when it fires. Seeded on its
+    own hash offset, drawn once per team+year (network-level event, not
+    per-show)."""
+    seed = (abs(hash(team_name)) + year * 5303 + 17) % (2 ** 31)
+    rng  = np.random.default_rng(seed)
+    if rng.random() > EMERGENCY_BUDGET_CHANCE:
+        return None
+    lo, hi = EMERGENCY_BUDGET_CUT_RANGE
+    return float(rng.uniform(lo, hi))
+
+
+def preview_regional_signal(team_name: str, year: int, show: "Show") -> Optional[list[dict]]:
+    """Sometimes reveals 1-2 regions (of REGIONS' small curated set) this
+    show may play well in, each with an illustrative demo profile. Returns
+    None most of the time (see REGIONAL_SIGNAL_CHANCE) — this is a bonus
+    signal layered on top of the star rating, not guaranteed every time
+    Research is purchased. Regions matching the show's genre are weighted
+    more likely to surface ("strong" fit) but a non-matching region can
+    still appear ("moderate" fit) — real audiences don't always follow the
+    obvious genre lines."""
+    seed = (abs(hash(team_name)) + show.id * 6151 + year * 271) % (2 ** 31)
+    rng  = np.random.default_rng(seed)
+    if rng.random() > REGIONAL_SIGNAL_CHANCE:
+        return None
+
+    names   = list(REGIONS.keys())
+    weights = np.array([3.0 if show.genre in REGIONS[n]["affinity"] else 1.0 for n in names])
+    weights = weights / weights.sum()
+    n_pick  = min(REGIONS_PER_SIGNAL_MAX, len(names))
+    chosen  = rng.choice(len(names), size=n_pick, replace=False, p=weights)
+
+    return [
+        {
+            "region": names[i],
+            "median_age": REGIONS[names[i]]["median_age"],
+            "household_income_k": REGIONS[names[i]]["household_income_k"],
+            "fit": "strong" if show.genre in REGIONS[names[i]]["affinity"] else "moderate",
+        }
+        for i in chosen
+    ]
 
 
 # ── Green Light model ─────────────────────────────────────────────────────────
