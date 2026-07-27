@@ -190,12 +190,15 @@ with st.sidebar:
         st.markdown('<div class="section-title">Simulation</div>', unsafe_allow_html=True)
 
         section_defs = [
+            ("app",         "🏠 App"),
             ("leaderboard", "🏆 Leaderboard"),
             ("tv",          "📺 TV / Streaming"),
             ("movies",      "🎬 Movies"),
         ]
         for section_key, section_label in section_defs:
-            is_active = ss.active_section == section_key
+            is_active = ss.active_section == section_key or (
+                section_key == "app" and ss.active_section is None
+            )
             if st.button(f"{'🎯' if is_active else ''} {section_label}".strip(),
                          key=f"section_{section_key}", use_container_width=True,
                          type="primary" if is_active else "secondary"):
@@ -306,8 +309,9 @@ if not ss.registered:
         unsafe_allow_html=True
     )
 
-elif ss.active_section is None:
-    # ── Choose Your Simulation — shown once, right after registering ───────────
+elif ss.active_section in (None, "app"):
+    # ── Choose Your Simulation — landing screen, reachable via the "App" nav
+    # button at any time, not just once right after registering ────────────────
     st.markdown(f"""
     <div style="text-align:center;margin-bottom:20px;">
       <div style="font-family:DM Serif Display,serif;font-size:24px;color:#e8eaf0;">
