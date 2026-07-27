@@ -5,9 +5,15 @@ Student builds a show concept and compares Linear vs. SVOD P&L.
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from utils.models import greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS
+from utils.models import greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS, Show
 from utils.charts import base_layout, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
+from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR
+
+_GENRES = ["Reality", "Competition", "Talk", "Scripted", "True Crime", "Drama"]
+_NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturation threshold
+                           # (Show.projected_rating's decay formula), so a fresh concept trends
+                           # mildly upward rather than assuming instant franchise value
 
 # Protected titles — every real show name already in this game's own data.
 # Zach Schlessel's feedback: "Risk = 0 score: take an existing show title
@@ -30,6 +36,40 @@ def render():
     </div>
     """, unsafe_allow_html=True)
 
+    # ── AI Pitch Generator (optional, BYOK — see README.md) ─────────────────────
+    # Complements AI Pitch Feedback below: that grades a pitch the student
+    # already wrote, this proposes a starting concept for a student who's
+    # stuck on ideation. Either path leads to the same concept builder below.
+    from utils.ai_grading import api_key_configured, grade_show_concept, generate_show_pitch
+
+    if api_key_configured():
+        gp1, gp2 = st.columns([3, 1])
+        with gp1:
+            st.markdown(
+                '<div style="font-size:11px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
+                'concept to start from — you can still edit every field below before greenlighting.</div>',
+                unsafe_allow_html=True)
+        with gp2:
+            if st.button("🤖 Get an AI Pitch Idea", key="gl_generate_pitch", use_container_width=True):
+                with st.spinner("Generating a pitch..."):
+                    idea = generate_show_pitch(NETWORK_INFO[ss.active_network]["display_name"])
+                if idea is None:
+                    st.error("AI pitch generation is temporarily unavailable. Try again later.")
+                else:
+                    st.session_state["gl_show_name"] = idea.show_name
+                    st.session_state["gl_genre"]     = idea.genre if idea.genre in _GENRES else _GENRES[0]
+                    st.session_state["gl_eps"]        = idea.suggested_episodes
+                    st.session_state["gl_ep_cost"]    = idea.suggested_ep_cost_k
+                    st.session_state["gl_rating"]     = idea.suggested_rating
+                    st.session_state["gl_appeal"]     = idea.suggested_svod_appeal
+                    ss.gl_ai_pitch_text = idea.pitch
+                    st.rerun()
+        if ss.get("gl_ai_pitch_text"):
+            st.markdown(
+                f'<div style="background:#12141a;border:1px solid #252836;border-radius:6px;'
+                f'padding:10px 14px;margin-bottom:10px;font-size:12px;color:#e0e2ea;">'
+                f'💡 <b>AI pitch:</b> {ss.gl_ai_pitch_text}</div>', unsafe_allow_html=True)
+
     # ── Show Concept Builder ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Show Concept Inputs</div>', unsafe_allow_html=True)
 
@@ -37,7 +77,7 @@ def render():
         c1,c2,c3 = st.columns(3)
         with c1:
             show_name = st.text_input("Show Name / Concept", "My New Show", key="gl_show_name")
-            genre     = st.selectbox("Genre", ["Reality","Competition","Talk","Scripted","True Crime","Drama"], key="gl_genre")
+            genre     = st.selectbox("Genre", _GENRES, key="gl_genre")
             eps       = st.number_input("Episode Count", 4, 24, 10, step=1, key="gl_eps")
         with c2:
             ep_cost   = st.number_input("Cost per Episode ($K)", 100, 5000, 750, step=50,
@@ -199,6 +239,54 @@ def render():
         st.success(f"📺 **Linear wins in Year {year}** — Faster cash recovery. Ad revenue beats SVOD LTV at current cord-cut levels.")
     else:
         st.info(f"📱 **SVOD+ wins in Year {year}** — Subscription LTV outpaces declining linear ad market. Long-term play.")
+
+    st.divider()
+
+    # ── Greenlight This Show — actually adds it to the real roster ─────────────
+    # Added 2026-07-27: Greenlighting was previously a standalone P&L
+    # sandbox that never touched real game state. Cap of MAX_NEW_SHOWS_PER_YEAR
+    # matches real network development slates (a handful of new titles per
+    # season against a 20-40 show base) — budget already gates spending on
+    # top of this, this caps pacing/portfolio growth.
+    if "greenlit_ids_this_year" not in ss:
+        ss.greenlit_ids_this_year = set()
+    if "greenlit_ids_this_level" not in ss:
+        ss.greenlit_ids_this_level = set()
+    if "total_shows_greenlit" not in ss:
+        ss.total_shows_greenlit = 0
+    if "next_show_id" not in ss:
+        ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
+
+    net_display = NETWORK_INFO[ss.active_network]["display_name"]
+    slots_used  = len(ss.greenlit_ids_this_year)
+    slots_left  = MAX_NEW_SHOWS_PER_YEAR - slots_used
+
+    st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+        f'Adds this concept to {net_display}\'s real roster — production cost (${linear["cost"]:.2f}M) '
+        f'comes out of this year\'s budget immediately, and it starts earning/costing real money '
+        f'starting this year. You\'ve greenlit {slots_used} of {MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
+        unsafe_allow_html=True)
+
+    if slots_left <= 0:
+        st.warning(f"⚠ You've used all {MAX_NEW_SHOWS_PER_YEAR} greenlight slots for this year — "
+                    "come back next year for more.")
+    elif st.button(f"🎬 Greenlight \"{show_name}\" for {net_display}", type="primary", use_container_width=True):
+        new_show = Show(
+            id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=eps,
+            ep_cost_k=ep_cost, rating=rating, ip_score=_NEW_SHOW_IP_SCORE,
+            air_month=air_month, network=net_display,
+        )
+        roster_key = f"{ss.active_network}_shows"
+        ss[roster_key] = ss[roster_key] + [new_show]
+        ss.level_budget = ss.get("level_budget", 0) - linear["cost"]   # production cost, unescalated (year-1 basis)
+        ss.greenlit_ids_this_year.add(new_show.id)
+        ss.greenlit_ids_this_level.add(new_show.id)
+        ss.total_shows_greenlit += 1
+        ss.next_show_id += 1
+        st.rerun()   # note: a st.success() here would never render — rerun replaces the DOM
+                     # immediately. The updated "X of N greenlit" count above is the confirmation.
 
     st.divider()
 

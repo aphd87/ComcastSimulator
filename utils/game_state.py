@@ -17,6 +17,9 @@ from pathlib import Path
 # ── Constants ────────────────────────────────────────────────────────────────
 LEADERBOARD_FILE = Path("leaderboard.json")
 MAX_ATTEMPTS     = 3          # After 3 fails, still unlock next level
+MAX_NEW_SHOWS_PER_YEAR = 3    # Greenlighting cap, added 2026-07-27 — real TV networks greenlight
+                               # a handful of new titles per season, not dozens; budget already
+                               # gates spending, this caps pacing/portfolio growth on top of that
 YEARS_PER_LEVEL  = 5          # Each network runs a real 5-calendar-year era — see LEVEL_START_YEAR
 LEVEL_START_YEAR = {           # First in-game year of each network's era (2026-07-27, per user request)
     "oxygen":  2012,          # 2012-2016 — saving a sinking channel

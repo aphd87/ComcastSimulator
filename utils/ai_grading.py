@@ -33,6 +33,21 @@ class ShowConceptGrade(BaseModel):
                      "makes this concept worth (or not worth) paying to de-risk.")
 
 
+class ShowPitchIdea(BaseModel):
+    show_name: str = Field(description="A punchy, original working title — must not match or "
+                             "closely resemble any existing real or well-known TV show.")
+    genre:     str = Field(description="Exactly one of: Reality, Competition, Talk, Scripted, "
+                             "True Crime, Drama.")
+    pitch:     str = Field(description="2-3 sentence pitch describing the concept, hook, and audience.")
+    suggested_episodes:     int   = Field(description="Reasonable first-season episode count, 6-20.")
+    suggested_ep_cost_k:    int   = Field(description="Reasonable cost per episode in $K, 200-1500 "
+                                            "depending on genre/scope (reality cheaper, scripted pricier).")
+    suggested_rating:       float = Field(description="Reasonable projected 18-49 rating for an "
+                                            "unproven new concept, 0.3-2.5.")
+    suggested_svod_appeal:  int   = Field(description="0-100 streaming-conversion appeal score for "
+                                            "this concept's genre/hook.")
+
+
 def api_key_configured() -> bool:
     """True if this deployment has its own Anthropic API key configured."""
     try:
@@ -73,6 +88,42 @@ def grade_show_concept(show_name: str, genre: str, pitch: str) -> ShowConceptGra
                 ),
             }],
             output_format=ShowConceptGrade,
+        )
+        return response.parsed_output
+    except Exception:
+        return None
+
+
+def generate_show_pitch(network_context: str) -> ShowPitchIdea | None:
+    """Generate an original show concept for a student who's stuck on
+    ideation — complements grade_show_concept() above, which grades a
+    pitch the student already wrote rather than proposing one. Returns
+    None on any failure (missing key, API error) so the caller can show a
+    friendly message instead of crashing the page.
+    """
+    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    if not api_key:
+        return None
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        response = client.messages.parse(
+            model="claude-haiku-4-5",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Propose an original TV show concept for {network_context}, for a "
+                    "business-school portfolio-simulation exercise. The concept must be "
+                    "genuinely original — do not reuse or lightly reskin any existing real or "
+                    "well-known show. Suggest realistic production parameters (episode count, "
+                    "cost per episode, projected rating, streaming appeal) a student could "
+                    "sanity-check and adjust before greenlighting it."
+                ),
+            }],
+            output_format=ShowPitchIdea,
         )
         return response.parsed_output
     except Exception:

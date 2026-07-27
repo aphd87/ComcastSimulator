@@ -241,6 +241,9 @@ with st.sidebar:
                         ss.renewal_decisions    = {}
                         ss.research_revealed    = {}
                         ss.emergency_shock_years = set()
+                        ss.greenlit_ids_this_year  = set()
+                        ss.greenlit_ids_this_level = set()
+                        ss.total_shows_greenlit    = 0
                         ss.year                 = 1
                         ss.level_budget         = None   # re-derived from the new network's budget_base
                         ss.decision_step        = 1

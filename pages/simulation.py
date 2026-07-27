@@ -42,6 +42,22 @@ def _active_shows(shows, cancelled: set):
     return [s for s in shows if s.id not in cancelled]
 
 
+def _remove_greenlit_shows(ss, ids_to_remove: set):
+    """Strips the given show IDs out of whichever roster list(s) they're
+    in — used to undo shows added via pages/greenlight.py's "Greenlight
+    This Show" action on Redo Year / Restart Level. IDs are globally
+    unique (see ss.next_show_id, initialized in pages/greenlight.py), so
+    filtering all three lists uniformly is safe and simple. Note: unlike
+    cancellations, this does NOT refund the production cost already
+    deducted from ss.level_budget — same posture as Research fees, which
+    also aren't refunded on redo. Only the phantom show itself is removed
+    so it doesn't linger with no record of how it was paid for."""
+    if not ids_to_remove:
+        return
+    for key in ("oxygen_shows", "bravo_shows", "peacock_shows"):
+        ss[key] = [s for s in ss.get(key, []) if s.id not in ids_to_remove]
+
+
 def _annual_cost(shows, year: int, prev_cancelled: set, new_cancel: set) -> float:
     """Full annual amort cost. New cancellations pay a 25% sunk-cost penalty
     (production already committed before the decision); prior cancellations
@@ -765,6 +781,15 @@ def _results(ss, shows, net_info, year, team, net):
             # result["budget"] is what was actually available *this* year,
             # before that update projected next year's figure.
             ss.level_budget    = result["budget"]
+            # Undo any shows greenlit during the year being redone — a full
+            # retry of the year's decisions, not a partial one. Production
+            # cost already spent isn't refunded (see _remove_greenlit_shows'
+            # docstring), matching how Research fees already behave.
+            this_year_ids = ss.get("greenlit_ids_this_year", set())
+            _remove_greenlit_shows(ss, this_year_ids)
+            ss.greenlit_ids_this_level = ss.get("greenlit_ids_this_level", set()) - this_year_ids
+            ss.total_shows_greenlit    = max(0, ss.get("total_shows_greenlit", 0) - len(this_year_ids))
+            ss.greenlit_ids_this_year  = set()
             ss.sim_phase       = "decisions"
             ss.decision_step   = 1
             st.rerun()
@@ -774,6 +799,7 @@ def _results(ss, shows, net_info, year, team, net):
                 ss.year          = year + 1
                 ss.sim_phase     = "decisions"
                 ss.decision_step = 1
+                ss.greenlit_ids_this_year = set()   # fresh greenlight cap for the new year
                 st.rerun()
         else:
             if st.button("→ View Final Results & Submit Score",
@@ -1040,6 +1066,12 @@ def _complete(ss, shows, net_info, team, net):
                         ss.renewal_decisions    = {}
                         ss.research_revealed    = {}
                         ss.emergency_shock_years = set()
+                        # Shows greenlit during the level just passed STAY in the
+                        # roster (same as any other pre-existing show) — only the
+                        # per-level trackers reset fresh for the new level.
+                        ss.greenlit_ids_this_year  = set()
+                        ss.greenlit_ids_this_level = set()
+                        ss.total_shows_greenlit    = 0
                         ss.year                 = 1
                         ss.level_budget         = None   # re-derived from next_net's budget_base
                         ss.decision_step        = 1
@@ -1047,12 +1079,19 @@ def _complete(ss, shows, net_info, team, net):
 
     with restart_col:
         if st.button("↺ Restart This Level", use_container_width=True):
+            # Unlike Advance, a full restart also undoes any shows greenlit
+            # during this level attempt — they were part of this attempt's
+            # decisions, not a permanent fact of the roster yet.
+            _remove_greenlit_shows(ss, ss.get("greenlit_ids_this_level", set()))
             ss.sim_phase            = "decisions"
             ss.yearly_log           = []
             ss.cancelled_shows      = set()
             ss.renewal_decisions    = {}
             ss.research_revealed    = {}
             ss.emergency_shock_years = set()
+            ss.greenlit_ids_this_year  = set()
+            ss.greenlit_ids_this_level = set()
+            ss.total_shows_greenlit    = 0
             ss.submitted            = False
             ss.last_score           = None
             ss.year                 = 1
