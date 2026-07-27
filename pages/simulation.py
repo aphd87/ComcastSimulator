@@ -997,6 +997,56 @@ def _complete(ss, shows, net_info, team, net):
 
         st.divider()
 
+    # ── Level Notables ──────────────────────────────────────────────────────────
+    # Plain-language playthrough summary, shown to the student regardless of
+    # submission -- always reflects the live yearly_log, so it stays current
+    # through Redo/Restart. Distinct from record_attempt's stored `notables`,
+    # which freezes a copy of this at Submit time for the Leaderboard.
+    notables = compute_level_notables(log, ss.get("total_shows_greenlit", 0))
+    st.markdown('<div class="section-title">🌟 Your Level Notables</div>', unsafe_allow_html=True)
+
+    by = notables["best_year"]
+    mi = notables["most_improved"]
+    cs = notables["consistency_score"]
+    sg = notables["shows_greenlit"]
+
+    by_val = by["label"] if by else "—"
+    by_sub = f"{by['margin']:.1f}% margin" if by else "not enough data"
+    mi_c   = SUCCESS if (mi or 0) > 0 else (DANGER if (mi or 0) < 0 else TEXT2)
+    mi_val = f"{mi:+.1f} pts" if mi is not None else "—"
+    cs_c     = SUCCESS if (cs or 0) >= 85 else (WARN if (cs or 0) >= 65 else DANGER)
+    cs_val   = f"{cs:.0f}/100" if cs is not None else "—"
+    cs_label = ("Rock-solid" if cs >= 85 else "Steady" if cs >= 65 else "Volatile") if cs is not None else "not enough data"
+
+    n_cols = st.columns(4)
+    cards = [
+        ("BEST YEAR",       by_val, SUCCESS, by_sub),
+        ("MOST IMPROVED",   mi_val, mi_c,    "margin, first → last year"),
+        ("CONSISTENCY",     cs_val, cs_c,    cs_label),
+        ("SHOWS GREENLIT",  str(sg), ACCENT, "new titles added this level"),
+    ]
+    for col, (title, val, color, sub) in zip(n_cols, cards):
+        with col:
+            st.markdown(f"""
+            <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:12px;height:100%;">
+              <div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:4px;">{title}</div>
+              <div style="font-size:17px;font-family:DM Serif Display,serif;color:{color};">{val}</div>
+              <div style="font-size:11px;color:#e0e2ea;">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    dt = notables["diversity_trend"]
+    if dt is not None:
+        if dt > 0.02:
+            dt_msg = f"Your portfolio concentrated over the level (genre HHI rose {dt:.2f}) — fewer genres carrying the slate by the end."
+        elif dt < -0.02:
+            dt_msg = f"Your portfolio diversified over the level (genre HHI fell {abs(dt):.2f}) — a broader genre mix by the end."
+        else:
+            dt_msg = "Your genre mix held roughly steady across the level."
+        st.caption(f"📊 {dt_msg}")
+
+    st.divider()
+
     # ── Submit & navigation ───────────────────────────────────────────────────
     act_col, restart_col = st.columns([2, 1])
 

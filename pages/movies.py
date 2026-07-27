@@ -492,6 +492,43 @@ def _complete(ss):
         </div>
         """, unsafe_allow_html=True)
 
+    # ── Slate Notables ────────────────────────────────────────────────────────
+    # Movies-track equivalent of the TV side's Level Notables, shown to the
+    # student regardless of submission -- always reflects the live
+    # movie_log, so it stays current through Redo This Cycle.
+    notables = compute_movie_notables(sorted_log)
+    st.markdown('<div class="section-title">🌟 Your Slate Notables</div>', unsafe_allow_html=True)
+
+    bc = notables["best_cycle"]
+    mi = notables["most_improved"]
+    cs = notables["consistency_score"]
+    gv = notables["genre_variety"]
+
+    bc_val = bc["label"] if bc else "—"
+    bc_sub = f"{_fmt_money(bc['npv'])} NPV" if bc else "not enough data"
+    mi_c   = SUCCESS if (mi or 0) > 0 else (DANGER if (mi or 0) < 0 else TEXT2)
+    mi_val = f"{_fmt_money(mi)}" if mi is not None else "—"
+    cs_c     = SUCCESS if (cs or 0) >= 85 else (WARN if (cs or 0) >= 65 else DANGER)
+    cs_val   = f"{cs:.0f}/100" if cs is not None else "—"
+    cs_label = ("Rock-solid" if cs >= 85 else "Steady" if cs >= 65 else "Volatile") if cs is not None else "not enough data"
+
+    n_cols = st.columns(4)
+    cards = [
+        ("BEST CYCLE",     bc_val, SUCCESS, bc_sub),
+        ("MOST IMPROVED",  mi_val, mi_c,    "NPV, first → last cycle"),
+        ("CONSISTENCY",    cs_val, cs_c,    cs_label),
+        ("GENRE VARIETY",  str(gv), ACCENT, "distinct genres attempted"),
+    ]
+    for col, (title, val, color, sub) in zip(n_cols, cards):
+        with col:
+            st.markdown(f"""
+            <div class="rounded-lg bg-surface2 p-3" style="height:100%;">
+              <div class="text-[9px] text-muted font-mono mb-1">{title}</div>
+              <div class="text-lg font-serif" style="color:{color};">{val}</div>
+              <div class="text-xs" style="color:#e0e2ea;">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
     st.divider()
     attempts = get_attempt_count(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)
     prev_official = get_official_score(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)

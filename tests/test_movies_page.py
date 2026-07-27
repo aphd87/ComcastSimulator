@@ -85,3 +85,68 @@ def test_greenlight_phase_shows_bear_base_bull_preview():
     text = "\n".join(md.value for md in at.markdown)
     for label in ("bear case", "base case", "bull case"):
         assert label in text.lower()
+
+
+def _complete_movies_app() -> AppTest:
+    """Seeds movie_log/movie_phase directly (session_state set before the
+    first .run(), no button interaction) rather than clicking through
+    3 real cycles -- sidesteps the AppTest + st.rerun() limitation
+    documented at the top of this file, which only bites on a *second*
+    interaction after a phase transition."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.movie_models import (
+            MovieProject, draw_actual_multiplier, draw_critical_reception,
+            AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
+        )
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.school = "Test School"
+        st.session_state.class_section = "Sec A"
+        log = []
+        for cycle, (title, genre) in enumerate(
+            [("First Movie", "Drama"), ("Second Movie", "Comedy"), ("Third Movie", "Action/Tentpole")],
+            start=1,
+        ):
+            project = MovieProject(title=title, genre=genre, budget_m=80, pa_spend_m=40,
+                                    star_power=60, screens=3000, cycle=cycle,
+                                    release_strategy="wide_theatrical", concept_type="New IP")
+            multiplier = draw_actual_multiplier("AppTest Team", cycle, project.genre, project.concept_type)
+            critical_score = draw_critical_reception("AppTest Team", cycle, project.genre)
+            awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
+            log.append({
+                "cycle": cycle, "project_kwargs": dict(project.__dict__),
+                "multiplier": multiplier, "scenario_label": "base",
+                "critical_score": critical_score,
+                "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
+                "npv": project.npv(multiplier, critical_score),
+                "irr": project.irr(multiplier, critical_score),
+                "total_revenue": project.total_revenue(multiplier, critical_score),
+                "domestic_bo": project.domestic_box_office(multiplier),
+                "theatrical_net": project.theatrical_studio_net(multiplier),
+                "pvod": project.pvod_revenue(multiplier),
+                "sub_value": project.subscriber_value(multiplier),
+                "longtail": project.library_longtail(multiplier, critical_score),
+                "awards_bump": project.awards_season_bump(multiplier, critical_score),
+                "theme_park": project.theme_park_value(multiplier),
+                "capital_at_risk": project.capital_at_risk(),
+            })
+        st.session_state.movie_log = log
+        st.session_state.movie_cycle = 3
+        st.session_state.movie_phase = "complete"
+        import pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Complete phase raised: {list(at.exception)}"
+    return at
+
+
+def test_complete_phase_renders_slate_notables_with_no_exceptions():
+    at = _complete_movies_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Slate Notables" in text
+    assert "BEST CYCLE" in text
+    assert "GENRE VARIETY" in text
