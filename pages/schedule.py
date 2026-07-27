@@ -43,11 +43,21 @@ def render():
     # Student inputs
     with st.expander("🎛️ Configure Premiere Day Scenario", expanded=True):
         c1,c2,c3,c4 = st.columns(4)
-        pd_show_name = c1.selectbox("Show", [s.name for s in shows[:10]], key="sched_show")
+        pd_show_name = c1.selectbox("Show", [s.name for s in shows[:10]], key="sched_show",
+                                     help="Loads this show's real episode count and per-episode cost below — "
+                                          "still yours to edit if you want to explore a hypothetical instead.")
         pd_launch    = c2.radio("Launch Day", [1, 15, 30], horizontal=True,
                                 help="Day of month the show premieres", key="sched_launch_day")
-        pd_eps       = c3.number_input("Episode Count", 6, 24, 10, key="sched_eps")
-        pd_cost_k    = c4.number_input("Cost/Episode ($K)", 100, 3000, 750, step=50, key="sched_cost_k")
+        # Defaults come from the selected show's real numbers, not a fixed
+        # placeholder — the key is scoped to the show name so switching the
+        # dropdown loads that show's actual figures instead of carrying over
+        # whatever was typed for the previous selection.
+        selected_show = next((s for s in shows if s.name == pd_show_name), None)
+        eps_default   = selected_show.episodes if selected_show else 10
+        cost_default  = int(selected_show.ep_cost_k) if selected_show else 750
+        pd_eps       = c3.number_input("Episode Count", 6, 24, eps_default, key=f"sched_eps_{pd_show_name}")
+        pd_cost_k    = c4.number_input("Cost/Episode ($K)", 100, 3000, cost_default, step=50,
+                                        key=f"sched_cost_k_{pd_show_name}")
 
     total_season_cost = pd_eps * pd_cost_k / 1000     # $M
     monthly_amort     = total_season_cost / 12         # $M per month
@@ -247,7 +257,9 @@ def render():
 
     sched_df = pd.DataFrame(sched_data).set_index("Time")
     st.dataframe(sched_df, use_container_width=True)
-    st.caption("Auto-assigned by rating. Primetime = Tue–Thu 8–10PM. Adjust via Show Editor.")
+    st.caption("Auto-assigned by rating — highest-rated shows get primetime. Illustrative only: "
+               "there's no separate editor, and this grid isn't something your decisions elsewhere "
+               "change — it's here to show what a rating-optimized primetime lineup looks like.")
 
     # ── Hourly Revenue Index ──────────────────────────────────────────────────
     st.divider()

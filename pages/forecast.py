@@ -30,6 +30,12 @@ def render():
     earn the right to add Bravo (Years 4–7) → launch Peacock SVOD+ (Years 8–10).
     Each phase is a performance threshold. Cord-cutting accelerates after Year 4.
     Peacock becomes the hedge against linear erosion.
+    <br><br>
+    ⚠️ <b style="color:#ffb74d;">This is a separate what-if model, not the real game you're playing.</b>
+    It uses its own continuous Year 1–10 timeline to explore long-run strategy in one view — it
+    doesn't match the actual calendar eras you play through elsewhere (Oxygen 2012–2016, Bravo
+    2017–2021, Peacock 2022–2026, each starting its own fresh Year 1). Nothing you set here
+    changes your real score.
     </div>
     """, unsafe_allow_html=True)
 

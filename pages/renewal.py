@@ -242,17 +242,22 @@ def render():
 
                     current = ss.renewal_decisions.get(r["_id"], "Renew")
                     choice = st.selectbox(
-                        "Decision", ["Renew", "Watch", "Cancel"],
+                        "Your decision", ["Renew", "Watch", "Cancel"],
                         index=["Renew", "Watch", "Cancel"].index(current),
-                        key=f"ren_{r['_id']}", label_visibility="collapsed",
+                        key=f"ren_{r['_id']}",
+                        help="Renew: keep it for next year at the escalated cost. Watch: keep it "
+                             "for now, flagged for a closer look. Cancel: drop it (a 25% sunk-cost "
+                             "penalty applies if you cancel a show mid-production).",
                     )
                     ss.renewal_decisions[r["_id"]] = choice
 
                     if choice != "Cancel":
                         new_month = st.number_input(
-                            "Premiere month", 1, 12, value=s.air_month,
-                            key=f"premiere_{r['_id']}", label_visibility="collapsed",
-                            help="Premiere month — affects the amortization cash trough (see Scheduling).",
+                            "Premiere month (1-12)", 1, 12, value=s.air_month,
+                            key=f"premiere_{r['_id']}",
+                            help="Which calendar month this show premieres — affects the amortization "
+                                 "cash trough (see Scheduling): a late-month premiere means a full "
+                                 "month's cost with only a few days of revenue.",
                         )
                         if new_month != s.air_month:
                             s.air_month = new_month
