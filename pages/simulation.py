@@ -185,8 +185,6 @@ def _init(ss, net_info):
         ss.sim_phase = "decisions"
     if not ss.get("level_budget"):
         ss.level_budget = float(net_info["budget_base"])
-    if not ss.get("decision_step"):
-        ss.decision_step = 1
 
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
@@ -254,7 +252,7 @@ def render():
     _progress_bar(ss, net_info, year, phase, net)
 
     if phase == "decisions":
-        _decisions(ss, shows, net_info, year)
+        _decisions(ss, shows, net_info, year, net)
     elif phase == "results":
         _results(ss, shows, net_info, year, team, net)
     else:
@@ -262,9 +260,6 @@ def render():
 
 
 # ── Decisions phase ────────────────────────────────────────────────────────────
-
-STEP_LABELS = {1: "💰 Financing", 2: "🔄 Renewal", 3: "🎬 Greenlighting", 4: "📅 Scheduling"}
-
 
 def _last_year_recap(prev: dict, threshold: float):
     """Pinned strip at the top of Decisions showing last year's actuals —
@@ -290,36 +285,8 @@ def _last_year_recap(prev: dict, threshold: float):
     """, unsafe_allow_html=True)
 
 
-def _step_bar(step: int):
-    """Explicit numbered step tracker replacing free-form tabs — the
-    sequence (Financing → Renewal → Greenlighting → Scheduling) wasn't
-    legible as a guided flow before. Added 2026-07-24 per user feedback."""
-    items = []
-    for i in range(1, 5):
-        if i < step:
-            bg, txt, clr = "#66bb6a", "✓", "#0b0c10"
-        elif i == step:
-            bg, txt, clr = "#e8c547", str(i), "#0b0c10"
-        else:
-            bg, txt, clr = "#252836", str(i), "#b0b5c4"
-        label_c = "#e8eaf0" if i == step else "#b0b5c4"
-        items.append(f'''
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;">
-          <div style="width:30px;height:30px;border-radius:50%;background:{bg};display:flex;
-               align-items:center;justify-content:center;font-family:DM Mono,monospace;
-               font-size:12px;font-weight:700;color:{clr};">{txt}</div>
-          <div style="font-size:10px;color:{label_c};font-family:DM Mono,monospace;text-align:center;">
-            {STEP_LABELS[i]}
-          </div>
-        </div>
-        ''')
-    connector = '<div style="flex:0.3;height:2px;background:#252836;margin-bottom:16px;"></div>'
-    st.markdown(f'<div style="display:flex;align-items:flex-start;margin-bottom:16px;">'
-                f'{connector.join(items)}</div>', unsafe_allow_html=True)
-
-
-def _step_financing(ss, shows, year, net_info, level_budget):
-    st.markdown('<div class="section-title">💰 Financing</div>', unsafe_allow_html=True)
+def _section_financing(ss, shows, year, net_info, level_budget):
+    st.markdown('<div class="section-title">1 · 💰 Financing</div>', unsafe_allow_html=True)
 
     # ── Mid-year emergency budget shock ─────────────────────────────────────
     # Rare, automated, seeded per team+year (see draw_emergency_budget_shock)
@@ -454,7 +421,15 @@ def _step_financing(ss, shows, year, net_info, level_budget):
             f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
 
 
-def _decisions(ss, shows, net_info, year):
+def _decisions(ss, shows, net_info, year, net):
+    """Single scrolling page (redesigned 2026-07-27, replacing the old
+    Back/Next 4-step wizard per user request: "students should have
+    prompts that force them to make decisions as they scroll down...
+    then click simulate at the bottom"). All four decision sections
+    render unconditionally, top to bottom; each is a self-contained
+    module (pages.renewal/greenlight/schedule) already written to read
+    and write st.session_state directly with no cross-module widget key
+    collisions, so nothing in those three files needed to change."""
     threshold    = net_info["pass_threshold"]
     level_budget = ss.level_budget
 
@@ -462,115 +437,129 @@ def _decisions(ss, shows, net_info, year):
     if prev:
         _last_year_recap(prev, threshold)
 
-    if not ss.get("decision_step"):
-        ss.decision_step = 1
-    step = ss.decision_step
-    _step_bar(step)
+    st.markdown(
+        '<div style="font-size:11px;color:#b0b5c4;margin-bottom:14px;">'
+        'Work through each decision as you scroll, then simulate the year at the bottom. '
+        '<a href="#financing" style="color:#e8c547;">Financing</a> · '
+        '<a href="#renewal" style="color:#e8c547;">Renewal</a> · '
+        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a> · '
+        '<a href="#scheduling" style="color:#e8c547;">Scheduling</a> · '
+        '<a href="#simulate" style="color:#e8c547;">Simulate</a>'
+        '</div>', unsafe_allow_html=True)
 
-    # Persisted regardless of which step is currently shown, so the pinned
-    # P&L preview and End Year button always reflect the latest decisions.
+    st.markdown('<a id="financing"></a>', unsafe_allow_html=True)
+    _section_financing(ss, shows, year, net_info, level_budget)
+    # Re-read: an emergency budget shock (see draw_emergency_budget_shock)
+    # may have just mutated ss.level_budget inside _section_financing.
+    level_budget = ss.level_budget
+
+    st.divider()
+    st.markdown('<a id="renewal"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">2 · 🔄 Renewal</div>', unsafe_allow_html=True)
+    from pages.renewal import render as render_renewal
+    render_renewal()
+
+    st.divider()
+    st.markdown('<a id="greenlighting"></a>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">3 · 🎬 Greenlighting '
+        '<span style="font-size:10px;color:#b0b5c4;">(optional)</span></div>',
+        unsafe_allow_html=True)
+    from pages.greenlight import render as render_greenlight
+    render_greenlight()
+    # Re-read again: Greenlighting's "Greenlight This Show" button also
+    # deducts real production cost from ss.level_budget immediately.
+    level_budget = ss.level_budget
+
+    st.divider()
+    st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">4 · 📅 Scheduling & Cash-Flow Reference '
+        '<span style="font-size:10px;color:#b0b5c4;">(reference — the premiere-month calls '
+        'above in Renewal already drive the real math)</span></div>',
+        unsafe_allow_html=True)
+    from pages.schedule import render as render_schedule
+    render_schedule()
+
+    st.divider()
+
+    # Read once, after every section above has actually executed and
+    # written its widgets to session state — always current-as-of-this-run,
+    # unlike the old per-step wizard which could only reflect whichever
+    # step was on screen.
     mkt = ss.get("mkt_budget", 5.0)
     active_now = _active_shows(shows, ss.cancelled_shows)
     new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
 
-    left, right = st.columns([3, 2])
+    st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
+    p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel)
 
-    with left:
-        if step == 1:
-            _step_financing(ss, shows, year, net_info, level_budget)
-            mkt = ss.get("mkt_budget", 5.0)
-            # Re-read: an emergency budget shock (see draw_emergency_budget_shock)
-            # may have just mutated ss.level_budget inside _step_financing —
-            # refresh the local var so the right-panel over-budget check below
-            # isn't stale on the same render.
-            level_budget = ss.level_budget
-        elif step == 2:
-            # Renewal is the real cancellation mechanism (2026-07-24) — its
-            # Renew/Watch/Cancel choices, written into ss.renewal_decisions
-            # by its own show-card widgets, are read above/below to build
-            # new_cancel.
-            from pages.renewal import render as render_renewal
-            render_renewal()
-            new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
-        elif step == 3:
-            from pages.greenlight import render as render_greenlight
-            render_greenlight()
-        else:
-            from pages.schedule import render as render_schedule
-            render_schedule()
+    ocf_c    = SUCCESS if p["ocf"] >= 0 else DANGER
+    margin_c = SUCCESS if p["margin"] >= threshold else (WARN if p["margin"] >= 0 else DANGER)
+    bar_pct  = min(abs(p["margin"]) / max(threshold * 1.5, 1), 1.0) * 100
 
-    with right:
-        # ── Live P&L preview ──────────────────────────────────────────────────
-        st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
-        p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel)
+    items = [
+        ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
+        ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
+        ("Content Cost",  f"-${p['cost']:.2f}M",   WARN),
+        ("Marketing",     f"-${mkt:.2f}M",           WARN),
+        ("G&A (6%)",      f"-${p['ga']:.2f}M",      TEXT2),
+    ]
+    rows_html = "".join([
+        f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
+        f'border-bottom:1px solid rgba(37,40,54,.5);font-size:11px;">'
+        f'<span style="color:#e0e2ea;">{lbl}</span>'
+        f'<span style="font-family:DM Mono,monospace;color:{clr};">{val}</span></div>'
+        for lbl, val, clr in items
+    ])
 
-        ocf_c    = SUCCESS if p["ocf"] >= 0 else DANGER
-        margin_c = SUCCESS if p["margin"] >= threshold else (WARN if p["margin"] >= 0 else DANGER)
-        bar_pct  = min(abs(p["margin"]) / max(threshold * 1.5, 1), 1.0) * 100
+    if new_cancel:
+        cancel_names = [s.name for s in shows if s.id in new_cancel]
+        penalty = sum(s.annual_amort_expense(year) * 0.25
+                      for s in shows if s.id in new_cancel)
+        penalty_note = (f'<div style="font-size:10px;color:{WARN};margin-top:6px;'
+                        f'font-family:DM Mono,monospace;">⚠ Cancelling this year '
+                        f'({", ".join(cancel_names)}): ${penalty:.2f}M sunk-cost penalty</div>')
+    else:
+        penalty_note = ""
 
-        items = [
-            ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
-            ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
-            ("Content Cost",  f"-${p['cost']:.2f}M",   WARN),
-            ("Marketing",     f"-${mkt:.2f}M",           WARN),
-            ("G&A (6%)",      f"-${p['ga']:.2f}M",      TEXT2),
-        ]
-        rows_html = "".join([
-            f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
-            f'border-bottom:1px solid rgba(37,40,54,.5);font-size:11px;">'
-            f'<span style="color:#e0e2ea;">{lbl}</span>'
-            f'<span style="font-family:DM Mono,monospace;color:{clr};">{val}</span></div>'
-            for lbl, val, clr in items
-        ])
+    spend_this_year = p["cost"] + mkt
+    if spend_this_year > level_budget:
+        over = spend_this_year - level_budget
+        budget_note = (f'<div style="font-size:10px;color:{DANGER};margin-top:6px;'
+                       f'font-family:DM Mono,monospace;">⚠ ${over:.1f}M over this year\'s '
+                       f'${level_budget:.1f}M budget (content + marketing) — cut marketing or '
+                       f'cancel more in Renewal.</div>')
+    else:
+        budget_note = (f'<div style="font-size:10px;color:{TEXT2};margin-top:6px;'
+                       f'font-family:DM Mono,monospace;">Budget: ${level_budget:.1f}M · '
+                       f'committed ${spend_this_year:.1f}M</div>')
 
-        if new_cancel:
-            cancel_names = [s.name for s in shows if s.id in new_cancel]
-            penalty = sum(s.annual_amort_expense(year) * 0.25
-                          for s in shows if s.id in new_cancel)
-            penalty_note = (f'<div style="font-size:10px;color:{WARN};margin-top:6px;'
-                            f'font-family:DM Mono,monospace;">⚠ Cancelling this year '
-                            f'({", ".join(cancel_names)}): ${penalty:.2f}M sunk-cost penalty</div>')
-        else:
-            penalty_note = ""
-
-        spend_this_year = p["cost"] + mkt
-        if spend_this_year > level_budget:
-            over = spend_this_year - level_budget
-            budget_note = (f'<div style="font-size:10px;color:{DANGER};margin-top:6px;'
-                           f'font-family:DM Mono,monospace;">⚠ ${over:.1f}M over this year\'s '
-                           f'${level_budget:.1f}M budget (content + marketing) — cut marketing or '
-                           f'cancel more in Renewal.</div>')
-        else:
-            budget_note = (f'<div style="font-size:10px;color:{TEXT2};margin-top:6px;'
-                           f'font-family:DM Mono,monospace;">Budget: ${level_budget:.1f}M · '
-                           f'committed ${spend_this_year:.1f}M</div>')
-
-        st.markdown(f"""
-        <div style="background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px;">
-          {rows_html}
-          <div style="margin-top:10px;padding-top:8px;border-top:1px solid #252836;">
-            <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;">
-              <span style="color:#e8eaf0;">Annual OCF</span>
-              <span style="font-family:DM Mono,monospace;color:{ocf_c};">${p['ocf']:+.2f}M</span>
-            </div>
-            <div style="margin-top:8px;">
-              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
-                <span style="color:#b0b5c4;font-family:DM Mono,monospace;">OCF Margin</span>
-                <span style="color:{margin_c};font-family:DM Mono,monospace;">
-                  {p['margin']:.1f}% / {threshold:.0f}% target
-                </span>
-              </div>
-              <div style="height:5px;background:#252836;border-radius:3px;overflow:hidden;">
-                <div style="width:{bar_pct}%;height:100%;background:{margin_c};border-radius:3px;"></div>
-              </div>
-            </div>
-          </div>
-          {penalty_note}
-          {budget_note}
+    st.markdown(f"""
+    <div style="background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px;">
+      {rows_html}
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #252836;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;">
+          <span style="color:#e8eaf0;">Annual OCF</span>
+          <span style="font-family:DM Mono,monospace;color:{ocf_c};">${p['ocf']:+.2f}M</span>
         </div>
-        """, unsafe_allow_html=True)
-
-    st.divider()
+        <div style="margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
+            <span style="color:#b0b5c4;font-family:DM Mono,monospace;">OCF Margin</span>
+            <span style="color:{margin_c};font-family:DM Mono,monospace;">
+              {p['margin']:.1f}% / {threshold:.0f}% target
+            </span>
+          </div>
+          <div style="height:5px;background:#252836;border-radius:3px;overflow:hidden;">
+            <div style="width:{bar_pct}%;height:100%;background:{margin_c};border-radius:3px;"></div>
+          </div>
+        </div>
+      </div>
+      {penalty_note}
+      {budget_note}
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── Active slate summary ──────────────────────────────────────────────────
     with st.expander("📋 View Active Show Slate", expanded=False):
@@ -603,33 +592,24 @@ def _decisions(ss, shows, net_info, year):
 
     st.divider()
 
-    # ── Step navigation ────────────────────────────────────────────────────────
-    nav_back, nav_next = st.columns([1, 1])
-    with nav_back:
-        if step > 1:
-            if st.button(f"← Back: {STEP_LABELS[step-1]}", use_container_width=True):
-                ss.decision_step = step - 1
-                st.rerun()
-    with nav_next:
-        if step < 4:
-            if st.button(f"Next: {STEP_LABELS[step+1]} →", type="primary", use_container_width=True):
-                ss.decision_step = step + 1
-                st.rerun()
-        else:
-            if st.button(f"▶  End Year {year}  →  See Results",
-                         type="primary", use_container_width=True):
-                result           = _compute_year(ss, shows, year, mkt, new_cancel, net)
-                result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
-                ss.yearly_log.append(result)
-                ss.cancelled_shows = ss.cancelled_shows | new_cancel
-                ss.mkt_budget      = mkt     # sync to sidebar/other pages' ss.get("mkt_budget")
-                # Next year's budget is performance-linked, not a flat 3%/yr —
-                # computed from THIS year's actual result, so it's only known
-                # once results are in, same as a real budget review would be.
-                ss.level_budget    = level_budget * performance_linked_growth(result["margin"], threshold)
-                ss.decision_step   = 1   # reset the wizard for next year
-                ss.sim_phase       = "results"
-                st.rerun()
+    # ── Simulate the year ──────────────────────────────────────────────────────
+    if st.button(f"▶  Simulate Year {year}  →  See Results",
+                 type="primary", use_container_width=True, key="sim_end_year"):
+        result           = _compute_year(ss, shows, year, mkt, new_cancel, net)
+        result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
+        ss.yearly_log.append(result)
+        ss.cancelled_shows = ss.cancelled_shows | new_cancel
+        # No manual ss.mkt_budget sync needed here (unlike the old per-step
+        # wizard): Financing always renders on this page now, so its
+        # key="mkt_budget" slider already keeps session state current —
+        # reassigning it here would raise StreamlitAPIException ("cannot be
+        # modified after the widget... is instantiated").
+        # Next year's budget is performance-linked, not a flat 3%/yr —
+        # computed from THIS year's actual result, so it's only known
+        # once results are in, same as a real budget review would be.
+        ss.level_budget    = level_budget * performance_linked_growth(result["margin"], threshold)
+        ss.sim_phase       = "results"
+        st.rerun()
 
 
 # ── Results phase ──────────────────────────────────────────────────────────────
@@ -791,14 +771,12 @@ def _results(ss, shows, net_info, year, team, net):
             ss.total_shows_greenlit    = max(0, ss.get("total_shows_greenlit", 0) - len(this_year_ids))
             ss.greenlit_ids_this_year  = set()
             ss.sim_phase       = "decisions"
-            ss.decision_step   = 1
             st.rerun()
     with nav2:
         if year < YEARS_PER_LEVEL:
             if st.button(f"→ Start Year {year + 1}", type="primary", use_container_width=True):
                 ss.year          = year + 1
                 ss.sim_phase     = "decisions"
-                ss.decision_step = 1
                 ss.greenlit_ids_this_year = set()   # fresh greenlight cap for the new year
                 st.rerun()
         else:
@@ -1125,7 +1103,6 @@ def _complete(ss, shows, net_info, team, net):
                         ss.total_shows_greenlit    = 0
                         ss.year                 = 1
                         ss.level_budget         = None   # re-derived from next_net's budget_base
-                        ss.decision_step        = 1
                         st.rerun()
 
     with restart_col:
@@ -1147,5 +1124,4 @@ def _complete(ss, shows, net_info, team, net):
             ss.last_score           = None
             ss.year                 = 1
             ss.level_budget         = None   # re-derived from net_info's budget_base
-            ss.decision_step        = 1
             st.rerun()

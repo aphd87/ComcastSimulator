@@ -4,14 +4,14 @@ Headless test of pages/movies.py using Streamlit's official AppTest harness
 simulated script session, without a browser.
 
 IMPORTANT — read before extending this file:
-A full click-through (Greenlight -> Release -> Results -> 3 cycles ->
-Complete -> Submit) was attempted here and conclusively diagnosed as
-blocked by a genuine Streamlit 1.59.2 AppTest limitation, not a bug in
+A full click-through (Decisions -> Results -> 3 cycles -> Complete ->
+Submit) was attempted here and conclusively diagnosed as blocked by a
+genuine Streamlit 1.59.2 AppTest limitation, not a bug in
 pages/movies.py: any button handler that calls `st.rerun()` (the pattern
 used consistently across this entire codebase — pages/simulation.py,
 app.py, and pages/movies.py all do `if st.button(...): ss.x = y;
 st.rerun()`) corrupts AppTest's widget-state tracking on the *second*
-interaction after the phase transition, raising a spurious
+interaction after a phase transition, raising a spurious
 KeyError("st.session_state has no key ...") for a widget from the
 *previous* phase that's no longer being rendered. Confirmed via a minimal
 synthetic repro: removing `st.rerun()` from the repro's button handlers
@@ -23,13 +23,15 @@ the failure every time, regardless of click pattern (chained vs. separate
 pages/movies.py inconsistent with the rest of the app for no real user-
 facing benefit, so it wasn't changed.
 
-Net effect: only the *first* phase (a single AppTest `.run()`, no
-interaction) is safely testable this way. The full click-through still
-needs a human in a real browser — Claude in Chrome was not connected for
-this entire effort (see DESIGN_NOTES.md). If a future Streamlit upgrade
-fixes this AppTest bug, the interactive tests are worth re-adding — the
-diagnostic script used to find this is preserved in this file's git
-history (see the commit that reduced this file to its current scope).
+Net effect: a single AppTest `.run()` with no interaction, OR exactly one
+click that causes a phase transition (the FIRST interaction, not a
+second one after an earlier transition), are the safe zone. The full
+multi-cycle click-through still needs a human in a real browser — Claude
+in Chrome was not connected for this entire effort (see DESIGN_NOTES.md).
+If a future Streamlit upgrade fixes this AppTest bug, more interactive
+tests are worth adding — the diagnostic script used to find this is
+preserved in this file's git history (see the commit that reduced this
+file to its then-current scope).
 """
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -55,36 +57,61 @@ def _movies_app() -> AppTest:
 
     at = AppTest.from_function(script, default_timeout=30)
     at.run()
-    assert not at.exception, f"Greenlight phase raised: {list(at.exception)}"
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
     return at
 
 
-def test_greenlight_phase_renders_with_no_exceptions():
+def test_decisions_phase_renders_with_no_exceptions():
     at = _movies_app()
     assert not at.exception
 
 
-def test_greenlight_phase_starts_at_cycle_1():
+def test_decisions_phase_starts_at_cycle_1():
     at = _movies_app()
-    assert at.session_state["movie_phase"] == "greenlight"
+    assert at.session_state["movie_phase"] == "decisions"
     assert at.session_state["movie_cycle"] == 1
     assert at.session_state["movie_log"] == []
 
 
-def test_greenlight_phase_has_expected_widgets():
+def test_decisions_phase_has_expected_widgets():
+    # Merged 2026-07-27: Greenlight + Release Strategy render on one
+    # scrolling page now, ending in a single "Simulate" button. At Cycle
+    # 1, windowing is still locked (WINDOWING_UNLOCK_CYCLE=3), so no
+    # "Choose <strategy>" buttons are reachable yet -- Simulate is the
+    # only button on the page.
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
-    assert len(at.selectbox) == 2      # genre, concept type (added 2026-07-27)
+    assert len(at.selectbox) == 2      # genre, concept type
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
-    assert any("Commit Capital" in b.label for b in at.button)
+    assert len(at.button) == 1
+    assert "Simulate" in at.button[0].label
 
 
-def test_greenlight_phase_shows_bear_base_bull_preview():
+def test_decisions_phase_shows_bear_base_bull_preview():
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
     for label in ("bear case", "base case", "bull case"):
         assert label in text.lower()
+
+
+def test_decisions_phase_shows_both_decisions_on_one_page():
+    at = _movies_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Greenlight the Concept" in text
+    assert "Release Strategy" in text
+
+
+def test_clicking_simulate_transitions_to_results_with_no_exceptions():
+    # Exactly one click, from a fresh session -- the FIRST interaction,
+    # not a second one after an earlier phase transition, so this is
+    # inside the AppTest safe zone documented at the top of this file.
+    at = _movies_app()
+    at.button[0].click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    assert at.session_state["movie_phase"] == "results"
+    assert len(at.session_state["movie_log"]) == 1
+    assert at.session_state["movie_log"][0]["cycle"] == 1
 
 
 def _complete_movies_app() -> AppTest:

@@ -142,3 +142,92 @@ def test_complete_phase_renders_level_notables_with_no_exceptions():
     assert "Level Notables" in text
     assert "BEST YEAR" in text
     assert "SHOWS GREENLIT" in text
+
+
+def _decisions_sim_app() -> AppTest:
+    """A fresh Year 1 Decisions page -- the merged scrolling page
+    (redesigned 2026-07-27, replacing the old 4-step Financing/Renewal/
+    Greenlighting/Scheduling wizard) that renders all four sections at
+    once. A single AppTest .run() with no interaction is the documented
+    safe zone (see test_movies_page.py's docstring).
+
+    Every seed line below is guarded (`if key not in st.session_state`)
+    rather than an unconditional assignment -- a real bug caught while
+    writing this test: clicking a button that calls st.rerun() makes
+    AppTest re-execute this whole script() closure from the top, so an
+    unconditional `st.session_state.yearly_log = []` would silently wipe
+    out the entry the click just appended, making every post-click
+    assertion fail for a reason that has nothing to do with the page
+    under test. This mirrors app.py's own init_state() idiom."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+                Show(id=2, name="Show B", genre="True Crime", episodes=8, ep_cost_k=350,
+                     rating=0.9, ip_score=45, air_month=3, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [],
+            "year": 1,
+            "sim_phase": "decisions",
+            "level_budget": 220.0,
+            "mkt_budget": 5.0,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_decisions_phase_renders_all_four_sections_on_one_page():
+    at = _decisions_sim_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Financing" in text
+    assert "Renewal" in text
+    assert "Greenlighting" in text
+    assert "Scheduling" in text
+
+
+def test_decisions_phase_has_one_simulate_button():
+    at = _decisions_sim_app()
+    sim_buttons = [b for b in at.button if "Simulate Year" in b.label]
+    assert len(sim_buttons) == 1
+
+
+def test_clicking_simulate_transitions_to_results_with_no_exceptions():
+    # Exactly one click, from a fresh session -- the FIRST interaction,
+    # not a second one after an earlier phase transition, so this is
+    # inside the AppTest safe zone (see test_movies_page.py's docstring).
+    # This also regression-tests a real bug found while building this
+    # page: the old code referenced a bare `net` name inside _decisions()
+    # that was never passed in as a parameter, so clicking "End Year"
+    # would have raised NameError in production -- nothing had ever
+    # exercised that click path before this test existed.
+    at = _decisions_sim_app()
+    sim_button = next(b for b in at.button if "Simulate Year" in b.label)
+    sim_button.click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    assert at.session_state["sim_phase"] == "results"
+    assert len(at.session_state["yearly_log"]) == 1
+    assert at.session_state["yearly_log"][0]["year"] == 1

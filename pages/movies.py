@@ -37,8 +37,8 @@ RELEASE_LABELS = {
 def _init(ss):
     if ss.get("movie_cycle") is None:
         ss.movie_cycle = 1
-    if ss.get("movie_phase") not in ("greenlight", "release", "results", "complete"):
-        ss.movie_phase = "greenlight"
+    if ss.get("movie_phase") not in ("decisions", "results", "complete"):
+        ss.movie_phase = "decisions"
     if not isinstance(ss.get("movie_log"), list):
         ss.movie_log = []          # finished cycles: [{project_kwargs, multiplier, npv, irr, ...}, ...]
     if not isinstance(ss.get("movie_draft"), dict):
@@ -75,8 +75,8 @@ def _current_project(ss) -> MovieProject:
 
 # ── Progress indicator ───────────────────────────────────────────────────────
 def _progress_bar(ss):
-    steps = ["Greenlight", "Release Strategy", "Results"]
-    phase_idx = {"greenlight": 0, "release": 1, "results": 2, "complete": 2}[ss.movie_phase]
+    steps = ["Decisions", "Results"]
+    phase_idx = {"decisions": 0, "results": 1, "complete": 1}[ss.movie_phase]
     dot_items = []
     for i, label in enumerate(steps):
         done = i < phase_idx or ss.movie_phase == "complete"
@@ -117,19 +117,32 @@ def render():
 
     _progress_bar(ss)
 
-    if ss.movie_phase == "greenlight":
-        _greenlight(ss)
-    elif ss.movie_phase == "release":
-        _release(ss)
+    if ss.movie_phase == "decisions":
+        _decisions(ss)
     elif ss.movie_phase == "results":
         _results(ss)
     else:
         _complete(ss)
 
 
-# ── Phase 1: Greenlight ──────────────────────────────────────────────────────
-def _greenlight(ss):
-    st.markdown('<div class="section-title">Decision 1 — Greenlight the Concept</div>', unsafe_allow_html=True)
+# ── Phase 1: Decisions (Greenlight + Release Strategy) ───────────────────────
+def _decisions(ss):
+    """Single scrolling page (redesigned 2026-07-27, replacing the old
+    Greenlight -> Release Strategy click-through per user request:
+    "students should have prompts that force them to make decisions as
+    they scroll down... then click simulate at the bottom"). Both
+    decisions render unconditionally, top to bottom, ending in one
+    button that does what the old "Lock Strategy -> See Results" button
+    did."""
+    st.markdown(
+        '<div style="font-size:11px;color:#8a8f9e;margin-bottom:10px;">'
+        '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
+        '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
+        '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'
+        '</div>', unsafe_allow_html=True)
+
+    st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">1 · Greenlight the Concept</div>', unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Both budget and P&A spend are cash out today, before any '
         'revenue visibility — unlike Day 1\'s amortized TV cost.</p>', unsafe_allow_html=True)
@@ -207,16 +220,12 @@ def _greenlight(ss):
         st.caption("Actual outcome is drawn continuously between these at Results — not one of exactly three buckets.")
 
     st.divider()
-    if st.button("▶  Commit Capital  →  Choose Release Strategy", type="primary", use_container_width=True):
-        ss.movie_phase = "release"
-        st.rerun()
 
+    # ── Decision 2: Release Strategy ─────────────────────────────────────────
+    st.markdown('<a id="release"></a>', unsafe_allow_html=True)
+    project_base = project   # already reflects this run's Greenlight inputs above
 
-# ── Phase 2: Release Strategy ────────────────────────────────────────────────
-def _release(ss):
-    project_base = _current_project(ss)
-
-    st.markdown('<div class="section-title">Decision 2 — Release Strategy</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">2 · Release Strategy</div>', unsafe_allow_html=True)
 
     # Progressive windowing — Zach Schlessel's brief: the theatrical vs.
     # streaming vs. PVOD tradeoff is a "Year 3 Introduction," not available
@@ -272,50 +281,48 @@ def _release(ss):
     st.markdown(f'<p class="text-sm text-ink2">Currently selected: <b class="text-ink">{RELEASE_LABELS[chosen]}</b></p>',
                 unsafe_allow_html=True)
 
-    nav1, nav2 = st.columns(2)
-    with nav1:
-        if st.button("← Back to Greenlight", use_container_width=True):
-            ss.movie_phase = "greenlight"
-            st.rerun()
-    with nav2:
-        if st.button("▶  Lock Strategy  →  See Results", type="primary", use_container_width=True):
-            project = _current_project(ss)
-            multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre, project.concept_type)
-            # Critical reception is drawn independently of box-office
-            # performance — a movie can open huge and get panned, or open
-            # modestly and find acclaim. Neither draw is known to the
-            # student until this exact moment.
-            critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
-            awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
-            outcome = {
-                "cycle":            ss.movie_cycle,
-                "project_kwargs":   dict(project.__dict__),
-                "multiplier":       multiplier,
-                "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
-                "critical_score":   critical_score,
-                "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
-                "npv":              project.npv(multiplier, critical_score),
-                "irr":              project.irr(multiplier, critical_score),
-                "total_revenue":    project.total_revenue(multiplier, critical_score),
-                "domestic_bo":      project.domestic_box_office(multiplier),
-                "theatrical_net":   project.theatrical_studio_net(multiplier),
-                "pvod":             project.pvod_revenue(multiplier),
-                "sub_value":        project.subscriber_value(multiplier),
-                "longtail":         project.library_longtail(multiplier, critical_score),
-                "awards_bump":      project.awards_season_bump(multiplier, critical_score),
-                "theme_park":       project.theme_park_value(multiplier),
-                "capital_at_risk":  project.capital_at_risk(),
-            }
-            ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
-            ss.movie_phase = "results"
-            st.rerun()
+    st.divider()
+
+    # ── Simulate ───────────────────────────────────────────────────────────────
+    st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
+    if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True):
+        project = _current_project(ss)
+        multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre, project.concept_type)
+        # Critical reception is drawn independently of box-office
+        # performance — a movie can open huge and get panned, or open
+        # modestly and find acclaim. Neither draw is known to the
+        # student until this exact moment.
+        critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
+        awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
+        outcome = {
+            "cycle":            ss.movie_cycle,
+            "project_kwargs":   dict(project.__dict__),
+            "multiplier":       multiplier,
+            "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
+            "critical_score":   critical_score,
+            "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
+            "npv":              project.npv(multiplier, critical_score),
+            "irr":              project.irr(multiplier, critical_score),
+            "total_revenue":    project.total_revenue(multiplier, critical_score),
+            "domestic_bo":      project.domestic_box_office(multiplier),
+            "theatrical_net":   project.theatrical_studio_net(multiplier),
+            "pvod":             project.pvod_revenue(multiplier),
+            "sub_value":        project.subscriber_value(multiplier),
+            "longtail":         project.library_longtail(multiplier, critical_score),
+            "awards_bump":      project.awards_season_bump(multiplier, critical_score),
+            "theme_park":       project.theme_park_value(multiplier),
+            "capital_at_risk":  project.capital_at_risk(),
+        }
+        ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
+        ss.movie_phase = "results"
+        st.rerun()
 
 
-# ── Phase 3: Results ──────────────────────────────────────────────────────────
+# ── Phase 2: Results ──────────────────────────────────────────────────────────
 def _results(ss):
     result = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle), None)
     if not result:
-        ss.movie_phase = "greenlight"
+        ss.movie_phase = "decisions"
         st.rerun()
         return
 
@@ -405,14 +412,14 @@ def _results(ss):
     with nav1:
         if st.button("← Redo This Cycle", use_container_width=True):
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle]
-            ss.movie_phase = "greenlight"
+            ss.movie_phase = "decisions"
             st.rerun()
     with nav2:
         if ss.movie_cycle < CYCLES_TOTAL:
             if st.button(f"→ Start Cycle {ss.movie_cycle + 1}", type="primary", use_container_width=True):
                 ss.movie_cycle += 1
                 ss.movie_draft = {}
-                ss.movie_phase = "greenlight"
+                ss.movie_phase = "decisions"
                 st.rerun()
         else:
             if st.button("→ View Final Slate & Submit Score", type="primary", use_container_width=True):
@@ -420,10 +427,10 @@ def _results(ss):
                 st.rerun()
 
 
-# ── Phase 4: Complete ──────────────────────────────────────────────────────────
+# ── Phase 3: Complete ──────────────────────────────────────────────────────────
 def _complete(ss):
     if not ss.movie_log:
-        ss.movie_phase = "greenlight"
+        ss.movie_phase = "decisions"
         ss.movie_cycle = 1
         st.rerun()
         return
@@ -583,7 +590,7 @@ def _complete(ss):
     with restart_col:
         if st.button("↺ Restart Slate", use_container_width=True):
             ss.movie_cycle = 1
-            ss.movie_phase = "greenlight"
+            ss.movie_phase = "decisions"
             ss.movie_log = []
             ss.movie_draft = {}
             ss.movie_submitted = False
