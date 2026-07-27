@@ -55,6 +55,54 @@ def render():
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
                                          help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
 
+    # ── AI Pitch Feedback (optional, BYOK — see README.md) ──────────────────────
+    from utils.ai_grading import api_key_configured, grade_show_concept
+
+    st.divider()
+    st.markdown(
+        '<div class="section-title">AI Pitch Feedback '
+        '<span style="font-size:10px;color:#b0b5c4;">(optional)</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    if not api_key_configured():
+        st.markdown(
+            '<div style="font-size:11px;color:#b0b5c4;">'
+            'Ask your instructor to enable AI feedback for this class.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        pitch = st.text_area(
+            "Describe your show concept in your own words (2-4 sentences)",
+            placeholder="e.g. A competition show where design students renovate a real "
+                        "small business on a shoestring budget...",
+            key="gl_pitch_text",
+        )
+        if st.button("🤖 Get AI Feedback", key="gl_grade_button"):
+            if not pitch.strip():
+                st.warning("Write a short pitch first.")
+            else:
+                with st.spinner("Grading your pitch..."):
+                    grade = grade_show_concept(show_name, genre, pitch)
+                if grade is None:
+                    st.error("AI feedback is temporarily unavailable. Try again later.")
+                else:
+                    total = (grade.originality_score + grade.market_fit_score
+                              + grade.feasibility_score + grade.presentation_score)
+                    st.markdown(f"**Score: {total}/100**")
+                    st.write(grade.feedback)
+                    gc1, gc2 = st.columns(2)
+                    with gc1:
+                        st.markdown("**Strengths**")
+                        for s in grade.strengths:
+                            st.markdown(f"- {s}")
+                    with gc2:
+                        st.markdown("**Risks**")
+                        for r in grade.risks:
+                            st.markdown(f"- {r}")
+
+    st.divider()
+
     # ── Title / IP legal-risk check ─────────────────────────────────────────────
     title_collision = show_name.strip().lower() in _PROTECTED_TITLES
     if title_collision:
