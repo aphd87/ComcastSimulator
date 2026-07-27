@@ -6,7 +6,16 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
-## Status as of 2026-07-24 end of session — read this first
+## Status as of 2026-07-27 — read this first
+
+**What happened today:** Added a 4th 🏠 App nav button (landing screen was previously unreachable after leaving it, see "App structure" below) and wired the two previously-orphaned `pages/finance.py` (P&L/OCF) and `pages/forecast.py` (10-Yr Forecast) pages in as new tabs under TV/Streaming. 46 tests still pass; both changes are commit-and-push-worthy small diffs, not structural rewrites. **Not yet verified in a real browser** — same standing gap as everything else in this doc.
+
+**Still open, carried over from 2026-07-24 below:**
+- No real human browser click-through has ever happened, on Day 1 or Day 2 (or now the two new tabs).
+- Whether the Streamlit Cloud deployment survived the `ImportError` fix from 07-22 — last checked via a user-initiated reboot on 07-27, outcome not yet confirmed back to this doc.
+- Zach Schlessel's three unresolved structural asks (abstract 0-100 budget sliders, AI-graded custom show concepts, Movies category rework) — see "Working list — next up" below. Not scoped or built.
+
+## History — 2026-07-24 end of session (superseded by 2026-07-27 above)
 
 **What happened today:**
 1. Restructured the quarterly Decisions phase (`pages/simulation.py`) into **Financing → Renewal → Greenlighting → Scheduling**. Renewal/Greenlighting/Scheduling reuse `pages/renewal.py`/`greenlight.py`/`schedule.py` verbatim — all three were fully built in earlier sessions but never actually imported or called from anywhere in the app, so students could never reach them despite the math and UI already existing. Financing (new revenue-stream breakdown — ad vs. distribution revenue — ahead of the existing marketing slider and cancel-shows decision) stays open by default; Renewal/Greenlighting/Scheduling sit below it.
@@ -143,17 +152,20 @@ Rebuilt `pages/simulation.py` from a quarterly loop (4 quarters inside a frozen 
 
 **Sidebar nav restructured 2026-07-24 (second pass, same day)** — three peer top-level sections: 🏆 Leaderboard, 📺 TV/Streaming, 🎬 Movies (`ss.active_section`). Previously Leaderboard was a tab nested inside whichever of TV/Movies was active (duplicated in both), and Movies was a peer of the Oxygen/Bravo/Peacock network buttons rather than a peer of TV itself. The Oxygen/Bravo/Peacock selector is now a secondary selector shown only when TV/Streaming is the active section (`ss.active_network`, unchanged mechanics — lock icons, attempt badges, official scores). A new "Choose Your Simulation" landing screen (`ss.active_section is None`) appears once right after registering, with TV/Streaming and Movies as two cards plus a Leaderboard shortcut; picking a section persists it in the sidebar for free switching afterward.
 
+**4th top-level nav button added (2026-07-27)**: 🏠 App — the landing screen above existed but had no way back to it once you'd picked a section (only "Change Team" got you there, by deregistering). Now `ss.active_section == "app"` (and the initial `None` state) both route to it; the nav button highlights correctly in both cases.
+
 | Section | File | Purpose |
 |---|---|---|
+| 🏠 App | (landing screen, in `app.py`) | "Choose Your Simulation" cards (TV/Streaming, Movies) + Leaderboard shortcut. Reachable any time via the sidebar now, not just once after registering. |
 | 🏆 Leaderboard | `pages/leaderboard.py` | Standalone top-level section as of this pass (was nested tabs, duplicated per-section). Already covered TV networks + Movies internally via its own tabs (`_render_board_tab`, `MOVIES_INFO`) — no wrapping needed, `render()` takes no args and reads `ss` directly. |
-| 📺 TV/Streaming → Financing | `pages/simulation.py` | Annual turn engine — Decisions → Results × 4 years per network, then submit for score. Financing (revenue-stream breakdown, marketing spend) is the always-open anchor; cancellation lives in the Renewal tab. |
-| 📺 TV/Streaming → Renewal (tab) | `pages/renewal.py` | Renew/Watch/Cancel decision matrix, IP-value vs. OCF tradeoff, budget waterfall, paid Research. |
-| 📺 TV/Streaming → Greenlighting (tab) | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept, title/IP legal-risk check. |
-| 📺 TV/Streaming → Scheduling (tab) | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid, scheduling optimizer. |
+| 📺 TV/Streaming → Simulation (tab) | `pages/simulation.py` | Annual turn engine — Decisions → Results × 4 years per network, then submit for score. Financing (revenue-stream breakdown, marketing spend) is the always-open anchor; cancellation lives in the Renewal tab. |
+| 📺 TV/Streaming → Renewal (sub-tab) | `pages/renewal.py` | Renew/Watch/Cancel decision matrix, IP-value vs. OCF tradeoff, budget waterfall, paid Research. |
+| 📺 TV/Streaming → Greenlighting (sub-tab) | `pages/greenlight.py` | Linear vs. SVOD P&L builder for a new show concept, title/IP legal-risk check. |
+| 📺 TV/Streaming → Scheduling (sub-tab) | `pages/schedule.py` | Premiere-day cash trough, monthly amortization grid, scheduling optimizer. |
+| 📺 TV/Streaming → P&L / OCF (tab) | `pages/finance.py` | **Wired in 2026-07-27** (previously orphaned). Full income statement, monthly revenue/cost trend, distribution-revenue calculator, revenue-per-rating-point benchmarks — a fuller view than Financing's condensed summary. Reads the currently active network's shows/year/marketing spend from `ss` directly, no new state needed. |
+| 📺 TV/Streaming → 10-Yr Forecast (tab) | `pages/forecast.py` | **Wired in 2026-07-27** (previously orphaned). Scenario tool spanning all three networks — adjustable cord-cut rate, budget growth, Bravo/Peacock launch year — independent of the active network's actual progress, so it lives as a tab rather than being tied to `ss.active_network`. |
 | 📺 TV/Streaming → Theory (tab) | (in `app.py`, `THEORY_CONTENT`) | BCG matrix, HHI diversification, cord-cutting S-curve, amortization, LTV/CAC. |
 | 🎬 Movies | `pages/movies.py` | Universal Pictures — Day 2. Own top-level section, own Theory tab, independent of TV network progress. |
-| *(not wired in)* | `pages/finance.py` | Full income statement, revenue decomposition, distribution model. Financing's revenue-stream summary covers a condensed version; the full page is still orphaned. |
-| *(not wired in)* | `pages/forecast.py` | Full 10-year portfolio simulation across all three networks. Still orphaned. |
 
 `pages/portfolio_v2.py` — superseded by `simulation.py`'s turn engine (per commit `24ce9c9`), confirmed nothing imported it, **deleted 2026-07-24**.
 

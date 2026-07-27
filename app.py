@@ -555,14 +555,24 @@ else:
     # see the ss.active_section == "movies"/"leaderboard" branches above.
     tabs = st.tabs([
         "📊 Simulation",
+        "💹 P&L / OCF",
+        "📈 10-Yr Forecast",
         "📖 Theory",
     ])
 
     from pages.simulation import render as render_simulation
+    from pages.finance    import render as render_finance
+    from pages.forecast   import render as render_forecast
 
     with tabs[0]:
         render_simulation()
 
     with tabs[1]:
+        render_finance()
+
+    with tabs[2]:
+        render_forecast()
+
+    with tabs[3]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         _render_theory_grid()
