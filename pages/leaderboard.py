@@ -14,7 +14,8 @@ import plotly.graph_objects as go
 from datetime import datetime
 from utils.game_state import (
     get_network_leaderboard, get_school_rollup, get_overall_leaderboard,
-    NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard
+    NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard,
+    get_attempt_count, MAX_ATTEMPTS,
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
@@ -47,6 +48,40 @@ def _format_slate_item(item: dict) -> str:
         if key in item and item[key] is not None:
             parts.append(fmt.format(item[key]))
     return " · ".join(parts)
+
+
+def _format_notables_badges(notables: dict) -> str:
+    """Small badge row for a leaderboard entry's stored `notables`
+    (compute_level_notables for TV, compute_movie_notables for Movies —
+    see the two record_attempt() call sites). Renders whichever fields
+    are present rather than assuming one fixed shape, same approach as
+    _format_slate_item: TV entries carry best_year/diversity_trend/
+    shows_greenlit, Movies entries carry best_cycle/genre_variety, and
+    entries submitted before this feature existed carry neither."""
+    if not notables:
+        return ""
+    badges = []
+    best = notables.get("best_year") or notables.get("best_cycle")
+    if best:
+        badges.append(f"🏆 Best: {best['label']}")
+    mi = notables.get("most_improved")
+    if mi is not None:
+        badges.append(f"📈 {mi:+.1f} improvement")
+    cs = notables.get("consistency_score")
+    if cs is not None:
+        badges.append(f"🎯 {cs:.0f}/100 consistency")
+    sg = notables.get("shows_greenlit")
+    if sg:
+        badges.append(f"🎬 {sg} greenlit")
+    gv = notables.get("genre_variety")
+    if gv:
+        badges.append(f"🎭 {gv} genre{'s' if gv != 1 else ''}")
+    if not badges:
+        return ""
+    return ('<div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;">' +
+            "".join(f'<span style="font-size:10px;font-family:DM Mono,monospace;color:{ACCENT2};">{b}</span>'
+                    for b in badges) +
+            '</div>')
 
 
 def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: bool):
@@ -205,6 +240,12 @@ def _render_board_tab(team: str, net: str, info: dict,
         school_tag = (f'<div style="font-size:10px;color:#b0b5c4;margin-top:1px;">'
                        f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
                        if show_school_col else "")
+        # Live attempt count -- entry['attempt'] is always 1 (the official
+        # first attempt is all the leaderboard ranks on), so this looks up
+        # the team's *current* total including retries made since.
+        attempts_used = get_attempt_count(entry["team_name"], net,
+                                           entry.get("school", ""), entry.get("class_section", ""))
+        notables_html = _format_notables_badges(entry.get("notables", {}))
         st.markdown(f"""
         <div style="background:{bg};{border}border-radius:8px;
              padding:10px 16px;margin-bottom:6px;">
@@ -227,7 +268,7 @@ def _render_board_tab(team: str, net: str, info: dict,
                 {entry['score']:.0f}
               </div>
               <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">
-                {passes} · {ts}
+                {passes} · {ts} · {attempts_used}/{MAX_ATTEMPTS} used
               </div>
             </div>
           </div>
@@ -235,6 +276,7 @@ def _render_board_tab(team: str, net: str, info: dict,
            ''.join([f'<span style="font-size:10px;font-family:DM Mono,monospace;color:#b0b5c4;">{k}: {v:.0f}</span>'
                     for k,v in details.items() if k not in ("total","passed")]) +
            '</div>' if details else ''}
+          {notables_html}
         </div>
         """, unsafe_allow_html=True)
 
