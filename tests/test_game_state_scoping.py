@@ -129,3 +129,56 @@ class TestSlateSummary:
         # falsy but a different failure mode if something unwraps it).
         entry = _record("Team Bravo", "Kellogg", "Sec A", 70, False)
         assert entry["slate_summary"] == []
+
+
+class TestOverallLeaderboard:
+    """get_overall_leaderboard, added 2026-07-27 -- sums OFFICIAL scores
+    across Oxygen/Bravo/Peacock per team. Movies is deliberately excluded
+    (its own separate track, per explicit user request), and a team that
+    hasn't reached every network yet must not be zero-padded -- only
+    networks_completed should shrink, not total_score get penalized."""
+
+    def test_sums_official_scores_across_networks(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True, network="oxygen")
+        _record("Team Alpha", "Kellogg", "Sec A", 90, True, network="bravo")
+        board = gs.get_overall_leaderboard()
+        assert len(board) == 1
+        assert board[0]["total_score"] == 170.0
+        assert board[0]["networks_completed"] == 2
+        assert board[0]["breakdown"] == {"oxygen": 80, "bravo": 90}
+
+    def test_team_with_fewer_networks_is_not_zero_padded(self):
+        # A team that's only cleared Oxygen should show a real 80, not an
+        # average or a total artificially dragged down by missing networks.
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True, network="oxygen")
+        board = gs.get_overall_leaderboard()
+        assert board[0]["total_score"] == 80.0
+        assert board[0]["networks_completed"] == 1
+
+    def test_movies_scores_are_excluded_from_overall(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True, network="oxygen")
+        _record("Team Alpha", "Kellogg", "Sec A", 999, True, network="movies")
+        board = gs.get_overall_leaderboard()
+        assert board[0]["total_score"] == 80.0   # the 999 from movies must not leak in
+        assert board[0]["networks_completed"] == 1
+        assert "movies" not in board[0]["breakdown"]
+
+    def test_ranked_by_total_score_descending(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True, network="oxygen")
+        _record("Team Bravo", "Kellogg", "Sec A", 60, True, network="oxygen")
+        _record("Team Bravo", "Kellogg", "Sec A", 60, True, network="bravo")
+        board = gs.get_overall_leaderboard()
+        assert board[0]["team_name"] == "Team Bravo"   # 120 > 80
+        assert board[0]["rank"] == 1
+        assert board[1]["team_name"] == "Team Alpha"
+        assert board[1]["rank"] == 2
+
+    def test_school_scoping_applies(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True, network="oxygen")
+        _record("Team Bravo", "Kelley", "Sec 1", 90, True, network="oxygen")
+        board = gs.get_overall_leaderboard(school="Kellogg")
+        assert len(board) == 1
+        assert board[0]["team_name"] == "Team Alpha"
+
+    def test_empty_board_returns_empty_list(self):
+        assert gs.get_overall_leaderboard() == []

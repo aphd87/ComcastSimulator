@@ -13,8 +13,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from utils.game_state import (
-    get_network_leaderboard, get_school_rollup, NETWORK_ORDER, NETWORK_INFO,
-    get_team_network_status, load_leaderboard
+    get_network_leaderboard, get_school_rollup, get_overall_leaderboard,
+    NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
@@ -47,6 +47,94 @@ def _format_slate_item(item: dict) -> str:
         if key in item and item[key] is not None:
             parts.append(fmt.format(item[key]))
     return " · ".join(parts)
+
+
+def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: bool):
+    """Combined TV/Streaming ranking — sum of official scores across
+    Oxygen/Bravo/Peacock (get_overall_leaderboard). A team that's only
+    cleared Oxygen still shows up, just with fewer networks counted — not
+    zero-padded to look like a bad score. Movies is deliberately excluded
+    (its own separate leaderboard tab, a genuinely different track)."""
+    board = get_overall_leaderboard(scope_school, scope_class)
+
+    if not board:
+        st.markdown("""
+        <div style="text-align:center;padding:40px;color:#b0b5c4;
+             font-family:DM Mono,monospace;font-size:12px;">
+          No submissions yet in this scope.
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    top3 = board[:3]
+    pcols = st.columns(3)
+    for idx, entry in enumerate(top3):
+        with pcols[idx]:
+            icon = RANK_ICONS.get(entry["rank"], "")
+            mc   = RANK_COLORS.get(entry["rank"], TEXT2)
+            glow_class = "crown-glow" if entry["rank"] == 1 else ""
+            school_line = (f'<div style="font-size:10px;color:#b0b5c4;margin-top:2px;">'
+                            f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                            if show_school_col else "")
+            st.markdown(f"""
+            <div class="{glow_class}" style="background:#1a1d26;border:2px solid {mc};border-radius:10px;
+                 padding:16px;text-align:center;margin-bottom:8px;">
+              <div style="font-size:30px;">{icon}</div>
+              <div style="font-size:14px;font-weight:600;color:{mc};margin:4px 0;">
+                {entry['team_name']}
+              </div>
+              {school_line}
+              <div style="font-family:DM Serif Display,serif;font-size:32px;color:{mc};">
+                {entry['total_score']:.0f}
+              </div>
+              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">
+                pts · {entry['networks_completed']} network{'s' if entry['networks_completed']!=1 else ''}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.divider()
+    st.markdown('<div class="section-title">Full Rankings — Combined Oxygen + Bravo + Peacock</div>', unsafe_allow_html=True)
+
+    for entry in board:
+        rank_c = RANK_COLORS.get(entry["rank"], "#e8eaf0")
+        icon   = RANK_ICONS.get(entry["rank"], f"#{entry['rank']}")
+        is_me  = entry["team_name"] == team
+        bg     = "rgba(232,197,71,.08)" if is_me else "#1a1d26"
+        border = "border:1px solid rgba(232,197,71,.3);" if is_me else "border:1px solid #252836;"
+        school_tag = (f'<div style="font-size:10px;color:#b0b5c4;margin-top:1px;">'
+                       f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                       if show_school_col else "")
+        breakdown_badges = "".join(
+            f'<span style="font-size:10px;font-family:DM Mono,monospace;color:#b0b5c4;">'
+            f'{NETWORK_INFO[net]["display_name"]}: {score:.0f}</span>'
+            for net, score in entry["breakdown"].items()
+        )
+        st.markdown(f"""
+        <div style="background:{bg};{border}border-radius:8px;
+             padding:10px 16px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="font-family:DM Mono,monospace;font-size:16px;
+                 color:{rank_c};min-width:32px;font-weight:700;">{icon}</div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;
+                   color:{'#e8c547' if is_me else '#e8eaf0'};">
+                {entry['team_name']} {'← YOU' if is_me else ''}
+              </div>
+              {school_tag}
+              <div style="display:flex;gap:12px;margin-top:5px;flex-wrap:wrap;">{breakdown_badges}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:DM Serif Display,serif;font-size:20px;color:{rank_c};">
+                {entry['total_score']:.0f}
+              </div>
+              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;">
+                {entry['networks_completed']}/{len(NETWORK_ORDER)} networks
+              </div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def _render_board_tab(team: str, net: str, info: dict,
@@ -304,10 +392,17 @@ def render():
 
     st.divider()
 
-    # ── Per-Network Leaderboards (TV networks + Day 2 Movies) ─────────────────
+    # ── Overall + Per-Network Leaderboards (TV networks + Day 2 Movies) ───────
+    # Overall = sum of official scores across Oxygen/Bravo/Peacock only
+    # (get_overall_leaderboard) — Movies stays its own separate track, not
+    # folded in, per explicit user request.
     all_nets  = list(NETWORK_ORDER) + ["movies"]
     all_infos = {**{n: NETWORK_INFO[n] for n in NETWORK_ORDER}, "movies": MOVIES_INFO}
-    net_tabs  = st.tabs([f"{all_infos[n]['emoji']} {all_infos[n]['display_name']}" for n in all_nets])
+    tab_labels = ["🌐 Overall"] + [f"{all_infos[n]['emoji']} {all_infos[n]['display_name']}" for n in all_nets]
+    overall_tab, *net_tabs = st.tabs(tab_labels)
+
+    with overall_tab:
+        _render_overall_tab(team, scope_school, scope_class, show_school_col)
 
     for tab, net in zip(net_tabs, all_nets):
         with tab:

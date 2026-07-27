@@ -213,6 +213,45 @@ def get_network_leaderboard(network: str, school: Optional[str] = None,
         r["rank"] = i + 1
     return ranked
 
+def get_overall_leaderboard(school: Optional[str] = None,
+                             class_section: Optional[str] = None) -> list[dict]:
+    """
+    Combined TV/Streaming ranking (added 2026-07-27, per user request) —
+    sum of each team's OFFICIAL score across Oxygen, Bravo, and Peacock,
+    counting only the networks they've actually submitted. A team that's
+    only cleared Oxygen isn't zero-padded for Bravo/Peacock; it's simply
+    not included in that component — see `networks_completed` per entry.
+    Movies stays its own separate leaderboard (a genuinely different
+    track, independent of TV network progress), not summed in here.
+
+    Same scoping semantics as get_network_leaderboard: school/class_section
+    =None means unfiltered/cross-school; a value scopes down to one class
+    or one school. Ranking is keyed on (school, class_section, team_name),
+    same as every other leaderboard function, so same-pseudonym teams in
+    different classes never collide.
+    """
+    teams: dict[tuple, dict] = {}
+    for net in NETWORK_ORDER:
+        for entry in get_network_leaderboard(net, school, class_section):
+            key = (entry.get("school", ""), entry.get("class_section", ""), entry["team_name"])
+            t = teams.setdefault(key, {
+                "team_name": entry["team_name"], "school": entry.get("school", ""),
+                "class_section": entry.get("class_section", ""),
+                "total_score": 0.0, "networks_completed": 0,
+                "breakdown": {}, "timestamp": entry["timestamp"],
+            })
+            t["total_score"] += entry["score"]
+            t["networks_completed"] += 1
+            t["breakdown"][net] = entry["score"]
+            t["timestamp"] = min(t["timestamp"], entry["timestamp"])   # earliest submission, for tie-breaks
+
+    ranked = sorted(teams.values(), key=lambda x: (-x["total_score"], x["timestamp"]))
+    for i, r in enumerate(ranked):
+        r["rank"] = i + 1
+        r["total_score"] = round(r["total_score"], 1)
+    return ranked
+
+
 def get_school_rollup(network: str) -> list[dict]:
     """Aggregate stats per school (across every class within it) for a
     network — the school-vs-school comparison view. Only counts official
