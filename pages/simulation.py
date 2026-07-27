@@ -27,7 +27,7 @@ from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
-    YEARS_PER_LEVEL, LEVEL_START_YEAR,
+    YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
@@ -115,12 +115,12 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
             risk_reason = draw_production_risk_event(ss.team_name, year, s.id)
 
         if s.id in prev_cancelled:
-            show_rows.append({"id": s.id, "name": s.name, "network": s.network,
+            show_rows.append({"id": s.id, "name": s.name, "network": s.network, "genre": s.genre,
                                "status": "prev_cancelled",
                                "rating_base": s.rating, "rating_adj": 0.0,
                                "variance": round(v, 3), "revenue": 0.0, "cost": 0.0})
         elif s.id in new_cancel:
-            show_rows.append({"id": s.id, "name": s.name, "network": s.network,
+            show_rows.append({"id": s.id, "name": s.name, "network": s.network, "genre": s.genre,
                                "status": "cancelled",
                                "rating_base": s.rating, "rating_adj": 0.0,
                                "variance": round(v, 3), "revenue": 0.0,
@@ -131,7 +131,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
             # already committed), but the show stays in the roster for
             # next year's Renewal decision rather than being permanently
             # dropped — one bad year, not a career-ending one.
-            show_rows.append({"id": s.id, "name": s.name, "network": s.network,
+            show_rows.append({"id": s.id, "name": s.name, "network": s.network, "genre": s.genre,
                                "status": "risk_event", "reason": risk_reason,
                                "rating_base": s.rating, "rating_adj": 0.0,
                                "variance": round(v, 3), "revenue": 0.0,
@@ -139,7 +139,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
         else:
             rev = s.ad_revenue(year, per) * v
             adj_ad_rev += rev
-            show_rows.append({"id": s.id, "name": s.name, "network": s.network,
+            show_rows.append({"id": s.id, "name": s.name, "network": s.network, "genre": s.genre,
                                "status": "active",
                                "rating_base": s.rating,
                                "rating_adj": round(s.rating * v, 2),
@@ -1028,6 +1028,7 @@ def _complete(ss, shows, net_info, team, net):
                     details=score_d,
                     school=ss.school, class_section=ss.class_section,
                     slate_summary=slate_summary,
+                    notables=compute_level_notables(log, ss.get("total_shows_greenlit", 0)),
                 )
                 ss.last_score = entry
                 ss.submitted  = True

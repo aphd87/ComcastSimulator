@@ -100,6 +100,118 @@ def hhi_from_genres(genre_costs: dict) -> float:
     shares = [v/total for v in genre_costs.values()]
     return sum(s**2 for s in shares)
 
+
+def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> dict:
+    """
+    Summarizes a team's full level playthrough into plain-language
+    highlights — added 2026-07-27 per user request ("give students a brief
+    summary, notables and such"). Computed once at Submit time straight
+    from the level's yearly_log, which as of today carries a per-show
+    "genre" field on every show_row (see pages/simulation.py::
+    _compute_year) — so diversity_trend works off historical data, not the
+    live (possibly since-changed-by-cancellations-or-new-greenlights) roster.
+
+    Returns a dict of None/0 fields if yearly_log is empty rather than
+    raising — callers should treat that as "not enough data yet."
+    """
+    if not yearly_log:
+        return {"best_year": None, "most_improved": None,
+                "consistency_score": None, "diversity_trend": None,
+                "shows_greenlit": shows_greenlit}
+
+    sorted_log = sorted(yearly_log, key=lambda r: r["year"])
+
+    best = max(sorted_log, key=lambda r: r["margin"])
+    best_year = {"label": best["label"], "margin": round(best["margin"], 1),
+                 "ocf": round(best["ocf"], 2)}
+
+    first, last = sorted_log[0], sorted_log[-1]
+    most_improved = round(last["margin"] - first["margin"], 1)
+
+    # Consistency — lower year-to-year margin stdev = steadier, expressed
+    # as a 0-100 score (100 = perfectly steady) so it reads like the other
+    # 0-100 score components. The x3 stretch factor is a rough calibration
+    # (a ~5pt stdev → ~85, a ~15pt stdev → ~55), not formally derived —
+    # revisit if real playthrough data suggests a different spread.
+    margins = [r["margin"] for r in sorted_log]
+    if len(margins) > 1:
+        mean     = sum(margins) / len(margins)
+        variance = sum((m - mean) ** 2 for m in margins) / len(margins)
+        stdev    = variance ** 0.5
+        consistency_score = round(max(0.0, 100 - stdev * 3), 1)
+    else:
+        consistency_score = 100.0   # can't be inconsistent with a single data point
+
+    # Genre diversity trend — HHI at the first vs. last year played, from
+    # each year's own recorded active-show genres (mirrors how the
+    # Complete-phase score's genre_hhi is computed: active shows only,
+    # weighted by that year's cost).
+    def _hhi_for_year(entry):
+        genre_costs: dict[str, float] = {}
+        for row in entry.get("shows", []):
+            if row.get("status") == "active" and "genre" in row:
+                genre_costs[row["genre"]] = genre_costs.get(row["genre"], 0) + row.get("cost", 0)
+        return hhi_from_genres(genre_costs) if genre_costs else None
+
+    first_hhi, last_hhi = _hhi_for_year(first), _hhi_for_year(last)
+    # Negative delta = HHI went down = more diversified over the level.
+    diversity_trend = round(first_hhi - last_hhi, 3) if (first_hhi is not None and last_hhi is not None) else None
+
+    return {
+        "best_year":         best_year,
+        "most_improved":     most_improved,
+        "consistency_score": consistency_score,
+        "diversity_trend":   diversity_trend,
+        "shows_greenlit":    shows_greenlit,
+    }
+
+
+def compute_movie_notables(movie_log: list[dict]) -> dict:
+    """
+    Movies-track equivalent of compute_level_notables, added 2026-07-27.
+    The Movies track (utils/movie_models.py) only runs CYCLES_TOTAL=3
+    greenlight-to-release cycles and each cycle produces exactly one
+    project, so a per-cycle genre-diversity *trend* isn't meaningful (a
+    single-genre cycle always has HHI=1.0) -- "genre_variety" (count of
+    distinct genres attempted) is used instead, answering the same
+    "how varied was the portfolio" question the TV side's diversity_trend
+    answers.
+    """
+    if not movie_log:
+        return {"best_cycle": None, "most_improved": None,
+                "consistency_score": None, "genre_variety": None}
+
+    sorted_log = sorted(movie_log, key=lambda r: r["cycle"])
+
+    best = max(sorted_log, key=lambda r: r["npv"])
+    best_cycle = {"label": best["project_kwargs"]["title"],
+                  "npv": round(best["npv"], 1), "irr": best["irr"]}
+
+    first, last = sorted_log[0], sorted_log[-1]
+    most_improved = round(last["npv"] - first["npv"], 1)
+
+    # Consistency, mirroring compute_level_notables's approach but scaled
+    # for NPV's much wider $M spread vs. the TV side's 0-100 margin scale
+    # (a ~30M stdev -> ~85, a ~90M stdev -> ~55) -- a rough calibration,
+    # not formally derived.
+    npvs = [r["npv"] for r in sorted_log]
+    if len(npvs) > 1:
+        mean     = sum(npvs) / len(npvs)
+        variance = sum((n - mean) ** 2 for n in npvs) / len(npvs)
+        stdev    = variance ** 0.5
+        consistency_score = round(max(0.0, 100 - stdev * 0.5), 1)
+    else:
+        consistency_score = 100.0
+
+    genre_variety = len({r["project_kwargs"]["genre"] for r in sorted_log})
+
+    return {
+        "best_cycle":        best_cycle,
+        "most_improved":     most_improved,
+        "consistency_score": consistency_score,
+        "genre_variety":     genre_variety,
+    }
+
 # ── FERPA-Safe Leaderboard ────────────────────────────────────────────────────
 def load_leaderboard() -> list[dict]:
     """Load leaderboard from JSON. Returns empty list if not found."""
@@ -116,7 +228,8 @@ def save_leaderboard(board: list[dict]) -> None:
 def record_attempt(team_name: str, network: str, attempt_num: int,
                    score: float, passed: bool, details: dict,
                    school: str = "", class_section: str = "",
-                   slate_summary: Optional[list[dict]] = None) -> dict:
+                   slate_summary: Optional[list[dict]] = None,
+                   notables: Optional[dict] = None) -> dict:
     """
     Record one attempt. First attempt is always official.
     FERPA note: team_name is a student-chosen pseudonym — no PII stored.
@@ -137,6 +250,11 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
     separate from `details` — `details` is iterated and number-formatted
     wholesale by pages/leaderboard.py's score-badge rendering, so a list
     value there would break that loop.
+
+    notables (added 2026-07-27, see compute_level_notables): the
+    plain-language playthrough highlights dict — best year, most improved,
+    consistency score, genre-diversity trend, shows greenlit. Same
+    own-top-level-field reasoning as slate_summary.
     """
     board = load_leaderboard()
 
@@ -152,6 +270,7 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
         "is_official":   attempt_num == 1,   # first attempt locked as official
         "details":       details,
         "slate_summary": slate_summary or [],
+        "notables":      notables or {},
     }
     board.append(entry)
     save_leaderboard(board)

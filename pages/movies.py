@@ -19,7 +19,10 @@ from utils.movie_models import (
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
 )
-from utils.game_state import record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS
+from utils.game_state import (
+    record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
+    compute_movie_notables,
+)
 from utils.charts import base_layout, waterfall_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 MOVIE_NETWORK_KEY = "movies"   # leaderboard/attempt-tracking key — same FERPA-safe infra as Day 1
@@ -522,6 +525,7 @@ def _complete(ss):
                     attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
                     school=ss.school, class_section=ss.class_section,
                     slate_summary=slate_summary,
+                    notables=compute_movie_notables(sorted_log),
                 )
                 ss.movie_last_score = entry
                 ss.movie_submitted = True
