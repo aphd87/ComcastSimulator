@@ -83,11 +83,11 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 [data-testid="stMetric"] {
     background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px 16px !important;
 }
-[data-testid="stMetricLabel"] { color:#e0e2ea !important;font-size:11px !important;text-transform:uppercase;letter-spacing:.08em; }
+[data-testid="stMetricLabel"] { color:#e0e2ea !important;font-size:14px !important;text-transform:uppercase;letter-spacing:.08em; }
 [data-testid="stMetricValue"] { color:#e8eaf0 !important;font-family:'DM Serif Display',serif !important; }
 
 [data-testid="stTabs"] button {
-    color:#e0e2ea !important;font-family:'DM Mono',monospace !important;font-size:12px !important;
+    color:#e0e2ea !important;font-family:'DM Mono',monospace !important;font-size:15px !important;
     border-bottom:2px solid transparent !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
@@ -96,7 +96,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 
 .stDataFrame { border:1px solid #252836 !important;border-radius:6px; }
 .stDataFrame thead th { background:#1a1d26 !important;color:#e0e2ea !important;
-    font-family:'DM Mono',monospace;font-size:11px; }
+    font-family:'DM Mono',monospace;font-size:14px; }
 
 [data-testid="stSlider"] > div > div { background:#252836 !important; }
 
@@ -109,10 +109,10 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 [data-testid="stExpander"] {
     background:#12141a !important;border:1px solid #252836 !important;border-radius:6px !important;
 }
-.stAlert { border-radius:6px !important;font-family:'DM Mono',monospace !important;font-size:12px; }
+.stAlert { border-radius:6px !important;font-family:'DM Mono',monospace !important;font-size:15px; }
 .stButton button {
     background:#1a1d26 !important;color:#e8eaf0 !important;border:1px solid #252836 !important;
-    font-family:'DM Mono',monospace !important;font-size:12px !important;border-radius:5px !important;
+    font-family:'DM Mono',monospace !important;font-size:15px !important;border-radius:5px !important;
     transition: all .15s;
 }
 .stButton button:hover { border-color:#e8c547 !important;color:#e8c547 !important; }
@@ -120,7 +120,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 /* Submit button special styling */
 .submit-btn button {
     background:rgba(232,197,71,.15) !important;border:2px solid #e8c547 !important;
-    color:#e8c547 !important;font-weight:600 !important;font-size:14px !important;
+    color:#e8c547 !important;font-weight:600 !important;font-size:16px !important;
     padding:8px 24px !important;
 }
 .submit-btn button:hover { background:rgba(232,197,71,.3) !important; }
@@ -137,11 +137,11 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     font-size:36px;letter-spacing:.12em;
     font-weight:700;
 }
-.net-tagline { font-family:'DM Mono',monospace;font-size:11px;color:#e0e2ea;margin-top:2px; }
+.net-tagline { font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;margin-top:2px; }
 
 /* Badge pills */
 .badge { display:inline-block;padding:2px 8px;border-radius:4px;
-    font-family:'DM Mono',monospace;font-size:11px;font-weight:500; }
+    font-family:'DM Mono',monospace;font-size:14px;font-weight:500; }
 .badge-green  { background:rgba(102,187,106,.15);color:#81c784;border:1px solid rgba(102,187,106,.3); }
 .badge-yellow { background:rgba(255,167,38,.15);color:#ffb74d;border:1px solid rgba(255,167,38,.3); }
 .badge-red    { background:rgba(239,83,80,.15);color:#ef9a9a;border:1px solid rgba(239,83,80,.3); }
@@ -150,11 +150,11 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .badge-gold   { background:rgba(232,197,71,.15);color:#e8c547;border:1px solid rgba(232,197,71,.3); }
 
 .section-title {
-    font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;
-    letter-spacing:.12em;color:#b0b5c4;margin-bottom:8px;
-    padding-bottom:6px;border-bottom:1px solid #252836;
+    font-family:'DM Mono',monospace;font-size:19px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.1em;color:#e8eaf0;margin-bottom:8px;
+    padding-bottom:6px;border-bottom:2px solid #252836;
 }
-.phase-banner { padding:8px 16px;border-radius:6px;font-family:'DM Mono',monospace;font-size:12px;margin-bottom:12px; }
+.phase-banner { padding:8px 16px;border-radius:6px;font-family:'DM Mono',monospace;font-size:15px;margin-bottom:12px; }
 .phase-1 { background:rgba(192,57,43,.15);color:#e57373;border:1px solid rgba(192,57,43,.3); }
 .phase-2 { background:rgba(142,68,173,.15);color:#ba68c8;border:1px solid rgba(142,68,173,.3); }
 .phase-3 { background:rgba(26,107,181,.15);color:#4fc3f7;border:1px solid rgba(26,107,181,.3); }
@@ -173,9 +173,9 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     padding:8px 12px;border-radius:6px;margin-bottom:4px;
     background:#1a1d26;border:1px solid #252836;
 }
-.lb-rank { font-family:'DM Mono',monospace;font-size:13px;min-width:28px;font-weight:600; }
-.lb-team { font-size:13px;flex:1;font-weight:500; }
-.lb-score { font-family:'DM Mono',monospace;font-size:14px;font-weight:600; }
+.lb-rank { font-family:'DM Mono',monospace;font-size:15px;min-width:28px;font-weight:600; }
+.lb-team { font-size:15px;flex:1;font-weight:500; }
+.lb-score { font-family:'DM Mono',monospace;font-size:16px;font-weight:600; }
 
 /* Theory card */
 .theory-card {
@@ -183,9 +183,9 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     padding:14px 16px;height:100%;
 }
 .theory-icon { font-size:24px;margin-bottom:6px; }
-.theory-title { font-family:'DM Mono',monospace;font-size:11px;font-weight:600;
+.theory-title { font-family:'DM Mono',monospace;font-size:14px;font-weight:600;
     color:#e8c547;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px; }
-.theory-body { font-size:12px;color:#e0e2ea;line-height:1.6; }
+.theory-body { font-size:15px;color:#e0e2ea;line-height:1.6; }
 
 /* Real-time feedback pulse */
 @keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:.6} }

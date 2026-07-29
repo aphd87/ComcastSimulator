@@ -14,7 +14,7 @@ from streamlit.testing.v1 import AppTest
 import utils.game_state as gs
 from utils.models import Show
 from utils.game_state import MAX_NEW_SHOWS_PER_YEAR
-from pages.simulation import _remove_greenlit_shows
+from app_pages.simulation import _remove_greenlit_shows
 
 
 def _show(show_id: int, name: str = "Test") -> Show:
@@ -127,7 +127,7 @@ def _complete_sim_app() -> AppTest:
         st.session_state.sim_phase = "complete"
         st.session_state.level_budget = 25.0
 
-        import pages.simulation as simulation
+        import app_pages.simulation as simulation
         simulation.render()
 
     at = AppTest.from_function(script, default_timeout=30)
@@ -191,7 +191,7 @@ def _decisions_sim_app() -> AppTest:
             if k not in st.session_state:
                 st.session_state[k] = v
 
-        import pages.simulation as simulation
+        import app_pages.simulation as simulation
         simulation.render()
 
     at = AppTest.from_function(script, default_timeout=30)
@@ -311,7 +311,7 @@ def _results_sim_app() -> AppTest:
             if k not in st.session_state:
                 st.session_state[k] = v
 
-        import pages.simulation as simulation
+        import app_pages.simulation as simulation
         simulation.render()
 
     at = AppTest.from_function(script, default_timeout=30)
@@ -380,7 +380,7 @@ def _complete_sim_app_submitted() -> AppTest:
             if k not in st.session_state:
                 st.session_state[k] = v
 
-        import pages.simulation as simulation
+        import app_pages.simulation as simulation
         simulation.render()
 
     at = AppTest.from_function(script, default_timeout=30)

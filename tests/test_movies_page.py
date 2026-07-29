@@ -52,7 +52,7 @@ def _movies_app() -> AppTest:
         import sys
         sys.path.insert(0, ".")
         st.session_state.team_name = "AppTest Team"
-        import pages.movies as movies
+        import app_pages.movies as movies
         movies.render()
 
     at = AppTest.from_function(script, default_timeout=30)
@@ -137,7 +137,7 @@ def _movies_app_at_cycle_3() -> AppTest:
         for k, v in defaults.items():
             if k not in st.session_state:
                 st.session_state[k] = v
-        import pages.movies as movies
+        import app_pages.movies as movies
         movies.render()
 
     at = AppTest.from_function(script, default_timeout=30)
@@ -209,7 +209,7 @@ def _complete_movies_app() -> AppTest:
         st.session_state.movie_log = log
         st.session_state.movie_cycle = 3
         st.session_state.movie_phase = "complete"
-        import pages.movies as movies
+        import app_pages.movies as movies
         movies.render()
 
     at = AppTest.from_function(script, default_timeout=30)

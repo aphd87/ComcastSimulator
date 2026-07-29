@@ -16,6 +16,8 @@ from utils.models import (
     TRUE_CRIME_AMORT_MONTHS, MIN_MARKETING_PER_SHOW_M,
     draw_production_risk_event, PRODUCTION_RISK_CHANCE, PRODUCTION_RISK_REASONS,
     draw_emergency_budget_shock, EMERGENCY_BUDGET_CHANCE, EMERGENCY_BUDGET_CUT_RANGE,
+    slot_rating_multiplier, PRIMETIME_DAYS, PRIMETIME_HOURS,
+    SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
 )
 
 
@@ -200,3 +202,68 @@ class TestEmergencyBudgetShock:
 
     def test_chance_constant_is_small(self):
         assert 0.0 < EMERGENCY_BUDGET_CHANCE < 0.3
+
+
+# ── Primetime scheduling — real ratings trade-off (2026-07-29) ──────────────
+class TestPrimetimeScheduling:
+    def test_every_slot_within_bounds(self):
+        for d in PRIMETIME_DAYS:
+            for h in PRIMETIME_HOURS:
+                mult = slot_rating_multiplier(d, h)
+                assert SLOT_MULT_FLOOR <= mult <= SLOT_MULT_CEILING
+
+    def test_best_and_worst_slot_hit_the_exact_band_edges(self):
+        # The normalization is a linear rescale of the full grid's raw
+        # day x hour spread, so the single best combo must hit the ceiling
+        # exactly and the single worst must hit the floor exactly.
+        vals = [slot_rating_multiplier(d, h) for d in PRIMETIME_DAYS for h in PRIMETIME_HOURS]
+        assert max(vals) == pytest.approx(SLOT_MULT_CEILING)
+        assert min(vals) == pytest.approx(SLOT_MULT_FLOOR)
+
+    def test_weeknight_primetime_beats_friday_saturday(self):
+        # Tue/Wed/Thu 8-9PM should outscore the real "death slot" nights at
+        # the same hour -- the actual pedagogical point being taught.
+        for h in PRIMETIME_HOURS:
+            weeknight_best = max(slot_rating_multiplier(d, h) for d in ("Tue", "Wed", "Thu"))
+            weekend_worst  = min(slot_rating_multiplier(d, h) for d in ("Fri", "Sat"))
+            assert weeknight_best > weekend_worst
+
+    def test_show_defaults_to_unscheduled_and_neutral(self):
+        s = _show()
+        assert s.slot_day is None and s.slot_hour is None
+        assert s.schedule_multiplier() == 1.0
+
+    def test_schedule_multiplier_matches_slot_rating_multiplier_once_assigned(self):
+        s = _show()
+        s.slot_day, s.slot_hour = "Tue", "8PM"
+        assert s.schedule_multiplier() == slot_rating_multiplier("Tue", "8PM")
+
+    def test_ad_revenue_unaffected_when_unscheduled(self):
+        # Backward-compatibility guard: every show built before this feature
+        # existed keeps its exact original ad_revenue -- same "zero-effect
+        # baseline" precedent as movie_models.py's New IP concept type.
+        s = _show()
+        baseline = s.rating * 7.0  # REV_PER_RATING_POINT, year 1, no mkt boost
+        assert s.ad_revenue(year=1) == pytest.approx(baseline)
+
+    def test_ad_revenue_scales_with_assigned_slot(self):
+        s_good = _show(show_id=1)
+        s_good.slot_day, s_good.slot_hour = "Tue", "8PM"   # best slot
+        s_bad = _show(show_id=2)
+        s_bad.slot_day, s_bad.slot_hour = "Sat", "10PM"    # worst slot
+        s_none = _show(show_id=3)
+
+        assert s_good.ad_revenue(year=1) > s_none.ad_revenue(year=1) > s_bad.ad_revenue(year=1)
+        assert s_good.ad_revenue(year=1) == pytest.approx(s_none.ad_revenue(year=1) * SLOT_MULT_CEILING)
+        assert s_bad.ad_revenue(year=1) == pytest.approx(s_none.ad_revenue(year=1) * SLOT_MULT_FLOOR)
+
+    def test_double_booking_a_show_is_representable_but_last_write_wins(self):
+        # The grid UI (app_pages/schedule.py) detects and warns on double
+        # bookings; at the model level a show simply has one slot at a time,
+        # so re-assigning it just overwrites the previous slot cleanly.
+        s = _show()
+        s.slot_day, s.slot_hour = "Fri", "7PM"
+        first = s.schedule_multiplier()
+        s.slot_day, s.slot_hour = "Tue", "8PM"
+        second = s.schedule_multiplier()
+        assert second > first

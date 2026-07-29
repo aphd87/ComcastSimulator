@@ -8,7 +8,8 @@ import numpy as np
 import plotly.graph_objects as go
 from utils.models import (
     distribution_revenue, portfolio_ad_rev, AMORT_MONTHS_LINEAR,
-    MONTHS, HOUR_LABELS, HOURLY_INDEX
+    MONTHS, HOUR_LABELS, HOURLY_INDEX,
+    PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
 )
 from utils.charts import (
     base_layout, bar_chart, line_chart,
@@ -33,7 +34,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:12px;color:#e0e2ea;">
+         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">Key insight:</b> You pay 1/12 of a show's total annual cost on the 1st of each month the show is on air — 
     regardless of when in the month it premieres. A March 30 launch means you absorb a full monthly 
     amortization payment with only 2 days of ad revenue. Your cash cows must fund this gap.
@@ -73,20 +74,20 @@ def render():
     with c1:
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Revenue days in month</span>
             <span style="font-family:'DM Mono',monospace;{'color:#66bb6a' if revenue_days > 15 else 'color:#ef5350'};">{revenue_days}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Ad revenue earned</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${month_rev:.3f}M</span>
           </div>
-          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:14px;font-weight:600;">
+          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:16px;font-weight:600;">
             <span>Net Position</span>
             <span style="font-family:'DM Mono',monospace;color:{'#66bb6a' if net_position >= 0 else '#ef5350'};">{'+'if net_position>=0 else ''}{net_position:.3f}M</span>
           </div>
@@ -99,20 +100,20 @@ def render():
         mar1_net = mar1_rev - monthly_amort
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Revenue days in month</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">31</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Ad revenue earned</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${mar1_rev:.3f}M</span>
           </div>
-          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:14px;font-weight:600;">
+          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:16px;font-weight:600;">
             <span>Net Position</span>
             <span style="font-family:'DM Mono',monospace;color:{'#66bb6a' if mar1_net >= 0 else '#ef5350'};">{'+'if mar1_net>=0 else ''}{mar1_net:.3f}M</span>
           </div>
@@ -126,20 +127,20 @@ def render():
         funded = "✅ Cash cows cover" if cow_coverage >= abs(net_position) else "❌ Cash gap — raise reserve"
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Revenue shortfall vs. Day 1</span>
             <span style="font-family:'DM Mono',monospace;color:#ef5350;">${abs(gap):.3f}M</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Cash cow monthly rev</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${cow_coverage:.3f}M</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Reserve needed</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${max(0,-net_position):.3f}M</span>
           </div>
-          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;font-size:12px;">
+          <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;font-size:15px;">
             <span style="color:{'#66bb6a' if '✅' in funded else '#ef5350'};">{funded}</span>
           </div>
         </div>
@@ -150,7 +151,7 @@ def render():
     # ── Section 2: Monthly Amortization Grid ─────────────────────────────────
     st.markdown('<div class="section-title">Monthly Amortization Grid — All Active Shows</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:12px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
     Red cells = months with active amortization bills. Shows premiering in the same quarter stack costs —
     a deep-red column means your cash cows must bridge a large up-front gap before ad revenue catches up.
     </div>
@@ -186,7 +187,7 @@ def render():
     # ── Monthly Cash Bridge ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Cash Flow Bridge</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:12px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
     Green bars = revenue in; red bars = content cost out; gold line = net monthly cash flow.
     Months where the line dips below zero are squeeze points — your reserve must cover that shortfall or you risk a cash crisis.
     </div>
@@ -229,37 +230,66 @@ def render():
     st.divider()
 
     # ── Scheduling Grid ───────────────────────────────────────────────────────
-    st.markdown('<div class="section-title">Primetime Scheduling Optimizer</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div style="font-size:12px;color:#e0e2ea;margin-bottom:12px;">
-    Assign high-rating shows to Tue/Wed/Thu primetime to maximize short-term ratings. 
-    Emerging IP can anchor weekend slots to build audience without cannibalizing cash cows.
+    # Real decision, not illustrative (2026-07-29, per user request): where a
+    # show is placed changes its actual ad revenue for the year — see
+    # Show.schedule_multiplier() / slot_rating_multiplier() in utils/models.py.
+    st.markdown('<div class="section-title">Primetime Scheduling — Assign Your Shows</div>', unsafe_allow_html=True)
+    n_slots = len(PRIMETIME_DAYS) * len(PRIMETIME_HOURS)
+    bonus   = int(round((SLOT_MULT_CEILING - 1) * 100))
+    penalty = int(round((1 - SLOT_MULT_FLOOR) * 100))
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
+         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
+    ⚖️ <b style="color:#e8eaf0;">The trade-off, up front:</b> there are only {n_slots} primetime slots
+    ({len(PRIMETIME_HOURS)} hours × {len(PRIMETIME_DAYS)} nights) and exactly one show per slot — you
+    cannot put every show in the best slot. Tue/Wed/9PM is the strongest slot and is worth up to
+    <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there. Fri/Sat nights are the
+    real industry "death slot" — the weakest slot costs a show up to
+    <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus, no
+    penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
     </div>
     """, unsafe_allow_html=True)
 
-    days_of_week = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-    time_slots   = ["7PM","8PM","9PM","10PM"]
+    show_by_label = {f"{s.name} (#{s.id})": s for s in shows}
+    show_labels   = ["— none —"] + sorted(show_by_label.keys())
 
-    # Auto-assign by rating (highest → best slots)
-    sorted_shows = sorted(shows, key=lambda s: -s.rating)
-    slot_map = {}
-    for idx, slot in enumerate([(t,d) for t in time_slots for d in days_of_week]):
-        if idx < len(sorted_shows):
-            slot_map[slot] = sorted_shows[idx]
+    grid_rows = []
+    for h in PRIMETIME_HOURS:
+        row = {"Time": h}
+        for d in PRIMETIME_DAYS:
+            match = next((lbl for lbl, s in show_by_label.items()
+                          if s.slot_day == d and s.slot_hour == h), "— none —")
+            row[d] = match
+        grid_rows.append(row)
+    grid_df = pd.DataFrame(grid_rows).set_index("Time")
 
-    sched_data = []
-    for t in time_slots:
-        row = {"Time": t}
-        for d in days_of_week:
-            sh = slot_map.get((t,d))
-            row[d] = f"{sh.name[:12]} ({sh.rating:.1f})" if sh else "—"
-        sched_data.append(row)
+    col_config = {d: st.column_config.SelectboxColumn(d, options=show_labels, required=True)
+                  for d in PRIMETIME_DAYS}
+    edited_df = st.data_editor(grid_df, column_config=col_config, use_container_width=True,
+                                key=f"primetime_grid_{net}_{year}")
 
-    sched_df = pd.DataFrame(sched_data).set_index("Time")
-    st.dataframe(sched_df, use_container_width=True)
-    st.caption("Auto-assigned by rating — highest-rated shows get primetime. Illustrative only: "
-               "there's no separate editor, and this grid isn't something your decisions elsewhere "
-               "change — it's here to show what a rating-optimized primetime lineup looks like.")
+    # Persist the grid onto the real Show objects — same instances living in
+    # ss.oxygen_shows/etc. (shows[:] above is a shallow copy), same "write
+    # straight to the object" pattern renewal.py already uses for air_month.
+    for s in shows:
+        s.slot_day = None
+        s.slot_hour = None
+    double_booked = []
+    assigned_once = set()
+    for h in PRIMETIME_HOURS:
+        for d in PRIMETIME_DAYS:
+            label = edited_df.loc[h, d]
+            if label and label != "— none —" and label in show_by_label:
+                if label in assigned_once:
+                    double_booked.append(label)
+                assigned_once.add(label)
+                show_by_label[label].slot_day  = d
+                show_by_label[label].slot_hour = h
+
+    if double_booked:
+        names = ", ".join(sorted({lbl.rsplit(" (#", 1)[0] for lbl in double_booked}))
+        st.warning(f"⚠️ {names} assigned to more than one slot — only the last slot placed "
+                   f"for each show actually counts toward its rating.")
 
     # ── Hourly Revenue Index ──────────────────────────────────────────────────
     st.divider()

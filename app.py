@@ -28,7 +28,7 @@ from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
-    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS, SCHOOL_PRESETS,
+    get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS,
     YEARS_PER_LEVEL, LEVEL_START_YEAR,
 )
 from utils.models import annual_budget, cable_subs, distribution_revenue
@@ -115,7 +115,7 @@ with st.sidebar:
     st.markdown(
         '<div style="font-family:DM Serif Display,serif;font-size:24px;'
         'color:#e8c547;margin-bottom:2px;">VideoOS</div>'
-        '<div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;'
+        '<div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;'
         'margin-bottom:20px;letter-spacing:.1em;">VIDEO NETWORK PORTFOLIO SIMULATOR · 2012</div>',
         unsafe_allow_html=True
     )
@@ -132,18 +132,18 @@ with st.sidebar:
 
     if not ss.registered:
         st.markdown(
-            '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
             '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
             unsafe_allow_html=True
         )
-        school_choice = st.selectbox(
-            "School", SCHOOL_PRESETS, key="school_select",
-            help="Scopes your leaderboard to your own class/school — pick 'Other' to type your own."
+        university_input = st.text_input(
+            "University", placeholder="e.g. Northwestern University", key="university_input_field",
+            help="Your parent institution — scopes your leaderboard to your own school."
         )
-        if school_choice == "Other (type below)":
-            school_input = st.text_input("School Name", placeholder="e.g. Your University", key="school_input_field")
-        else:
-            school_input = school_choice
+        college_input = st.text_input(
+            "School / College", placeholder="e.g. Kellogg School of Management", key="college_input_field",
+            help="The specific business school within your university."
+        )
         class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
                                      max_chars=60, key="class_input_field")
         team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
@@ -151,13 +151,15 @@ with st.sidebar:
         if st.button("Register Team →", use_container_width=True):
             if not team_input.strip():
                 st.error("Please enter a team name.")
-            elif not school_input.strip():
-                st.error("Please enter a school name.")
+            elif not university_input.strip():
+                st.error("Please enter your university.")
+            elif not college_input.strip():
+                st.error("Please enter your school/college.")
             elif not class_input.strip():
                 st.error("Please enter your class/section.")
             else:
                 ss.team_name     = team_input.strip()
-                ss.school        = school_input.strip()
+                ss.school        = f"{college_input.strip()}, {university_input.strip()}"
                 ss.class_section = class_input.strip()
                 ss.registered    = True
                 st.rerun()
@@ -165,9 +167,9 @@ with st.sidebar:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
-            f'<div style="font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
+            f'<div style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
             f'<div style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</div>'
-            f'<div style="font-size:11px;color:#e0e2ea;margin-top:4px;">{ss.school} · {ss.class_section}</div>'
+            f'<div style="font-size:14px;color:#e0e2ea;margin-top:4px;">{ss.school} · {ss.class_section}</div>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -208,7 +210,7 @@ with st.sidebar:
         # ── TV network sub-selector — only shown once TV/Streaming is picked ────
         if ss.active_section == "tv":
             st.markdown(
-                '<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;'
+                '<div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;'
                 'text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px 4px;">'
                 'Active Network</div>', unsafe_allow_html=True)
             net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
@@ -249,7 +251,7 @@ with st.sidebar:
                 else:
                     st.markdown(
                         f'<div style="opacity:.4;padding:6px 10px;border-radius:5px;'
-                        f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:12px;">'
+                        f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:15px;">'
                         f'{lock_icon} {info["display_name"]} — Locked</div>',
                         unsafe_allow_html=True
                     )
@@ -272,7 +274,7 @@ with st.sidebar:
     # this was static.
     st.divider()
     st.markdown(
-        '<div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;line-height:1.6;">'
+        '<div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;line-height:1.6;">'
         'FERPA: No PII collected.<br>Team names are pseudonyms only.<br>'
         'Scores stored locally in leaderboard.json</div>',
         unsafe_allow_html=True
@@ -283,7 +285,7 @@ if not ss.registered:
     # ── Welcome / Theory screen ────────────────────────────────────────────────
     st.markdown(
         '<h1 style="text-align:center;margin-bottom:4px;">VideoOS</h1>'
-        '<div style="text-align:center;font-family:DM Mono,monospace;font-size:13px;'
+        '<div style="text-align:center;font-family:DM Mono,monospace;font-size:15px;'
         'color:#e0e2ea;margin-bottom:32px;">Video Network Portfolio Simulator · 2012</div>',
         unsafe_allow_html=True
     )
@@ -292,7 +294,7 @@ if not ss.registered:
     st.markdown('<div class="section-title">Strategic Foundation — Business Theory</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#e0e2ea;line-height:1.7;">
+         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:15px;color:#e0e2ea;line-height:1.7;">
     <b style="color:#e8eaf0;font-size:15px;">It's 2012. The linear TV era is ending.</b><br><br>
     Cable networks are facing their first existential threat. Subscribers are cutting the cord. 
     Netflix is spending aggressively. The iPad is two years old. You are the General Manager of 
@@ -307,7 +309,7 @@ if not ss.registered:
 
     st.divider()
     st.markdown(
-        '<div style="text-align:center;font-size:13px;color:#e0e2ea;padding:20px;">'
+        '<div style="text-align:center;font-size:15px;color:#e0e2ea;padding:20px;">'
         '← Register your team in the sidebar to begin.</div>',
         unsafe_allow_html=True
     )
@@ -320,7 +322,7 @@ elif ss.active_section in (None, "app"):
       <div style="font-family:DM Serif Display,serif;font-size:24px;color:#e8eaf0;">
         Welcome, {ss.team_name}
       </div>
-      <div style="font-size:13px;color:#e0e2ea;margin-top:6px;">
+      <div style="font-size:15px;color:#e0e2ea;margin-top:6px;">
         Choose your simulation to begin — you can switch anytime from the sidebar.
       </div>
     </div>
@@ -335,7 +337,7 @@ elif ss.active_section in (None, "app"):
           <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
             TV / Streaming
           </div>
-          <div style="font-size:12px;color:#e0e2ea;line-height:1.6;">
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
             Run Oxygen → Bravo → Peacock as General Manager. Annual portfolio decisions —
             financing, renewal, greenlighting, scheduling — amortization timing, and the
             linear-vs-SVOD tradeoff.
@@ -353,7 +355,7 @@ elif ss.active_section in (None, "app"):
           <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
             Movies
           </div>
-          <div style="font-size:12px;color:#e0e2ea;line-height:1.6;">
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
             Universal Pictures — risk-adjusted NPV under bull/base/bear variance, theatrical
             vs. streaming release-window strategy, and award-season reception. A concentrated,
             front-loaded bet, in contrast to TV's steady, amortized portfolio.
@@ -376,7 +378,7 @@ elif ss.active_section == "leaderboard":
     # pages/leaderboard.py already covers TV networks and Movies internally
     # via its own tabs (_render_board_tab, MOVIES_INFO) — no wrapping needed.
     st.markdown('<h2 style="margin-bottom:4px;">🏆 Leaderboard</h2>', unsafe_allow_html=True)
-    from pages.leaderboard import render as render_leaderboard
+    from app_pages.leaderboard import render as render_leaderboard
     render_leaderboard()
 
 elif ss.active_section == "movies":
@@ -387,7 +389,7 @@ elif ss.active_section == "movies":
       <div style="font-family:DM Serif Display,serif;font-size:22px;color:#e8c547;">
         🎬 Universal Pictures — Day 2
       </div>
-      <div style="font-size:12px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
+      <div style="font-size:15px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
         Theatrical vs. streaming economics: risk-adjusted NPV, release-window strategy, and
         award-season reception — a concentrated, front-loaded bet, in contrast to TV's
         steady, amortized portfolio.
@@ -397,7 +399,7 @@ elif ss.active_section == "movies":
 
     tabs = st.tabs(["🎬 Movies", "📖 Theory"])
 
-    from pages.movies import render as render_movies
+    from app_pages.movies import render as render_movies
 
     with tabs[0]:
         render_movies()
@@ -432,12 +434,12 @@ else:
               <span class="badge badge-gray">{net_info['hq']}</span>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
-              <div style="font-size:11px;color:#e0e2ea;">{net_info['demographics']}</div>
+              <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
+              <div style="font-size:14px;color:#e0e2ea;">{net_info['demographics']}</div>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
-              <div style="font-size:11px;color:#e0e2ea;">{net_info['avg_ep_cost']}</div>
+              <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
+              <div style="font-size:14px;color:#e0e2ea;">{net_info['avg_ep_cost']}</div>
             </div>
           </div>
         </div>
@@ -447,24 +449,24 @@ else:
         att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#e0e2ea")
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px 14px;">
-          <div style="font-size:10px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
-          <div style="font-size:13px;color:{att_color};font-family:DM Mono,monospace;">
+          <div style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
+          <div style="font-size:15px;color:{att_color};font-family:DM Mono,monospace;">
             {'✅ PASSED' if passed else f'Attempt {attempts+1} of {MAX_ATTEMPTS}' if can_sub else '🔒 All attempts used'}
           </div>
-          {'<div style="font-size:11px;color:#e0e2ea;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
-          {'<div style="font-size:11px;color:#ffa726;margin-top:4px;">⚠️ Retries are practice only — first score counts.</div>' if attempts > 0 and not passed else ''}
+          {'<div style="font-size:14px;color:#e0e2ea;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
+          {'<div style="font-size:14px;color:#ffa726;margin-top:4px;">⚠️ Retries are practice only — first score counts.</div>' if attempts > 0 and not passed else ''}
         </div>
         """, unsafe_allow_html=True)
 
     with hcol2:
         st.markdown(f"""
         <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
-          <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;
+          <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Network Biography</div>
-          <div style="font-size:13px;color:#c8cad4;line-height:1.75;">{net_info['bio']}</div>
+          <div style="font-size:15px;color:#c8cad4;line-height:1.75;">{net_info['bio']}</div>
           <div style="margin-top:12px;">
-            <div style="font-size:10px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
-            <div style="font-size:12px;color:#e0e2ea;">{net_info['hit_shows']}</div>
+            <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
+            <div style="font-size:15px;color:#e0e2ea;">{net_info['hit_shows']}</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -535,7 +537,7 @@ else:
 
     brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
     steps_html = "".join(
-        f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:12px;">'
+        f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
         f'<span style="color:#b0b5c4;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
         f'<span style="color:#c8cad4;">{s}</span></div>'
         for i, s in enumerate(brief["steps"])
@@ -545,13 +547,13 @@ else:
          border-radius:8px;padding:16px 20px;margin-bottom:16px;">
       <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:2;min-width:260px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
-          <div style="font-size:12px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
-          <div style="font-size:12px;color:#e0e2ea;line-height:1.7;">{brief['mission']}</div>
+          <div style="font-size:15px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.7;">{brief['mission']}</div>
         </div>
         <div style="flex:1;min-width:220px;">
-          <div style="font-family:DM Mono,monospace;font-size:10px;color:#b0b5c4;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
           {steps_html}
         </div>
@@ -572,9 +574,9 @@ else:
         "📖 Theory",
     ])
 
-    from pages.simulation import render as render_simulation
-    from pages.finance    import render as render_finance
-    from pages.forecast   import render as render_forecast
+    from app_pages.simulation import render as render_simulation
+    from app_pages.finance    import render as render_finance
+    from app_pages.forecast   import render as render_forecast
 
     with tabs[0]:
         render_simulation()

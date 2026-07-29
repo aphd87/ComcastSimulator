@@ -39,7 +39,7 @@ def render():
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">Renewal Economics:</b> Each renewed show costs 5% more next year.
     Your budget is performance-linked, not a flat raise — clear {threshold:.0f}% margin this year and
     next year's budget grows faster; miss it and it shrinks. Cancel low-ROI shows to free capacity
@@ -69,7 +69,7 @@ def render():
     st.markdown('<div class="section-title">Genre Decay Curves — Rating Trajectory</div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
         'Every show\'s rating drifts year over year based on its IP score — high-IP genres '
         'compound upward (franchise value), low-IP genres decay. This is the same math behind '
         'the "Proj Rating" column below, plotted forward so the trend is visible before you decide.</div>',
@@ -122,7 +122,7 @@ def render():
         st.markdown('<div class="section-title">🔬 Research — Preview This Year\'s Variance</div>',
                     unsafe_allow_html=True)
         st.markdown(
-            f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+            f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
             f'${RESEARCH_FEE:.0f}M per show, deducted from this year\'s budget immediately. Reveals a real '
             f'1-5 star signal for how that show\'s rating will actually move this year — not a decorative '
             f'guess. Low stars mean brace for a rough year; high stars mean lean into it. Sometimes also '
@@ -146,13 +146,13 @@ def render():
                             for r in revealed.get("regions") or []:
                                 fit_c = SUCCESS if r["fit"] == "strong" else TEXT2
                                 regional_html += (
-                                    f'<div style="font-size:9px;color:{fit_c};font-family:DM Mono,monospace;'
+                                    f'<div style="font-size:13px;color:{fit_c};font-family:DM Mono,monospace;'
                                     f'margin-top:3px;">🌍 {r["region"]} ({r["fit"]} fit)<br>'
                                     f'Median age {r["median_age"]} · HH income ${r["household_income_k"]}K</div>'
                                 )
                             st.markdown(
-                                f'<div style="font-size:12px;color:#e0e2ea;">{s.name[:18]}</div>'
-                                f'<div style="font-size:14px;color:{hint_c};">{star_str}</div>'
+                                f'<div style="font-size:15px;color:#e0e2ea;">{s.name[:18]}</div>'
+                                f'<div style="font-size:16px;color:{hint_c};">{star_str}</div>'
                                 f'{regional_html}',
                                 unsafe_allow_html=True)
                         else:
@@ -224,7 +224,7 @@ def render():
     # amortization-timing math everywhere else in the app.
     st.markdown('<div class="section-title">Your Slate — Decide & Schedule Each Show</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
         'For each show: Renew, Watch, or Cancel, and confirm which month it premieres. '
         'The schedule below updates live as you set premiere months.</div>',
         unsafe_allow_html=True)
@@ -240,15 +240,15 @@ def render():
                     s     = show_by_id[r["_id"]]
                     ocf_c = SUCCESS if r["Proj OCF"] >= 0 else DANGER
                     st.markdown(f"""
-                    <div style="font-size:13px;font-weight:600;color:#e8eaf0;">{r['Show']}</div>
+                    <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{r['Show']}</div>
                     <div style="display:flex;gap:6px;margin:4px 0;">
                       <span class="badge badge-gray">{r['Genre']}</span>
                       <span class="badge badge-gray">{r['Network']}</span>
                     </div>
-                    <div style="font-size:11px;color:#b0b5c4;font-family:DM Mono,monospace;">
+                    <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;">
                       Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
                     </div>
-                    <div style="font-size:12px;font-family:DM Mono,monospace;color:{ocf_c};margin:4px 0 8px;">
+                    <div style="font-size:15px;font-family:DM Mono,monospace;color:{ocf_c};margin:4px 0 8px;">
                       Proj OCF ${r['Proj OCF']:+.1f}M · Auto: {r['Auto'].split()[1]}
                     </div>
                     """, unsafe_allow_html=True)
@@ -279,7 +279,7 @@ def render():
     st.markdown('<div class="section-title" style="margin-top:14px;">This Year\'s Schedule</div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
         'Which shows premiere each month, updating live as you set premiere months above. '
         'Months stacked with several premieres pile up amortization cost — spread them out if '
         'your cash cows can\'t cover the gap.</div>',
@@ -302,7 +302,7 @@ def render():
         col.markdown(f"""
         <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
              padding:6px 2px;text-align:center;min-height:56px;">
-          <div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
+          <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
           <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -389,7 +389,7 @@ def render():
     # ── IP Value vs. OCF Scatter ──────────────────────────────────────────────
     st.divider()
     st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:11px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:14px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
 
     import plotly.express as px
     scatter_data = pd.DataFrame([{

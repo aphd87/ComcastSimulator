@@ -88,14 +88,14 @@ def _progress_bar(ss):
             f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
             f'<div style="width:32px;height:32px;border-radius:50%;background:{bg};'
             f'display:flex;align-items:center;justify-content:center;'
-            f'font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:{clr};">{txt}</div>'
-            f'<div style="font-size:9px;color:#b0b5c4;font-family:DM Mono,monospace;">{label}</div></div>'
+            f'font-family:DM Mono,monospace;font-size:15px;font-weight:700;color:{clr};">{txt}</div>'
+            f'<div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{label}</div></div>'
         )
     connector = '<div style="width:40px;height:2px;background:#252836;margin-bottom:16px;"></div>'
     cycle_label = f"Cycle {ss.movie_cycle} of {CYCLES_TOTAL}" if ss.movie_phase != "complete" else "Slate Complete"
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:14px 20px;margin-bottom:18px;">
-      <div style="font-family:DM Mono,monospace;font-size:11px;color:#e0e2ea;margin-bottom:10px;">{cycle_label}</div>
+      <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;margin-bottom:10px;">{cycle_label}</div>
       <div style="display:flex;align-items:center;justify-content:center;">{connector.join(dot_items)}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -135,7 +135,7 @@ def _decisions(ss):
     button that does what the old "Lock Strategy -> See Results" button
     did."""
     st.markdown(
-        '<div style="font-size:11px;color:#8a8f9e;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
         '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
         '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'

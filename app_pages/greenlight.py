@@ -29,7 +29,7 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#e0e2ea;">
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
     💡 <b style="color:#e8eaf0;">The Core Decision:</b> Do you put this show on Bravo (linear) or SVOD+?  
     In 2012, linear wins on immediate cash — faster ad revenue, no subscriber acquisition cost.  
     By Year 7+, SVOD subscription LTV starts to outpace a declining ad market. Build the P&L for both.
@@ -46,7 +46,7 @@ def render():
         gp1, gp2 = st.columns([3, 1])
         with gp1:
             st.markdown(
-                '<div style="font-size:11px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
+                '<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
                 'concept to start from — you can still edit every field below before greenlighting.</div>',
                 unsafe_allow_html=True)
         with gp2:
@@ -67,7 +67,7 @@ def render():
         if ss.get("gl_ai_pitch_text"):
             st.markdown(
                 f'<div style="background:#12141a;border:1px solid #252836;border-radius:6px;'
-                f'padding:10px 14px;margin-bottom:10px;font-size:12px;color:#e0e2ea;">'
+                f'padding:10px 14px;margin-bottom:10px;font-size:15px;color:#e0e2ea;">'
                 f'💡 <b>AI pitch:</b> {ss.gl_ai_pitch_text}</div>', unsafe_allow_html=True)
 
     # ── Show Concept Builder ───────────────────────────────────────────────────
@@ -101,13 +101,13 @@ def render():
     st.divider()
     st.markdown(
         '<div class="section-title">AI Pitch Feedback '
-        '<span style="font-size:10px;color:#b0b5c4;">(optional)</span></div>',
+        '<span style="font-size:14px;color:#b0b5c4;">(optional)</span></div>',
         unsafe_allow_html=True,
     )
 
     if not api_key_configured():
         st.markdown(
-            '<div style="font-size:11px;color:#b0b5c4;">'
+            '<div style="font-size:14px;color:#b0b5c4;">'
             'Ask your instructor to enable AI feedback for this class.</div>',
             unsafe_allow_html=True,
         )
@@ -157,10 +157,10 @@ def render():
         st.markdown(f"""
         <div style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.4);
              border-left:3px solid {DANGER};border-radius:6px;padding:14px 18px;margin-bottom:16px;">
-          <div style="font-size:13px;color:{DANGER};font-weight:600;margin-bottom:4px;">
+          <div style="font-size:15px;color:{DANGER};font-weight:600;margin-bottom:4px;">
             🚫 Legal Risk — Title Already Exists
           </div>
-          <div style="font-size:12px;color:#e0e2ea;">
+          <div style="font-size:15px;color:#e0e2ea;">
             "<b>{show_name}</b>" is already an existing title in this universe. Using it without
             permission gets you sued — <b>Risk Score: 0</b>. Rename the concept to something
             original before building a P&L on it.
@@ -187,16 +187,16 @@ def render():
         border = f"border:2px solid {color};" if winner else f"border:1px solid #252836;"
         rows = "".join([
             f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
-            f'border-bottom:1px solid rgba(37,40,54,.5);font-size:12px;">'
+            f'border-bottom:1px solid rgba(37,40,54,.5);font-size:15px;">'
             f'<span style="color:#e0e2ea;">{k}</span>'
             f'<span style="font-family:DM Mono,monospace;color:{vc};">{v}</span></div>'
             for k,v,vc in data
         ])
-        w_badge = f'<span style="background:{color};color:#0b0c10;font-size:10px;padding:2px 8px;border-radius:3px;font-family:DM Mono,monospace;">WINNER</span>' if winner else ''
+        w_badge = f'<span style="background:{color};color:#0b0c10;font-size:14px;padding:2px 8px;border-radius:3px;font-family:DM Mono,monospace;">WINNER</span>' if winner else ''
         return f"""
         <div style="background:#1a1d26;{border}border-radius:8px;padding:16px;height:100%;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <span style="font-family:DM Mono,monospace;font-size:11px;text-transform:uppercase;
+            <span style="font-family:DM Mono,monospace;font-size:14px;text-transform:uppercase;
                   letter-spacing:.1em;color:{color};">{title}</span>
             {w_badge}
           </div>
@@ -263,7 +263,7 @@ def render():
 
     st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<div style="font-size:11px;color:#e0e2ea;margin-bottom:8px;">'
+        f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
         f'Adds this concept to {net_display}\'s real roster — production cost (${linear["cost"]:.2f}M) '
         f'comes out of this year\'s budget immediately, and it starts earning/costing real money '
         f'starting this year. You\'ve greenlit {slots_used} of {MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
@@ -336,7 +336,7 @@ def render():
 
     # ── Sensitivity Table ──────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Sensitivity Analysis — Rating vs. Episode Cost</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:11px;color:#e0e2ea;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:14px;color:#e0e2ea;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
 
     rating_range = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
     cost_range   = [300, 500, 750, 1000, 1500, 2000]

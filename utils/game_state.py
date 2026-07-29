@@ -41,14 +41,6 @@ SCORE_WEIGHTS = {
 
 NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
-# Curated list for the School selector at registration — "Other" reveals a
-# free-text field, so any school can use this without a code change; the
-# curated names just save typing/typos for the two known adopters, and
-# keep cross-school rollups (get_school_rollup) matching on a consistent
-# string instead of "Kellogg"/"kellogg"/"Northwestern Kellogg" all being
-# treated as different schools.
-SCHOOL_PRESETS = ["Northwestern Kellogg", "Indiana Kelley", "Other (type below)"]
-
 # ── Scoring ───────────────────────────────────────────────────────────────────
 def compute_score(
     ocf_margin: float,

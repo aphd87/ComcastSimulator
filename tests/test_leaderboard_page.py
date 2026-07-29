@@ -1,5 +1,5 @@
 """
-Tests for pages/leaderboard.py. _format_notables_badges is a pure helper
+Tests for app_pages/leaderboard.py. _format_notables_badges is a pure helper
 (added 2026-07-27 alongside the Attempts-Used/Notables badge feature) and
 gets real unit tests; render() itself gets one AppTest smoke test seeding
 a real leaderboard.json (single .run(), no interaction -- see
@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.game_state as gs
-from pages.leaderboard import _format_notables_badges
+from app_pages.leaderboard import _format_notables_badges
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +83,7 @@ def test_leaderboard_renders_attempts_used_and_notables_with_no_exceptions(monke
         st.session_state.team_name = "Team Alpha"
         st.session_state.school = "Kellogg"
         st.session_state.class_section = "Sec A"
-        import pages.leaderboard as leaderboard
+        import app_pages.leaderboard as leaderboard
         leaderboard.render()
 
     at = AppTest.from_function(script, default_timeout=30)
