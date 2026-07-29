@@ -22,9 +22,9 @@ This doc captures the original design intent (from Zach's mechanics brief) recon
    - 10 new tests (`tests/test_models.py::TestPrimetimeScheduling`, `tests/test_schedule_page.py`) — band-edge exactness, weeknight-beats-weekend ordering, neutral-when-unscheduled backward compatibility (every show built before today keeps its exact original `ad_revenue`), and an AppTest smoke test confirming the new grid renders with no exceptions. 139 tests passing total.
 5. Local server restarted twice today (once after the rename, again after the scheduling/font changes) so changes were actually visible rather than silently sitting in edited-but-unloaded source — same lesson as item 1.
 
-**Still open, unchanged from 2026-07-27 below:**
+**Still open:**
 - **No real human/browser click-through has ever happened.** Today's fixes were verified via `py_compile`, the full `pytest` suite, and a local server restart/log check — not a real browser session. Given today's flat-tabs bug was itself something no automated check would have caught (Streamlit's multipage nav is a startup-time behavior, invisible to `pytest`/AppTest, which never spins up the real dev-server process), this gap is now even more clearly the single most important next step, not less. Claude in Chrome still not connected this session (not asked); Playwright still not installed.
-- **Nothing has been pushed to GitHub / the Streamlit Cloud deployment today** — all of today's fixes, including the flat-tabs bug, exist only in the local working tree until committed and pushed. The live deployment (still access-gated, per 2026-07-27 below) has not received any of today's changes.
+- **Pushed to GitHub 2026-07-29** (commit `e1bcad0`, `main` in sync with `origin/main`) — all four of today's fixes, including the flat-tabs rename, are now on the remote. **Whether the Streamlit Cloud deployment actually picked this up is still unconfirmed** — same access-gated state as 2026-07-27 below (the live URL redirects to a `share.streamlit.io` viewer login wall, not the app itself), so even though auto-deploy-on-push is the documented setup, nobody has actually logged in to confirm today's push built and deployed cleanly. Whoever owns the Streamlit Cloud account should check both the deploy log and the viewer-access setting.
 
 ## History — 2026-07-27 end of session (superseded by 2026-07-29 above)
 
