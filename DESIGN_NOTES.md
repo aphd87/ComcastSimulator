@@ -24,6 +24,8 @@ This doc captures the original design intent (from Zach's mechanics brief) recon
 
 **Same follow-up, landing-page copy fix**: the "Strategic Foundation — Business Theory" blurb on the pre-registration screen was still Oxygen's specific mission narrative ("You are the General Manager of Oxygen...") — copied over from the Oxygen level brief, but shown to every visitor before they've even chosen TV/Streaming vs. Movies. Per the user's ask ("can we write something more appropriate... given that it sits on top of business theory... some sort of intro that these are frameworks to consider"), rewritten as a general framing of both simulations sharing one underlying toolkit (BCG Matrix, HHI diversification, cord-cutting S-curve, amortization timing, LTV/CAC — the five `THEORY_CONTENT` cards rendered directly below it), rather than narrating one specific level. Oxygen's own mission narrative is untouched in `LEVEL_BRIEFS` where it actually belongs.
 
+**Session paused here 2026-07-30, resuming tomorrow.** Everything above is committed and pushed to `origin/main` (`5a8befc`), working tree clean, 144 tests passing. **Next session should start with the "Still open" item just below — a real human/browser click-through** — this session made three separate structural/copy changes to the landing and sign-in flow (sidebar removal, anonymous leaderboard access, rewritten intro copy) on top of that same still-unverified gap, which is now larger than it's ever been. Also worth a quick sanity check that the Streamlit Cloud deployment actually picked up today's pushes before assuming any of this is live for students.
+
 ## Status as of 2026-07-29
 
 **What happened today, in order:**
