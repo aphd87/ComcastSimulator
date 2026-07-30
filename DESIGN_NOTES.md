@@ -6,7 +6,17 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
-## Status as of 2026-07-29 — read this first
+## Status as of 2026-07-30 — read this first
+
+**Left sidebar removed entirely, per explicit user request** ("We don't need a left hand panel, but people should be able to sign in and see leaderboards for TV and movies respectively"). User reported "I can't see the left panel at all, and I can't register my team either" — one root cause, not two: registration and the App/Leaderboard/TV/Movies nav both lived exclusively in `st.sidebar`, so anything that made the sidebar fail to render (a collapsed sidebar with no way back open is a real Streamlit failure mode — `GLOBAL_CSS`'s `header{display:none}` rule hides the same `<header>` element that carries Streamlit's built-in "reopen sidebar" arrow in some versions, though this wasn't conclusively isolated as *the* trigger before the user asked to just drop the sidebar instead) took both features down together. Rather than keep debugging the sidebar, moved everything out of it:
+- **Team Registration** (University/School/Class/Team Name + Register button) now renders in the main content area, centered, above the welcome/theory screen — this is the new "sign in" entry point.
+- **Top-level nav** (🏠 App / 🏆 Leaderboard / 📺 TV-Streaming / 🎬 Movies) is now a horizontal button row in the main content header, shown once `ss.registered` is true. The TV network sub-selector (Oxygen/Bravo/Peacock, with lock icons) moved the same way, as a second row shown only when TV/Streaming is active.
+- `st.sidebar` is no longer called anywhere in `app.py`; the now-dead `[data-testid="stSidebar"]` CSS rules were removed from `utils/styles.py`.
+- Leaderboards for TV networks and Movies already existed as separate tabs within the single Leaderboard section (`app_pages/leaderboard.py` — Overall/Oxygen/Bravo/Peacock/Movies tabs) — no change needed there, satisfies the "see leaderboards for TV and movies respectively" ask as-is.
+- `tests/test_registration.py` updated: widget queries changed from `at.sidebar.text_input(...)` to `at.text_input(...)` now that the form lives in the main tree. One test (`test_registration_shows_the_simulation_nav_afterward`) hit the documented AppTest + `st.rerun()` stale-widget limitation once moved out of the sidebar block (sidebar apparently dodged it, the main tree doesn't) — fixed by seeding `session_state` directly and using a single `.run()`, the same workaround already established elsewhere in this suite, rather than touching the app's `st.rerun()` usage. 143 tests passing.
+- **Not yet verified in a real browser** — same standing gap as every prior session (no Playwright/Claude-in-Chrome click-through has ever happened on this repo). This change is a structural layout change with real UI-placement risk (centered columns, button row wrapping at narrow widths); a real click-through is more important than usual before trusting this in front of students.
+
+## Status as of 2026-07-29
 
 **What happened today, in order:**
 

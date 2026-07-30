@@ -71,12 +71,6 @@ html, body, [data-testid="stApp"] {
     color: #e8eaf0;
     font-family: 'DM Sans', sans-serif;
 }
-[data-testid="stSidebar"] {
-    background-color: #12141a !important;
-    border-right: 1px solid #252836;
-}
-[data-testid="stSidebar"] * { color: #e8eaf0 !important; }
-
 h1,h2,h3 { font-family:'DM Serif Display',serif !important; color:#e8eaf0 !important; }
 h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important; }
 

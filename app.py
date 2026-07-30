@@ -110,69 +110,36 @@ def init_state():
 init_state()
 ss = st.session_state
 
-# ── SIDEBAR ────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown(
-        '<div style="font-family:DM Serif Display,serif;font-size:24px;'
-        'color:#e8c547;margin-bottom:2px;">VideoOS</div>'
-        '<div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;'
-        'margin-bottom:20px;letter-spacing:.1em;">VIDEO NETWORK PORTFOLIO SIMULATOR · 2012</div>',
-        unsafe_allow_html=True
-    )
-    st.divider()
+# ── TOP HEADER — replaces the old left sidebar (2026-07-30, per explicit user
+# request: "We don't need a left hand panel, but people should be able to
+# sign in and see leaderboards for TV and movies respectively"). Registration
+# and section nav now render inline in the main content flow instead of
+# st.sidebar, so there's no separate panel that can fail to render or be
+# left collapsed with no way back open (the underlying complaint — "I can't
+# see the left panel at all, and I can't register my team either" — was one
+# problem, not two: registration and nav both lived only in the sidebar).
+st.markdown(
+    '<div style="text-align:center;margin-bottom:2px;">'
+    '<span style="font-family:DM Serif Display,serif;font-size:28px;color:#e8c547;">VideoOS</span>'
+    '</div>'
+    '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;'
+    'letter-spacing:.1em;margin-bottom:16px;">VIDEO NETWORK PORTFOLIO SIMULATOR · 2012</div>',
+    unsafe_allow_html=True
+)
 
-    # ── Team Registration ─────────────────────────────────────────────────────
-    # School + Class Section added 2026-07-22 — a team's real identity for
-    # gating/leaderboard purposes is (school, class_section, team_name), not
-    # just team_name alone, so the same "Team Alpha" pseudonym at two
-    # different schools (or two sections of the same school) never
-    # collides. Same FERPA posture as team_name itself: self-reported
-    # classroom context, not tied to any student identity.
-    st.markdown('<div class="section-title">Team Registration</div>', unsafe_allow_html=True)
-
-    if not ss.registered:
-        st.markdown(
-            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-            '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
-            unsafe_allow_html=True
-        )
-        university_input = st.text_input(
-            "University", placeholder="e.g. Northwestern University", key="university_input_field",
-            help="Your parent institution — scopes your leaderboard to your own school."
-        )
-        college_input = st.text_input(
-            "School / College", placeholder="e.g. Kellogg School of Management", key="college_input_field",
-            help="The specific business school within your university."
-        )
-        class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
-                                     max_chars=60, key="class_input_field")
-        team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
-                                    max_chars=30, key="team_input_field")
-        if st.button("Register Team →", use_container_width=True):
-            if not team_input.strip():
-                st.error("Please enter a team name.")
-            elif not university_input.strip():
-                st.error("Please enter your university.")
-            elif not college_input.strip():
-                st.error("Please enter your school/college.")
-            elif not class_input.strip():
-                st.error("Please enter your class/section.")
-            else:
-                ss.team_name     = team_input.strip()
-                ss.school        = f"{college_input.strip()}, {university_input.strip()}"
-                ss.class_section = class_input.strip()
-                ss.registered    = True
-                st.rerun()
-    else:
+if ss.registered:
+    tcol1, tcol2 = st.columns([5, 1])
+    with tcol1:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
-            f'<div style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</div>'
-            f'<div style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</div>'
-            f'<div style="font-size:14px;color:#e0e2ea;margin-top:4px;">{ss.school} · {ss.class_section}</div>'
+            f'<span style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
+            f'&nbsp;&nbsp;<span style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</span>'
+            f'&nbsp;&nbsp;<span style="font-size:14px;color:#e0e2ea;">{ss.school} · {ss.class_section}</span>'
             f'</div>',
             unsafe_allow_html=True
         )
+    with tcol2:
         if st.button("Change Team", use_container_width=True):
             ss.registered     = False
             ss.team_name      = ""
@@ -181,59 +148,54 @@ with st.sidebar:
             ss.active_section = None   # back to the landing screen for the next team
             st.rerun()
 
-    st.divider()
-
     # ── Top-level nav ─────────────────────────────────────────────────────────
-    # Restructured 2026-07-24 per user request: three peer sections on the
-    # left — Leaderboard, TV/Streaming, Movies — instead of Movies being
-    # buried as a peer of individual TV networks and Leaderboard only
-    # reachable as a nested tab within whichever section was active.
-    if ss.registered:
-        st.markdown('<div class="section-title">Simulation</div>', unsafe_allow_html=True)
-
-        section_defs = [
-            ("app",         "🏠 App"),
-            ("leaderboard", "🏆 Leaderboard"),
-            ("tv",          "📺 TV / Streaming"),
-            ("movies",      "🎬 Movies"),
-        ]
-        for section_key, section_label in section_defs:
-            is_active = ss.active_section == section_key or (
-                section_key == "app" and ss.active_section is None
-            )
+    # Same three peer sections as before (Leaderboard, TV/Streaming, Movies,
+    # plus App/Home) — now a horizontal button row instead of a stacked
+    # sidebar list.
+    section_defs = [
+        ("app",         "🏠 App"),
+        ("leaderboard", "🏆 Leaderboard"),
+        ("tv",          "📺 TV / Streaming"),
+        ("movies",      "🎬 Movies"),
+    ]
+    nav_cols = st.columns(len(section_defs))
+    for col, (section_key, section_label) in zip(nav_cols, section_defs):
+        is_active = ss.active_section == section_key or (
+            section_key == "app" and ss.active_section is None
+        )
+        with col:
             if st.button(f"{'🎯' if is_active else ''} {section_label}".strip(),
                          key=f"section_{section_key}", use_container_width=True,
                          type="primary" if is_active else "secondary"):
                 ss.active_section = section_key
                 st.rerun()
 
-        # ── TV network sub-selector — only shown once TV/Streaming is picked ────
-        if ss.active_section == "tv":
-            st.markdown(
-                '<div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;'
-                'text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px 4px;">'
-                'Active Network</div>', unsafe_allow_html=True)
-            net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
+    # ── TV network sub-selector — only shown once TV/Streaming is picked ────
+    if ss.active_section == "tv":
+        net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
+        net_cols = st.columns(len(NETWORK_ORDER))
+        for col, net in zip(net_cols, NETWORK_ORDER):
+            info     = NETWORK_INFO[net]
+            status   = net_status.get(net, {})
+            locked   = status.get("locked", net != "oxygen")
+            attempts = status.get("attempts", 0)
+            passed   = status.get("passed", False)
+            off_sc   = status.get("official_score")
 
-            for net in NETWORK_ORDER:
-                info     = NETWORK_INFO[net]
-                status   = net_status.get(net, {})
-                locked   = status.get("locked", net != "oxygen")
-                attempts = status.get("attempts", 0)
-                passed   = status.get("passed", False)
-                off_sc   = status.get("official_score")
+            if net == "oxygen":
+                locked = False   # Oxygen always unlocked (Level 1)
 
-                if net == "oxygen":
-                    locked = False   # Oxygen always unlocked (Level 1)
+            lock_icon = "🔒" if locked else ("✅" if passed else ("⚠️" if attempts > 0 else "▶️"))
 
-                lock_icon = "🔒" if locked else ("✅" if passed else ("⚠️" if attempts > 0 else "▶️"))
+            label = f"{lock_icon} {info['display_name']}"
+            if off_sc:   label += f" · {off_sc:.0f}pts"
+            if attempts: label += f" ({attempts})"
 
-                label = f"{lock_icon} {info['display_name']}"
-                if off_sc:   label += f" · {off_sc:.0f}pts"
-                if attempts: label += f" ({attempts} attempt{'s' if attempts>1 else ''})"
-
+            with col:
                 if not locked:
-                    if st.button(label, key=f"net_{net}", use_container_width=True):
+                    is_active_net = ss.active_network == net
+                    if st.button(label, key=f"net_{net}", use_container_width=True,
+                                 type="primary" if is_active_net else "secondary"):
                         ss.active_network       = net
                         ss.submitted            = False
                         ss.sim_phase            = "decisions"
@@ -251,44 +213,63 @@ with st.sidebar:
                 else:
                     st.markdown(
                         f'<div style="opacity:.4;padding:6px 10px;border-radius:5px;'
-                        f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:15px;">'
-                        f'{lock_icon} {info["display_name"]} — Locked</div>',
+                        f'border:1px solid #252836;font-family:DM Mono,monospace;font-size:15px;'
+                        f'text-align:center;">{lock_icon} {info["display_name"]} — Locked</div>',
                         unsafe_allow_html=True
                     )
 
-        st.divider()
-
-        # Budget Allocation removed 2026-07-24 — all gameplay decisions
-        # (including Marketing spend) now live in the main page's quarterly
-        # Financing section (pages/simulation.py), not the sidebar. This was
-        # the last decision control still duplicated between sidebar and
-        # main content; the sidebar is nav-only now (registration, section
-        # select). ss.mkt_budget stays as the shared session-state value
-        # simulation.py's Financing section reads/writes each quarter.
-
-    # Quick Checklist removed 2026-07-22 — it referenced tab names
-    # ("Portfolio", "Renewal", "P&L") from before the 7-tabs-to-3 redesign
-    # and no longer matched the actual UI; also purely duplicated the
-    # per-network "Suggested Order of Play" already shown prominently in
-    # the main content's Mission Brief, which is dynamic per network where
-    # this was static.
     st.divider()
-    st.markdown(
-        '<div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;line-height:1.6;">'
-        'FERPA: No PII collected.<br>Team names are pseudonyms only.<br>'
-        'Scores stored locally in leaderboard.json</div>',
-        unsafe_allow_html=True
-    )
 
 # ── MAIN CONTENT ──────────────────────────────────────────────────────────────
 if not ss.registered:
-    # ── Welcome / Theory screen ────────────────────────────────────────────────
-    st.markdown(
-        '<h1 style="text-align:center;margin-bottom:4px;">VideoOS</h1>'
-        '<div style="text-align:center;font-family:DM Mono,monospace;font-size:15px;'
-        'color:#e0e2ea;margin-bottom:32px;">Video Network Portfolio Simulator · 2012</div>',
-        unsafe_allow_html=True
-    )
+    # ── Sign In / Team Registration ─────────────────────────────────────────────
+    # School + Class Section: a team's real identity for gating/leaderboard
+    # purposes is (school, class_section, team_name), not just team_name
+    # alone, so the same "Team Alpha" pseudonym at two different schools (or
+    # two sections of the same school) never collides. FERPA-safe:
+    # self-reported classroom context, not tied to any student identity.
+    st.markdown('<div class="section-title" style="text-align:center;">Sign In — Register Your Team</div>',
+                unsafe_allow_html=True)
+    rcol1, rcol2, rcol3 = st.columns([1, 2, 1])
+    with rcol2:
+        st.markdown(
+            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;text-align:center;">'
+            '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
+            unsafe_allow_html=True
+        )
+        icol1, icol2 = st.columns(2)
+        with icol1:
+            university_input = st.text_input(
+                "University", placeholder="e.g. Northwestern University", key="university_input_field",
+                help="Your parent institution — scopes your leaderboard to your own school."
+            )
+            class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
+                                         max_chars=60, key="class_input_field")
+        with icol2:
+            college_input = st.text_input(
+                "School / College", placeholder="e.g. Kellogg School of Management", key="college_input_field",
+                help="The specific business school within your university."
+            )
+            team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
+                                        max_chars=30, key="team_input_field")
+        if st.button("Register Team →", use_container_width=True, type="primary"):
+            if not team_input.strip():
+                st.error("Please enter a team name.")
+            elif not university_input.strip():
+                st.error("Please enter your university.")
+            elif not college_input.strip():
+                st.error("Please enter your school/college.")
+            elif not class_input.strip():
+                st.error("Please enter your class/section.")
+            else:
+                ss.team_name     = team_input.strip()
+                ss.school        = f"{college_input.strip()}, {university_input.strip()}"
+                ss.class_section = class_input.strip()
+                ss.registered    = True
+                st.rerun()
+        st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
+
+    st.divider()
 
     # Theory section
     st.markdown('<div class="section-title">Strategic Foundation — Business Theory</div>', unsafe_allow_html=True)
@@ -306,13 +287,6 @@ if not ss.registered:
 
     # Theory cards
     _render_theory_grid()
-
-    st.divider()
-    st.markdown(
-        '<div style="text-align:center;font-size:15px;color:#e0e2ea;padding:20px;">'
-        '← Register your team in the sidebar to begin.</div>',
-        unsafe_allow_html=True
-    )
 
 elif ss.active_section in (None, "app"):
     # ── Choose Your Simulation — landing screen, reachable via the "App" nav
