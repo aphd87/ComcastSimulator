@@ -6,6 +6,10 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## ⚠️ TOP PRIORITY — not yet done, read this before anything else below
+
+**A real human/browser click-through has never happened on this repo, on any feature, in any session.** Every "Still open" note in every status section below repeats this same gap because it has never actually been closed — AppTest and `pytest` confirm the code executes without exceptions, but that is structurally not the same as confirming the app renders and works in a real browser (layout, CSS, button placement, whether a click actually does the visible thing a student expects). This is now higher-stakes than it's ever been: 2026-07-30 alone made three separate structural/copy changes to the landing and sign-in flow (sidebar removed, leaderboard made reachable pre-registration, landing copy rewritten) on top of this same unverified foundation. **Do not treat any layout or click-path change as trustworthy until this has actually been walked through live.**
+
 ## Status as of 2026-07-30 — read this first
 
 **Left sidebar removed entirely, per explicit user request** ("We don't need a left hand panel, but people should be able to sign in and see leaderboards for TV and movies respectively"). User reported "I can't see the left panel at all, and I can't register my team either" — one root cause, not two: registration and the App/Leaderboard/TV/Movies nav both lived exclusively in `st.sidebar`, so anything that made the sidebar fail to render (a collapsed sidebar with no way back open is a real Streamlit failure mode — `GLOBAL_CSS`'s `header{display:none}` rule hides the same `<header>` element that carries Streamlit's built-in "reopen sidebar" arrow in some versions, though this wasn't conclusively isolated as *the* trigger before the user asked to just drop the sidebar instead) took both features down together. Rather than keep debugging the sidebar, moved everything out of it:
