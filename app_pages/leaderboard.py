@@ -379,48 +379,59 @@ def render():
     """, unsafe_allow_html=True)
 
     # ── My Status ─────────────────────────────────────────────────────────────
-    st.markdown('<div class="section-title">My Team Status</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<p class="text-xs text-ink2 mb-2">{ss.school} · {ss.class_section}</p>'
-        if ss.get("school") else "", unsafe_allow_html=True)
-    status = get_team_network_status(team, ss.school, ss.class_section)
+    # Skipped entirely for an anonymous visitor (reachable via "Just check the
+    # Leaderboard" on the sign-in screen without registering) -- there's no
+    # team to show status for, and get_team_network_status("", "", "") would
+    # just render three misleading "Not started" cards for a team that
+    # doesn't exist.
+    if ss.get("registered"):
+        st.markdown('<div class="section-title">My Team Status</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<p class="text-xs text-ink2 mb-2">{ss.school} · {ss.class_section}</p>'
+            if ss.get("school") else "", unsafe_allow_html=True)
+        status = get_team_network_status(team, ss.school, ss.class_section)
 
-    cols = st.columns(3)
-    for i, net in enumerate(NETWORK_ORDER):
-        info  = NETWORK_INFO[net]
-        stat  = status.get(net, {})
-        off   = stat.get("official_score")
-        att   = stat.get("attempts", 0)
-        pas   = stat.get("passed", False)
+        cols = st.columns(3)
+        for i, net in enumerate(NETWORK_ORDER):
+            info  = NETWORK_INFO[net]
+            stat  = status.get(net, {})
+            off   = stat.get("official_score")
+            att   = stat.get("attempts", 0)
+            pas   = stat.get("passed", False)
 
-        with cols[i]:
-            border_c = info["color"] if pas else ("#252836")
-            score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#b0b5c4")
-            st.markdown(f"""
-            <div style="background:#1a1d26;border:2px solid {border_c};border-radius:10px;
-                 padding:16px;text-align:center;">
-              <div style="font-size:22px;margin-bottom:4px;">{info['emoji']}</div>
-              <div style="font-family:DM Mono,monospace;font-size:15px;font-weight:600;
-                   color:{info['color2']};">{info['display_name']}</div>
-              <div style="font-family:DM Serif Display,serif;font-size:28px;
-                   color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
-              <div style="font-size:14px;font-family:DM Mono,monospace;color:#b0b5c4;">
-                {'OFFICIAL SCORE' if off else 'NOT SUBMITTED'}
-              </div>
-              <div style="margin-top:8px;">
-                {'<span class="badge badge-green">✅ PASSED</span>' if pas else
-                 f'<span class="badge badge-yellow">{att} attempt{"s" if att!=1 else ""}</span>' if att > 0 else
-                 '<span class="badge badge-gray">Not started</span>'}
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
+            with cols[i]:
+                border_c = info["color"] if pas else ("#252836")
+                score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#b0b5c4")
+                st.markdown(f"""
+                <div style="background:#1a1d26;border:2px solid {border_c};border-radius:10px;
+                     padding:16px;text-align:center;">
+                  <div style="font-size:22px;margin-bottom:4px;">{info['emoji']}</div>
+                  <div style="font-family:DM Mono,monospace;font-size:15px;font-weight:600;
+                       color:{info['color2']};">{info['display_name']}</div>
+                  <div style="font-family:DM Serif Display,serif;font-size:28px;
+                       color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
+                  <div style="font-size:14px;font-family:DM Mono,monospace;color:#b0b5c4;">
+                    {'OFFICIAL SCORE' if off else 'NOT SUBMITTED'}
+                  </div>
+                  <div style="margin-top:8px;">
+                    {'<span class="badge badge-green">✅ PASSED</span>' if pas else
+                     f'<span class="badge badge-yellow">{att} attempt{"s" if att!=1 else ""}</span>' if att > 0 else
+                     '<span class="badge badge-gray">Not started</span>'}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-    st.divider()
+        st.divider()
 
     # ── Scope selector ─────────────────────────────────────────────────────────
+    # Anonymous visitors have no school/class to scope "My Class"/"My School"
+    # to, so default them straight to "All Schools" instead of a scope that
+    # would just come back empty.
     st.markdown('<div class="section-title">Leaderboard Scope</div>', unsafe_allow_html=True)
+    scope_options = ["My Class", "My School", "All Schools"]
     scope = st.radio(
-        "View", ["My Class", "My School", "All Schools"], horizontal=True, key="lb_scope",
+        "View", scope_options, horizontal=True, key="lb_scope",
+        index=scope_options.index("All Schools") if not ss.get("registered") else 0,
         help="My Class: just your section. My School: every class at your school. "
              "All Schools: every team, everywhere — see how you stack up beyond your own campus.",
     )

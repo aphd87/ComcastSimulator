@@ -41,7 +41,10 @@ def test_registration_with_all_fields_succeeds():
     assert not at.exception
     assert at.session_state["registered"] is False
     assert len(at.text_input) == 4
-    assert len(at.button) == 1
+    # Register Team + the "Just check the Leaderboard" shortcut added
+    # 2026-07-30 -- button[0] (Register Team, rendered first) is what
+    # _fill_and_submit clicks.
+    assert len(at.button) == 2
 
     _fill_and_submit(at)
     assert not at.exception, f"Registration raised: {list(at.exception)}"
@@ -106,3 +109,23 @@ def test_registration_blocks_on_missing_university():
     assert at.session_state["registered"] is False
     errors = [e.value for e in at.error]
     assert any("university" in e.lower() for e in errors)
+
+
+def test_leaderboard_reachable_without_registering():
+    # "Just check the Leaderboard" (sign-in screen, button[1]) sets
+    # active_section="leaderboard" without ever setting ss.registered --
+    # app.py's top-level branch has to let that win over the not-registered
+    # gate, or an anonymous visitor would just see the sign-in form again.
+    at = _fresh_app()
+    assert at.button[1].label == "🏆 Just check the Leaderboard"
+    at.button[1].click()
+    at.run()
+
+    assert not at.exception
+    assert at.session_state["registered"] is False
+    assert at.session_state["active_section"] == "leaderboard"
+    # My Team Status is skipped for anonymous visitors (no team to show);
+    # a way back to the sign-in form is offered instead.
+    assert any("Back to Sign In" in b.label for b in at.button)
+    text = "\n".join(md.value for md in at.markdown)
+    assert "My Team Status" not in text

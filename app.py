@@ -221,7 +221,11 @@ if ss.registered:
     st.divider()
 
 # ── MAIN CONTENT ──────────────────────────────────────────────────────────────
-if not ss.registered:
+# The leaderboard is viewable without registering -- "Just check the
+# Leaderboard" on the sign-in screen below sets active_section="leaderboard"
+# without ever setting ss.registered, so that branch has to win over the
+# not-registered branch rather than the reverse (2026-07-30).
+if not ss.registered and ss.active_section != "leaderboard":
     # ── Sign In / Team Registration ─────────────────────────────────────────────
     # School + Class Section: a team's real identity for gating/leaderboard
     # purposes is (school, class_section, team_name), not just team_name
@@ -270,18 +274,34 @@ if not ss.registered:
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
 
     st.divider()
+    lcol, _ = st.columns([1, 2])
+    with lcol:
+        if st.button("🏆 Just check the Leaderboard", use_container_width=True):
+            ss.active_section = "leaderboard"
+            st.rerun()
+
+    st.divider()
 
     # Theory section
+    # Rewritten 2026-07-30 -- the old copy here was Oxygen's specific mission
+    # narrative ("You are the General Manager of Oxygen..."), which belongs
+    # on the Oxygen level brief (see LEVEL_BRIEFS below), not on a shared
+    # landing page a visitor sees before choosing TV/Streaming vs. Movies at
+    # all. This is the frameworks section -- it should frame the toolkit
+    # both simulations share, not narrate one specific level.
     st.markdown('<div class="section-title">Strategic Foundation — Business Theory</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
          border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:15px;color:#e0e2ea;line-height:1.7;">
-    <b style="color:#e8eaf0;font-size:15px;">It's 2012. The linear TV era is ending.</b><br><br>
-    Cable networks are facing their first existential threat. Subscribers are cutting the cord. 
-    Netflix is spending aggressively. The iPad is two years old. You are the General Manager of 
-    <b style="color:#e8c547;">Oxygen</b> — responsible for the P&L, the show slate, and the budget.
-    Your job: maximize Operating Cash Flow while building IP that survives the transition to streaming.
-    Prove yourself on Oxygen, earn Bravo, then decide whether to launch Peacock.
+    <b style="color:#e8eaf0;font-size:15px;">Two simulations. One inflection point.</b><br><br>
+    It's 2012 — the start of a decade-long shift from linear, ad-supported TV toward streaming that
+    will reshape how media companies allocate capital, greenlight content, and manage risk.
+    <b style="color:#e8c547;">TV / Streaming</b> puts you in the network GM's seat, running a
+    portfolio (Oxygen → Bravo → Peacock) through amortization timing, genre diversification, and the
+    linear-vs-SVOD tradeoff. <b style="color:#e8c547;">Movies</b> puts you in the studio's seat at
+    Universal Pictures, making concentrated, front-loaded bets under risk-adjusted NPV and
+    release-window strategy. Both draw on the same underlying toolkit — the frameworks below are the
+    lens for every decision you'll make in either simulation.
     </div>
     """, unsafe_allow_html=True)
 
@@ -340,17 +360,18 @@ elif ss.active_section in (None, "app"):
             ss.active_section = "movies"
             st.rerun()
 
-    st.divider()
-    lcol, _ = st.columns([1, 2])
-    with lcol:
-        if st.button("🏆 Just check the Leaderboard", use_container_width=True):
-            ss.active_section = "leaderboard"
-            st.rerun()
-
 elif ss.active_section == "leaderboard":
     # ── Leaderboard — standalone top-level section ──────────────────────────────
     # pages/leaderboard.py already covers TV networks and Movies internally
     # via its own tabs (_render_board_tab, MOVIES_INFO) — no wrapping needed.
+    # Reachable without registering (see the not-registered branch's guard
+    # above) -- an anonymous visitor needs a way back to Sign In, since the
+    # top nav row (which would normally get them there) only renders once
+    # ss.registered is true.
+    if not ss.registered:
+        if st.button("← Back to Sign In", key="leaderboard_back_to_signin"):
+            ss.active_section = None
+            st.rerun()
     st.markdown('<h2 style="margin-bottom:4px;">🏆 Leaderboard</h2>', unsafe_allow_html=True)
     from app_pages.leaderboard import render as render_leaderboard
     render_leaderboard()
