@@ -240,14 +240,14 @@ if not ss.registered:
         icol1, icol2 = st.columns(2)
         with icol1:
             university_input = st.text_input(
-                "University", placeholder="e.g. Northwestern University", key="university_input_field",
+                "University", placeholder="e.g. University of Virginia", key="university_input_field",
                 help="Your parent institution — scopes your leaderboard to your own school."
             )
             class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
                                          max_chars=60, key="class_input_field")
         with icol2:
             college_input = st.text_input(
-                "School / College", placeholder="e.g. Kellogg School of Management", key="college_input_field",
+                "School / College", placeholder="e.g. Darden School of Business", key="college_input_field",
                 help="The specific business school within your university."
             )
             team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
