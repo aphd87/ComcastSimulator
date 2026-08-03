@@ -42,7 +42,13 @@ def render():
 
     # ── KPI Row ───────────────────────────────────────────────────────────────
     c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("Ad Revenue",     f"${ad_rev:.1f}M",   f"Rating × ${REV_PER_RATING_POINT}M/pt")
+    c1.metric("Ad Revenue",     f"${ad_rev:.1f}M",   f"Rating × ${REV_PER_RATING_POINT}M/pt",
+              help=(f"A **rating point** = 1% of the 18-49 target demo watching a show (the standard "
+                    f"Nielsen ad-buying metric). Each point is worth **${REV_PER_RATING_POINT}M** in ad "
+                    f"revenue at this network's baseline rate (Bravo tier, 2012) — so a show rated 1.5 "
+                    f"generates {1.5*REV_PER_RATING_POINT:.1f}M before marketing lift and cord-cutting decay. "
+                    f"Formula: Rating × ${REV_PER_RATING_POINT}M × marketing-lift × cord-cutting-decay × "
+                    f"schedule-slot multiplier."))
     c2.metric("Distribution",   f"${dist_rev:.1f}M", f"{subs:.1f}M subs × ${SUB_RATE_PER_MONTH}/mo")
     c3.metric("Total Revenue",  f"${total_rev:.1f}M","Ad + Distribution")
     c4.metric("Content Spend",  f"${cost:.1f}M",     "Amortized")
@@ -212,10 +218,16 @@ def render():
     # ── Revenue per Rating Point ──────────────────────────────────────────────
     st.divider()
     st.markdown('<div class="section-title">Revenue per Rating Point — Show Benchmarks</div>', unsafe_allow_html=True)
-    st.markdown("""
+    st.markdown(f"""
     <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
-    Higher revenue per rating point = stronger ad pricing power for that show.
-    Shows where cost-per-point exceeds revenue-per-point are destroying value — flag these for cancellation in the Renewal tab.
+    <b>What's a rating point?</b> 1 point = 1% of the 18-49 target demo watching (Nielsen's standard
+    ad-buying metric) — a show rated 2.0 reaches twice the audience share of one rated 1.0.<br>
+    <b>Rev/Point</b> = this show's Ad Revenue ÷ its Rating — starts from the ${REV_PER_RATING_POINT}M base
+    rate but reflects this year's marketing lift and cord-cutting decay too, i.e. what one point of audience
+    is really worth in the P&amp;L right now. <b>Cost/Point</b> = the show's amortized cost ÷ its Rating, the
+    same yardstick for spend.<br>
+    Higher Rev/Point = stronger ad pricing power for that show. Shows where Cost/Point exceeds Rev/Point are
+    destroying value on a per-point basis — flag these for cancellation in the Renewal tab.
     </div>
     """, unsafe_allow_html=True)
     rpp_rows = []

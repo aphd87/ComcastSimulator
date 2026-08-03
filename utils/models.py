@@ -280,6 +280,28 @@ REGIONAL_SIGNAL_CHANCE  = 0.5   # only sometimes reveals a regional signal, not 
 REGIONS_PER_SIGNAL_MAX  = 2     # 1-2 regions max, deliberately kept small
 
 
+# ── Genre demo profile ────────────────────────────────────────────────────────
+# A brief, always-visible "who actually watches this" line for the Renewal
+# matrix — deliberately static/illustrative per genre (not seeded or randomized
+# like REGIONS above, which is a paid-Research bonus signal). The point is a
+# quick teaching moment that ad pricing runs on a flat 18-49 rating point
+# (see REV_PER_RATING_POINT) even though real audiences skew older/younger
+# and male/female differently by genre — nothing deeper than that.
+GENRE_DEMOS = {
+    "True Crime":  {"age": "25-54", "gender": "Skews Female", "reach": "National (US)"},
+    "Reality":     {"age": "18-49", "gender": "Skews Female", "reach": "National (US)"},
+    "Competition": {"age": "18-49", "gender": "Balanced",     "reach": "National (US)"},
+    "Talk":        {"age": "35-64", "gender": "Skews Female", "reach": "National (US)"},
+    "Scripted":    {"age": "18-49", "gender": "Balanced",     "reach": "Global"},
+    "Drama":       {"age": "25-54", "gender": "Balanced",     "reach": "Global"},
+}
+GENRE_DEMO_DEFAULT = {"age": "18-49", "gender": "Balanced", "reach": "National (US)"}
+
+
+def genre_demo(genre: str) -> dict:
+    return GENRE_DEMOS.get(genre, GENRE_DEMO_DEFAULT)
+
+
 # ── Production-risk event ────────────────────────────────────────────────────
 # Zach Schlessel's feedback: "Shows can fail for legitimate reasons (talent
 # departure, poor script, etc.)" — a real, independent risk axis from the

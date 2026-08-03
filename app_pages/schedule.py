@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 from utils.models import (
     distribution_revenue, portfolio_ad_rev, AMORT_MONTHS_LINEAR,
     MONTHS, HOUR_LABELS, HOURLY_INDEX,
-    PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
 )
 from utils.charts import (
     base_layout, bar_chart, line_chart,
@@ -229,67 +228,10 @@ def render():
 
     st.divider()
 
-    # ── Scheduling Grid ───────────────────────────────────────────────────────
-    # Real decision, not illustrative (2026-07-29, per user request): where a
-    # show is placed changes its actual ad revenue for the year — see
-    # Show.schedule_multiplier() / slot_rating_multiplier() in utils/models.py.
-    st.markdown('<div class="section-title">Primetime Scheduling — Assign Your Shows</div>', unsafe_allow_html=True)
-    n_slots = len(PRIMETIME_DAYS) * len(PRIMETIME_HOURS)
-    bonus   = int(round((SLOT_MULT_CEILING - 1) * 100))
-    penalty = int(round((1 - SLOT_MULT_FLOOR) * 100))
-    st.markdown(f"""
-    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
-    ⚖️ <b style="color:#e8eaf0;">The trade-off, up front:</b> there are only {n_slots} primetime slots
-    ({len(PRIMETIME_HOURS)} hours × {len(PRIMETIME_DAYS)} nights) and exactly one show per slot — you
-    cannot put every show in the best slot. Tue/Wed/9PM is the strongest slot and is worth up to
-    <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there. Fri/Sat nights are the
-    real industry "death slot" — the weakest slot costs a show up to
-    <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus, no
-    penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
-    </div>
-    """, unsafe_allow_html=True)
-
-    show_by_label = {f"{s.name} (#{s.id})": s for s in shows}
-    show_labels   = ["— none —"] + sorted(show_by_label.keys())
-
-    grid_rows = []
-    for h in PRIMETIME_HOURS:
-        row = {"Time": h}
-        for d in PRIMETIME_DAYS:
-            match = next((lbl for lbl, s in show_by_label.items()
-                          if s.slot_day == d and s.slot_hour == h), "— none —")
-            row[d] = match
-        grid_rows.append(row)
-    grid_df = pd.DataFrame(grid_rows).set_index("Time")
-
-    col_config = {d: st.column_config.SelectboxColumn(d, options=show_labels, required=True)
-                  for d in PRIMETIME_DAYS}
-    edited_df = st.data_editor(grid_df, column_config=col_config, use_container_width=True,
-                                key=f"primetime_grid_{net}_{year}")
-
-    # Persist the grid onto the real Show objects — same instances living in
-    # ss.oxygen_shows/etc. (shows[:] above is a shallow copy), same "write
-    # straight to the object" pattern renewal.py already uses for air_month.
-    for s in shows:
-        s.slot_day = None
-        s.slot_hour = None
-    double_booked = []
-    assigned_once = set()
-    for h in PRIMETIME_HOURS:
-        for d in PRIMETIME_DAYS:
-            label = edited_df.loc[h, d]
-            if label and label != "— none —" and label in show_by_label:
-                if label in assigned_once:
-                    double_booked.append(label)
-                assigned_once.add(label)
-                show_by_label[label].slot_day  = d
-                show_by_label[label].slot_hour = h
-
-    if double_booked:
-        names = ", ".join(sorted({lbl.rsplit(" (#", 1)[0] for lbl in double_booked}))
-        st.warning(f"⚠️ {names} assigned to more than one slot — only the last slot placed "
-                   f"for each show actually counts toward its rating.")
+    # Primetime Scheduling — Assign Your Shows moved to app_pages/renewal.py
+    # (2026-08-03, per user request), right after the Full Renewal Analysis
+    # Table, so it sits alongside this year's other real decisions instead of
+    # here. This tab is cash-flow/amortization reference only now.
 
     # ── Hourly Revenue Index ──────────────────────────────────────────────────
     st.divider()

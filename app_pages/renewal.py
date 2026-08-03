@@ -8,7 +8,8 @@ import plotly.graph_objects as go
 from utils.models import (
     portfolio_ad_rev, portfolio_cost,
     distribution_revenue, renewal_decision, CONTENT_COST_ESC,
-    performance_linked_growth,
+    performance_linked_growth, genre_demo,
+    PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
 )
 from utils.game_state import NETWORK_INFO
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -169,10 +170,8 @@ def render():
 
         st.divider()
 
-    # ── Renewal Decision Table ────────────────────────────────────────────────
-    st.markdown('<div class="section-title">Renewal Decision Matrix — Year {} → {}</div>'.format(year, next_year), unsafe_allow_html=True)
-
-    # Initialize student decisions in session state
+    # Initialize student decisions in session state — needed by both the IP
+    # Value scatter below and the decision cards further down.
     if "renewal_decisions" not in ss:
         ss.renewal_decisions = {}
 
@@ -212,6 +211,40 @@ def render():
         })
 
     decisions_df = pd.DataFrame(rows)
+
+    # ── IP Value vs. OCF Scatter ──────────────────────────────────────────────
+    # Moved up (2026-08-03, per user request) to sit right before the Renewal
+    # Decision Matrix — a franchise-value read on the whole slate before
+    # making individual Renew/Watch/Cancel calls is meant to inform those
+    # calls, not just recap them afterward.
+    st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:14px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
+
+    import plotly.express as px
+    scatter_data = pd.DataFrame([{
+        "Show": r["Show"],
+        "IP Score": r["IP Score"],
+        "Projected OCF": r["Proj OCF"],
+        "Cost $M": r["Renew Cost"],
+        "Decision": ss.renewal_decisions.get(r["_id"], "Renew"),
+        "Genre": r["Genre"],
+    } for r in rows])
+
+    dec_colors = {"Renew": SUCCESS, "Watch": WARN, "Cancel": DANGER}
+    fig_ip = px.scatter(scatter_data, x="IP Score", y="Projected OCF",
+                         size="Cost $M", color="Decision", hover_name="Show",
+                         color_discrete_map=dec_colors, size_max=28)
+    fig_ip.add_hline(y=0, line_dash="dash", line_color=DANGER, opacity=0.4)
+    fig_ip.add_vline(x=60, line_dash="dash", line_color=TEXT2, opacity=0.3,
+                     annotation_text="IP threshold", annotation_font_color=TEXT2)
+    fig_ip.update_layout(**base_layout("IP Score vs. Projected OCF — Bubble = Cost", height=360))
+    fig_ip.update_traces(marker=dict(line=dict(width=1, color="#12141a")))
+    st.plotly_chart(fig_ip, use_container_width=True, config={"displayModeBar":False})
+
+    st.divider()
+
+    # ── Renewal Decision Table ────────────────────────────────────────────────
+    st.markdown('<div class="section-title">Renewal Decision Matrix — Year {} → {}</div>'.format(year, next_year), unsafe_allow_html=True)
 
     # ── Show slate — click-to-decide cards ────────────────────────────────────
     # Replaces the old column-of-selectboxes table (2026-07-24, per user
@@ -253,6 +286,13 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
 
+                    demo = genre_demo(r["Genre"])
+                    st.markdown(f"""
+                    <div style="font-size:13px;color:#8b8fa3;margin-bottom:8px;">
+                      Demos: {demo['age']} · {demo['gender']} · {demo['reach']}
+                    </div>
+                    """, unsafe_allow_html=True)
+
                     current = ss.renewal_decisions.get(r["_id"], "Renew")
                     choice = st.selectbox(
                         "Your decision", ["Renew", "Watch", "Cancel"],
@@ -274,39 +314,6 @@ def render():
                         )
                         if new_month != s.air_month:
                             s.air_month = new_month
-
-    # ── Live mini-schedule ────────────────────────────────────────────────────
-    st.markdown('<div class="section-title" style="margin-top:14px;">This Year\'s Schedule</div>',
-                unsafe_allow_html=True)
-    st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        'Which shows premiere each month, updating live as you set premiere months above. '
-        'Months stacked with several premieres pile up amortization cost — spread them out if '
-        'your cash cows can\'t cover the gap.</div>',
-        unsafe_allow_html=True)
-
-    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    active_this_year = [show_by_id[r["_id"]] for r in rows
-                         if ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
-    month_map = {m: [] for m in range(1, 13)}
-    for s in active_this_year:
-        month_map[s.air_month].append(s.name)
-
-    sched_cols = st.columns(12)
-    for i, col in enumerate(sched_cols):
-        m = i + 1
-        names = month_map[m]
-        count = len(names)
-        bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
-        title_attr = ", ".join(names) if names else "No premieres"
-        col.markdown(f"""
-        <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
-             padding:6px 2px;text-align:center;min-height:56px;">
-          <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
-          <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.caption("Number = shows premiering that month. Hover a column for names.")
 
     # ── Budget Impact ─────────────────────────────────────────────────────────
     st.divider()
@@ -386,28 +393,132 @@ def render():
         file_name=f"cableos_renewal_year{year}.csv", mime="text/csv"
     )
 
-    # ── IP Value vs. OCF Scatter ──────────────────────────────────────────────
+    # ── Primetime Scheduling Grid ─────────────────────────────────────────────
+    # Moved here from app_pages/schedule.py (2026-08-03, per user request) —
+    # a real decision, not illustrative: where a show is placed changes its
+    # actual ad revenue for the year (see Show.schedule_multiplier() /
+    # slot_rating_multiplier() in utils/models.py). Placed right after the
+    # Full Renewal Analysis Table so it sits alongside the rest of this
+    # year's real decisions instead of the separate Scheduling tab, which is
+    # now cash-flow/amortization reference only.
     st.divider()
-    st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:14px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Primetime Scheduling — Assign Your Shows</div>', unsafe_allow_html=True)
+    n_slots = len(PRIMETIME_DAYS) * len(PRIMETIME_HOURS)
+    bonus   = int(round((SLOT_MULT_CEILING - 1) * 100))
+    penalty = int(round((1 - SLOT_MULT_FLOOR) * 100))
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
+         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
+    ⚖️ <b style="color:#e8eaf0;">The trade-off, up front:</b> there are only {n_slots} primetime slots
+    ({len(PRIMETIME_HOURS)} hours × {len(PRIMETIME_DAYS)} nights) and exactly one show per slot — you
+    cannot put every show in the best slot. Tue/Wed/9PM is the strongest slot and is worth up to
+    <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there. Fri/Sat nights are the
+    real industry "death slot" — the weakest slot costs a show up to
+    <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus, no
+    penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
+    </div>
+    """, unsafe_allow_html=True)
 
-    import plotly.express as px
-    scatter_data = pd.DataFrame([{
-        "Show": r["Show"],
-        "IP Score": r["IP Score"],
-        "Projected OCF": r["Proj OCF"],
-        "Cost $M": r["Renew Cost"],
-        "Decision": ss.renewal_decisions.get(r["_id"], "Renew"),
-        "Genre": r["Genre"],
-    } for r in rows])
+    show_by_label = {f"{s.name} (#{s.id})": s for s in shows}
+    show_labels   = ["— none —"] + sorted(show_by_label.keys())
 
-    dec_colors = {"Renew": SUCCESS, "Watch": WARN, "Cancel": DANGER}
-    fig_ip = px.scatter(scatter_data, x="IP Score", y="Projected OCF",
-                         size="Cost $M", color="Decision", hover_name="Show",
-                         color_discrete_map=dec_colors, size_max=28)
-    fig_ip.add_hline(y=0, line_dash="dash", line_color=DANGER, opacity=0.4)
-    fig_ip.add_vline(x=60, line_dash="dash", line_color=TEXT2, opacity=0.3,
-                     annotation_text="IP threshold", annotation_font_color=TEXT2)
-    fig_ip.update_layout(**base_layout("IP Score vs. Projected OCF — Bubble = Cost", height=360))
-    fig_ip.update_traces(marker=dict(line=dict(width=1, color="#12141a")))
-    st.plotly_chart(fig_ip, use_container_width=True, config={"displayModeBar":False})
+    grid_rows = []
+    for h in PRIMETIME_HOURS:
+        row = {"Time": h}
+        for d in PRIMETIME_DAYS:
+            match = next((lbl for lbl, s in show_by_label.items()
+                          if s.slot_day == d and s.slot_hour == h), "— none —")
+            row[d] = match
+        grid_rows.append(row)
+    grid_df = pd.DataFrame(grid_rows).set_index("Time")
+
+    col_config = {d: st.column_config.SelectboxColumn(d, options=show_labels, required=True)
+                  for d in PRIMETIME_DAYS}
+    edited_df = st.data_editor(grid_df, column_config=col_config, use_container_width=True,
+                                key=f"primetime_grid_{net}_{year}")
+
+    # Persist the grid onto the real Show objects — same instances living in
+    # ss.oxygen_shows/etc. (shows[:] above is a shallow copy), same "write
+    # straight to the object" pattern used for air_month above.
+    for s in shows:
+        s.slot_day = None
+        s.slot_hour = None
+    double_booked = []
+    assigned_once = set()
+    for h in PRIMETIME_HOURS:
+        for d in PRIMETIME_DAYS:
+            label = edited_df.loc[h, d]
+            if label and label != "— none —" and label in show_by_label:
+                if label in assigned_once:
+                    double_booked.append(label)
+                assigned_once.add(label)
+                show_by_label[label].slot_day  = d
+                show_by_label[label].slot_hour = h
+
+    if double_booked:
+        names = ", ".join(sorted({lbl.rsplit(" (#", 1)[0] for lbl in double_booked}))
+        st.warning(f"⚠️ {names} assigned to more than one slot — only the last slot placed "
+                   f"for each show actually counts toward its rating.")
+
+    # ── Live mini-schedule ────────────────────────────────────────────────────
+    # Moved here (2026-08-03, per user request) to sit right after Primetime
+    # Scheduling now that both live in Renewal — the premiere-month calendar
+    # and the day/hour grid are the two real scheduling decisions, so they
+    # read naturally back to back.
+    st.divider()
+    st.markdown('<div class="section-title">This Year\'s Schedule</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+        'Which shows premiere each month, updating live as you set premiere months above. '
+        'Months stacked with several premieres pile up amortization cost — spread them out if '
+        'your cash cows can\'t cover the gap.</div>',
+        unsafe_allow_html=True)
+
+    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    active_this_year = [show_by_id[r["_id"]] for r in rows
+                         if ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
+    month_map = {m: [] for m in range(1, 13)}
+    for s in active_this_year:
+        month_map[s.air_month].append(s.name)
+
+    sched_cols = st.columns(12)
+    for i, col in enumerate(sched_cols):
+        m = i + 1
+        names = month_map[m]
+        count = len(names)
+        bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
+        title_attr = ", ".join(names) if names else "No premieres"
+        col.markdown(f"""
+        <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
+             padding:6px 2px;text-align:center;min-height:56px;">
+          <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
+          <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.caption("Number = shows premiering that month. Hover a column for names.")
+
+    # New-this-year shows (greenlit this year, see app_pages/greenlight.py)
+    # get their own debut-month picker right here — they're easy to miss in
+    # the Renewal card grid above since that grid is dominated by returning
+    # shows, and their debut timing matters the same way a renewal's premiere
+    # month does (see the amortization cash-trough note in Scheduling).
+    debuting = [s for s in active_this_year if s.id in ss.get("greenlit_ids_this_year", set())]
+    if debuting:
+        st.markdown(
+            '<div style="font-size:14px;color:#e8c547;margin-top:12px;margin-bottom:6px;">'
+            '🆕 New this year — set each show\'s debut month</div>',
+            unsafe_allow_html=True)
+        nc = 4
+        chunks = [debuting[i:i+nc] for i in range(0, len(debuting), nc)]
+        for chunk in chunks:
+            cols = st.columns(nc)
+            for col, s in zip(cols, chunk):
+                with col:
+                    new_month = st.number_input(
+                        f"{s.name[:20]} debut month", 1, 12, value=s.air_month,
+                        key=f"debut_month_{s.id}",
+                        help="Which calendar month this new show premieres.",
+                    )
+                    if new_month != s.air_month:
+                        s.air_month = new_month

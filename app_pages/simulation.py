@@ -7,10 +7,12 @@ frozen "year 1") to a genuine annual engine per Zach Schlessel's (NBCUniversal)
 feedback — see DESIGN_NOTES.md. ss.year is the actual turn counter driving
 all financial math, not a fixed value.
 
-Reshaped 2026-07-27 to real calendar eras per network (Oxygen 2012-2016,
-Bravo 2017-2021, Peacock 2022-2026) — YEARS_PER_LEVEL and LEVEL_START_YEAR
-now live in utils/game_state.py as the single source of truth (app.py's
-LEVEL_BRIEFS mission text reads the same constants), not duplicated here.
+Reshaped 2026-07-27 to real calendar eras per network, each starting
+exactly YEARS_PER_LEVEL after the last (clean handoff, no overlap) —
+YEARS_PER_LEVEL and LEVEL_START_YEAR now live in utils/game_state.py as the
+single source of truth (app.py's LEVEL_BRIEFS mission text reads the same
+constants), not duplicated here. YEARS_PER_LEVEL defaults to 4 but is
+instructor-tailorable per deployment (2026-08-03) — see README.md.
 """
 import streamlit as st
 import pandas as pd
@@ -285,6 +287,42 @@ def _last_year_recap(prev: dict, threshold: float):
     """, unsafe_allow_html=True)
 
 
+def _starting_position(net_info, shows, net):
+    """Year-1-only card, shown once before Financing: unlike _last_year_recap
+    (which reads real yearly_log actuals from year > 1), there is no played
+    year to recap yet — so this instead shows the incoming roster's baseline
+    economics (its built-in ratings/costs, default $5M marketing, no
+    cancellations/decisions applied) as a stand-in for "how the network was
+    doing the year before you took over." Explicitly labeled as a baseline,
+    not an official actual, so students don't mistake it for a real played year."""
+    start_year = LEVEL_START_YEAR[net]
+    baseline   = _preview_pnl(shows, 1, 5.0, set(), set())
+    margin_c   = SUCCESS if baseline["margin"] >= net_info["pass_threshold"] else (
+                 WARN if baseline["ocf"] >= 0 else DANGER)
+    st.markdown(f"""
+    <div style="background:#12141a;border:1px solid #252836;border-radius:8px;
+         padding:10px 18px;margin-bottom:16px;">
+      <div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;
+           text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">
+        {net_info['display_name']} — Starting Position ({start_year - 1})
+      </div>
+      <div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;line-height:1.5;">
+        This is where {net_info['display_name']} stood the year before you took over —
+        its current show slate's built-in ratings and costs, run at a default $5M
+        marketing spend with no cancellations. It's a baseline for comparison, not an
+        official played year (that starts once you simulate Year 1 below).
+      </div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;">
+        <span style="font-size:14px;color:#e0e2ea;">Revenue <b style="font-family:DM Mono,monospace;color:#e8eaf0;">${baseline['rev']:.1f}M</b></span>
+        <span style="font-size:14px;color:#e0e2ea;">Cost <b style="font-family:DM Mono,monospace;color:{WARN};">${baseline['cost']:.1f}M</b></span>
+        <span style="font-size:14px;color:#e0e2ea;">OCF <b style="font-family:DM Mono,monospace;color:{SUCCESS if baseline['ocf'] >= 0 else DANGER};">${baseline['ocf']:+.1f}M</b></span>
+        <span style="font-size:14px;color:#e0e2ea;">Margin <b style="font-family:DM Mono,monospace;color:{margin_c};">{baseline['margin']:.1f}%</b></span>
+        <span style="font-size:14px;color:#e0e2ea;">Pass threshold <b style="font-family:DM Mono,monospace;color:#e0e2ea;">{net_info['pass_threshold']:.0f}%</b></span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def _section_financing(ss, shows, year, net_info, level_budget):
     st.markdown('<div class="section-title">1 · 💰 Financing</div>', unsafe_allow_html=True)
 
@@ -436,6 +474,8 @@ def _decisions(ss, shows, net_info, year, net):
     prev = next((r for r in ss.yearly_log if r["year"] == year - 1), None) if year > 1 else None
     if prev:
         _last_year_recap(prev, threshold)
+    elif year == 1:
+        _starting_position(net_info, shows, net)
 
     st.markdown(
         '<div style="font-size:14px;color:#b0b5c4;margin-bottom:14px;">'
@@ -475,8 +515,8 @@ def _decisions(ss, shows, net_info, year, net):
     st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-title">4 · 📅 Scheduling & Cash-Flow Reference '
-        '<span style="font-size:14px;color:#b0b5c4;">(reference — the premiere-month calls '
-        'above in Renewal already drive the real math)</span></div>',
+        '<span style="font-size:14px;color:#b0b5c4;">(reference — the premiere-month and '
+        'primetime-slot calls above in Renewal already drive the real math)</span></div>',
         unsafe_allow_html=True)
     from app_pages.schedule import render as render_schedule
     render_schedule()
@@ -1055,6 +1095,7 @@ def _complete(ss, shows, net_info, team, net):
                     passed=score_d["passed"],
                     details=score_d,
                     school=ss.school, class_section=ss.class_section,
+                    class_abbrev=ss.get("class_abbrev", ""),
                     slate_summary=slate_summary,
                     notables=compute_level_notables(log, ss.get("total_shows_greenlit", 0)),
                 )

@@ -258,7 +258,7 @@ class TestPrimetimeScheduling:
         assert s_bad.ad_revenue(year=1) == pytest.approx(s_none.ad_revenue(year=1) * SLOT_MULT_FLOOR)
 
     def test_double_booking_a_show_is_representable_but_last_write_wins(self):
-        # The grid UI (app_pages/schedule.py) detects and warns on double
+        # The grid UI (app_pages/renewal.py) detects and warns on double
         # bookings; at the model level a show simply has one slot at a time,
         # so re-assigning it just overwrites the previous slot cleanly.
         s = _show()

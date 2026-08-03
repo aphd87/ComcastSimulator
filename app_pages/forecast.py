@@ -145,6 +145,19 @@ def render():
 
     with c1:
         st.markdown('<div class="section-title">OCF by Phase</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="font-size:14px;color:#b0b5c4;margin-bottom:8px;">
+        <b>OCF by Phase</b> sums each year's Operating Cash Flow (Ad + Distribution + SVOD revenue,
+        minus content cost, marketing, and G&amp;A) into three fixed windows: <b>Phase 1 — Oxygen</b>
+        (Years 1–3, single network), <b>Phase 2 — Oxygen + Bravo</b> (Years 4–7, two P&amp;Ls), and
+        <b>Phase 3 — Full Portfolio</b> (Years 8–10, adds Peacock SVOD+). It's a way to see which era of
+        the strategy actually generated the cash, not just the year-by-year swings in the chart above.<br>
+        ⚠️ These three windows are fixed and don't move with your Bravo Launch Year / Peacock Launch Year
+        sliders above — if you set Bravo to launch in Year {bravo_year} or Peacock in Year {svod_year},
+        the phase groupings below still split at Year 3/7 regardless, so a custom launch year can land
+        inside a phase window that doesn't yet include that network.
+        </div>
+        """, unsafe_allow_html=True)
         phase_agg = df.groupby("Phase")["OCF"].sum().reset_index()
         phase_agg.columns = ["Phase","Cumulative OCF ($M)"]
         phase_agg["Color"] = phase_agg["Phase"].map(PHASE_COLORS)
