@@ -224,3 +224,74 @@ def test_complete_phase_renders_slate_notables_with_no_exceptions():
     assert "Slate Notables" in text
     assert "BEST CYCLE" in text
     assert "GENRE VARIETY" in text
+
+
+# ── Last Cycle recap (2026-08-03) ────────────────────────────────────────────
+def _movies_app_at_cycle_2_with_prior_log() -> AppTest:
+    """Seeds a real Cycle 1 outcome directly into movie_log, then lands on
+    Cycle 2's Decisions phase -- the Movies-side equivalent of
+    tests/test_simulation.py's prev-year-recap fixtures. Deliberately omits
+    production_trouble/ancillary_surprise from the seeded entry (both
+    default to None if absent) to double as a backward-compatibility check
+    for log entries recorded before those fields existed."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.movie_models import (
+            MovieProject, draw_actual_multiplier, draw_critical_reception,
+        )
+        defaults = {
+            "team_name": "AppTest Team",
+            "movie_phase": "decisions",
+            "movie_draft": {},
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        if "movie_log" not in st.session_state:
+            project = MovieProject(title="First Movie", genre="Drama", budget_m=80,
+                                    pa_spend_m=40, star_power=60, screens=3000, cycle=1,
+                                    release_strategy="wide_theatrical", concept_type="New IP")
+            multiplier = draw_actual_multiplier("AppTest Team", 1, project.genre, project.concept_type)
+            critical_score = draw_critical_reception("AppTest Team", 1, project.genre)
+            st.session_state.movie_log = [{
+                "cycle": 1, "project_kwargs": dict(project.__dict__),
+                "multiplier": multiplier, "scenario_label": "base",
+                "critical_score": critical_score, "awards_contender": False,
+                "npv": project.npv(multiplier, critical_score),
+                "irr": project.irr(multiplier, critical_score),
+                "total_revenue": project.total_revenue(multiplier, critical_score),
+                "domestic_bo": project.domestic_box_office(multiplier),
+                "theatrical_net": project.theatrical_studio_net(multiplier),
+                "pvod": project.pvod_revenue(multiplier),
+                "sub_value": project.subscriber_value(multiplier),
+                "longtail": project.library_longtail(multiplier, critical_score),
+                "awards_bump": 0.0,
+                "theme_park": project.theme_park_value(multiplier),
+                "capital_at_risk": project.capital_at_risk(),
+            }]
+        if "movie_cycle" not in st.session_state:
+            st.session_state.movie_cycle = 2
+
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Cycle 2 decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_last_cycle_recap_shows_at_cycle_2_with_prior_outcome():
+    at = _movies_app_at_cycle_2_with_prior_log()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Last Cycle's Actuals" in text
+    assert "First Movie" in text
+
+
+def test_last_cycle_recap_absent_at_cycle_1_with_no_prior_outcome():
+    at = _movies_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Last Cycle's Actuals" not in text

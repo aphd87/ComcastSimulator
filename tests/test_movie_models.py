@@ -21,6 +21,10 @@ from utils.movie_models import (
     SEQUEL_OPENING_BONUS_BY_CYCLE, KIDS_OPENING_MULT, KIDS_LONGTAIL_MULT,
     WINDOWING_UNLOCK_CYCLE, CYCLES_TOTAL,
     THEME_PARK_ELIGIBLE_GENRES, THEME_PARK_REVENUE_RATE,
+    draw_production_trouble, PRODUCTION_TROUBLE_CHANCE, PRODUCTION_TROUBLE_HAIRCUT_RANGE,
+    PRODUCTION_TROUBLE_REASONS,
+    draw_ancillary_surprise, ANCILLARY_SURPRISE_CHANCE, ANCILLARY_SURPRISE_RANGE,
+    ANCILLARY_SURPRISE_REASONS_UP, ANCILLARY_SURPRISE_REASONS_DOWN,
 )
 
 
@@ -377,3 +381,96 @@ class TestThemeParkRevenue:
         ineligible = MovieProject(**{**eligible.__dict__, "genre": "Drama", "title": "B"})
         assert eligible.total_revenue("base") > ineligible.total_revenue("base")
         assert eligible.npv("base") > ineligible.npv("base")
+
+
+# ── Production Trouble — creative/talent risk axis (2026-08-03) ─────────────
+class TestProductionTrouble:
+    def test_reproducible_for_same_team_cycle(self):
+        a = draw_production_trouble("Team Echo", 2)
+        b = draw_production_trouble("Team Echo", 2)
+        assert a == b
+
+    def test_rare_but_reachable_over_many_draws(self):
+        outcomes = [draw_production_trouble(f"Team {i}", c)
+                    for i in range(200) for c in range(1, 4)]
+        fired = [o for o in outcomes if o is not None]
+        assert len(fired) > 0
+        assert len(fired) < len(outcomes) * 0.3   # nowhere close to a coin flip
+        lo, hi = PRODUCTION_TROUBLE_HAIRCUT_RANGE
+        for reason, haircut in fired:
+            assert reason in PRODUCTION_TROUBLE_REASONS
+            assert lo <= haircut <= hi
+
+    def test_haircut_only_ever_reduces_never_boosts(self):
+        lo, hi = PRODUCTION_TROUBLE_HAIRCUT_RANGE
+        assert hi < 1.0
+
+    def test_chance_constant_is_small(self):
+        assert 0.0 < PRODUCTION_TROUBLE_CHANCE < 0.15
+
+    def test_independent_of_box_office_and_critical_reception_seeds(self):
+        # If trouble accidentally shared a seed with either draw, every
+        # "trouble fired" case would show identical reception scores.
+        fired_receptions = []
+        for i in range(300):
+            team = f"Team Trouble {i}"
+            if draw_production_trouble(team, 1) is not None:
+                fired_receptions.append(round(draw_critical_reception(team, 1, "Drama"), 1))
+        assert len(fired_receptions) >= 3
+        assert len(set(fired_receptions)) > 1
+
+
+# ── Ancillary Markets Surprise — PVOD/theme-park/merch (2026-08-03) ─────────
+class TestAncillarySurprise:
+    def test_reproducible_for_same_team_cycle(self):
+        a = draw_ancillary_surprise("Team Echo", 2)
+        b = draw_ancillary_surprise("Team Echo", 2)
+        assert a == b
+
+    def test_rare_but_reachable_over_many_draws(self):
+        outcomes = [draw_ancillary_surprise(f"Team {i}", c)
+                    for i in range(200) for c in range(1, 4)]
+        fired = [o for o in outcomes if o is not None]
+        assert len(fired) > 0
+        assert len(fired) < len(outcomes) * 0.4
+        lo, hi = ANCILLARY_SURPRISE_RANGE
+        for reason, mult in fired:
+            assert lo <= mult <= hi
+            expected_reasons = ANCILLARY_SURPRISE_REASONS_UP if mult >= 1.0 else ANCILLARY_SURPRISE_REASONS_DOWN
+            assert reason in expected_reasons
+
+    def test_can_swing_both_directions(self):
+        fired = [draw_ancillary_surprise(f"Team Swing {i}", c)
+                 for i in range(300) for c in range(1, 4)]
+        mults = [m for r in fired if r is not None for m in [r[1]]]
+        assert any(m > 1.0 for m in mults)
+        assert any(m < 1.0 for m in mults)
+
+    def test_chance_constant_is_small(self):
+        assert 0.0 < ANCILLARY_SURPRISE_CHANCE < 0.3
+
+
+class TestAncillaryMultipliersWireIntoRevenue:
+    """Confirms pvod_mult/theme_park_mult (added to windowed_cashflows/npv/
+    irr/total_revenue 2026-08-03) actually isolate the two intended windows
+    -- not a broad, accidental haircut/boost to the whole project."""
+
+    def test_default_multiplier_is_a_no_op(self):
+        p = _tentpole()
+        assert p.npv("base") == p.npv("base", pvod_mult=1.0, theme_park_mult=1.0)
+        assert p.total_revenue("base") == p.total_revenue("base", pvod_mult=1.0, theme_park_mult=1.0)
+        assert p.irr("base") == p.irr("base", pvod_mult=1.0, theme_park_mult=1.0)
+
+    def test_pvod_mult_scales_only_pvod_revenue(self):
+        p = _tentpole()
+        base_pvod  = p.pvod_revenue("base")
+        base_total = p.total_revenue("base")
+        assert base_pvod > 0
+        assert p.total_revenue("base", pvod_mult=2.0) == pytest.approx(base_total + base_pvod)
+
+    def test_theme_park_mult_scales_only_theme_park_revenue(self):
+        p = _tentpole()   # Action/Tentpole is theme-park-eligible
+        base_tp    = p.theme_park_value("base")
+        base_total = p.total_revenue("base")
+        assert base_tp > 0
+        assert p.total_revenue("base", theme_park_mult=2.0) == pytest.approx(base_total + base_tp)

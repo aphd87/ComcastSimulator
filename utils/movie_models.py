@@ -184,6 +184,86 @@ def draw_critical_reception(team_name: str, cycle: int, genre: str) -> float:
     return float(rng.triangular(lo, mode, hi))
 
 
+# ── Production Trouble — a real, independent creative/talent risk axis ──────
+# 2026-08-03, per user request: mirrors utils/models.py's TV-side
+# draw_production_risk_event (talent/creative departures, own independent
+# seed, rare) but sized for a movie's one-shot economics. TV can zero a
+# single show's revenue for a year and the other ~19 shows in the portfolio
+# absorb it; a movie IS the whole bet for that cycle, so a full zero would
+# wipe out the entire cycle rather than dent a portfolio. Modeled instead as
+# a moderate haircut on the resolved box-office multiplier — a troubled
+# production still ships, just weaker: lost buzz, a compressed marketing
+# runway, reshoot-drained momentum going into release.
+PRODUCTION_TROUBLE_CHANCE        = 0.05   # ~5% per movie per cycle — rare, but real
+PRODUCTION_TROUBLE_HAIRCUT_RANGE = (0.60, 0.85)   # multiplies the drawn box-office multiplier down
+PRODUCTION_TROUBLE_REASONS = [
+    "Lead actor injury forced a costly production shutdown",
+    "The director exited over creative differences mid-shoot",
+    "Reshoots blew the schedule and delayed the release window",
+    "A key VFX vendor collapsed mid-production",
+    "A producer dispute stalled the project for weeks",
+]
+
+
+def draw_production_trouble(team_name: str, cycle: int) -> Optional[tuple[str, float]]:
+    """Rare, independent draw (own seed offset — doesn't perturb
+    draw_actual_multiplier's or draw_critical_reception's sequences).
+    Returns None most of the time; when it fires, returns
+    (reason, haircut_multiplier) where haircut_multiplier < 1.0 is meant to
+    be applied to the already-drawn box-office multiplier before computing
+    the cycle's actual outcome."""
+    seed = (abs(hash(team_name)) + cycle * 5563 + 97) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > PRODUCTION_TROUBLE_CHANCE:
+        return None
+    reason = PRODUCTION_TROUBLE_REASONS[int(rng.integers(0, len(PRODUCTION_TROUBLE_REASONS)))]
+    lo, hi = PRODUCTION_TROUBLE_HAIRCUT_RANGE
+    return reason, float(rng.uniform(lo, hi))
+
+
+# ── Ancillary Markets Surprise — genuinely movie-industry-specific ──────────
+# 2026-08-03, per user request ("is there randomness we can raise in movie
+# industry that we can't elsewhere... windowing rentals and theme park
+# stuff/merchandise"). TV/Streaming has no PVOD rental window and no theme
+# park/merchandise line at all (utils/models.py has nothing analogous) — so
+# unlike Production Trouble above (a movie-flavored version of a mechanic
+# TV already has), this is a risk axis with literally no TV-side
+# counterpart. Independent of both box-office performance and critical
+# reception: a rental surge or a theme-park deal signing/falling-through is
+# its own real-world story, not a downstream consequence of how the movie
+# performed theatrically or reviewed. Can swing either direction, unlike
+# Production Trouble's one-directional haircut.
+ANCILLARY_SURPRISE_CHANCE = 0.12   # a bit more common than Production Trouble — lower stakes, not a crisis
+ANCILLARY_SURPRISE_RANGE  = (0.60, 1.60)
+ANCILLARY_SURPRISE_REASONS_UP = [
+    "A surprise home-rental surge as word-of-mouth built after theatrical",
+    "A theme park deal signed early, ahead of the usual licensing timeline",
+    "A merchandise partner expanded the deal after strong early demand",
+]
+ANCILLARY_SURPRISE_REASONS_DOWN = [
+    "PVOD demand came in soft as rental piracy ate into transactions",
+    "A licensing partner delayed the theme park attraction rollout",
+    "A merchandise deal fell through after a partner pulled out",
+]
+
+
+def draw_ancillary_surprise(team_name: str, cycle: int) -> Optional[tuple[str, float]]:
+    """Rare, independent draw (own seed offset) affecting PVOD rental
+    revenue and theme-park/merchandise value together — both are
+    post-theatrical licensing/ancillary markets, distinct from the core
+    theatrical performance. Returns None most of the time; when it fires,
+    returns (reason, multiplier) where multiplier can be above or below 1.0."""
+    seed = (abs(hash(team_name)) + cycle * 6229 + 149) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > ANCILLARY_SURPRISE_CHANCE:
+        return None
+    lo, hi = ANCILLARY_SURPRISE_RANGE
+    mult = float(rng.uniform(lo, hi))
+    reasons = ANCILLARY_SURPRISE_REASONS_UP if mult >= 1.0 else ANCILLARY_SURPRISE_REASONS_DOWN
+    reason = reasons[int(rng.integers(0, len(reasons)))]
+    return reason, mult
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -333,7 +413,8 @@ class MovieProject:
         strength = (critical_score - AWARDS_CONTENDER_THRESHOLD) / (100 - AWARDS_CONTENDER_THRESHOLD)
         return self.domestic_box_office(scenario) * 0.08 * strength
 
-    def windowed_cashflows(self, scenario: str, critical_score: Optional[float] = None) -> list[tuple[float, float]]:
+    def windowed_cashflows(self, scenario: str, critical_score: Optional[float] = None,
+                            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> list[tuple[float, float]]:
         """Returns [(months_from_release, cash_m), ...] — the actual timing
         of each window's revenue, needed for discounting. Theatrical revenue
         is recognized at the midpoint of the run (~6 weeks in), not at
@@ -344,13 +425,19 @@ class MovieProject:
         critical_score is None during planning-stage bear/base/bull previews
         (a student genuinely can't know reviews in advance — including it
         there would leak information they shouldn't have yet) and only
-        supplied once the outcome is actually resolved at Results."""
+        supplied once the outcome is actually resolved at Results.
+
+        pvod_mult/theme_park_mult (added 2026-08-03, default 1.0 = no-op for
+        every existing caller): apply draw_ancillary_surprise()'s resolved
+        swing to just these two windows — PVOD and theme-park/merchandise
+        are their own independent real-world story, not a downstream
+        consequence of box-office or critical performance."""
         theatrical = self.theatrical_studio_net(scenario)
-        pvod       = self.pvod_revenue(scenario)
+        pvod       = self.pvod_revenue(scenario) * pvod_mult
         sub_value  = self.subscriber_value(scenario)
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
-        theme_park = self.theme_park_value(scenario)
+        theme_park = self.theme_park_value(scenario) * theme_park_mult
         window_mo  = self.window_days() / 30.0
         flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
@@ -365,12 +452,14 @@ class MovieProject:
         return flows
 
     def npv(self, scenario: str, critical_score: Optional[float] = None,
-            discount_rate: float = COST_OF_CAPITAL) -> float:
-        cashflows = self.windowed_cashflows(scenario, critical_score)
+            discount_rate: float = COST_OF_CAPITAL,
+            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> float:
+        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult)
         pv = sum(cash / ((1 + discount_rate) ** (months / 12.0)) for months, cash in cashflows)
         return pv - self.capital_at_risk()
 
-    def irr(self, scenario: str, critical_score: Optional[float] = None) -> Optional[float]:
+    def irr(self, scenario: str, critical_score: Optional[float] = None,
+            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> Optional[float]:
         """Approximate IRR via a simple bisection search — front-loaded cost
         and back-loaded, windowed revenue means closed-form IRR isn't clean,
         and this doesn't need finance-library precision for a teaching sim.
@@ -380,7 +469,7 @@ class MovieProject:
         hit, not a bug — display as ">500%"), otherwise the converged rate.
         Silently returning the search boundary as if it were a converged
         answer would look like a real number without being one."""
-        cashflows = self.windowed_cashflows(scenario, critical_score)
+        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult)
         total_in = sum(c for _, c in cashflows)
         if total_in <= self.capital_at_risk():
             return None   # never recovers capital — IRR undefined/negative-infinite
@@ -400,8 +489,10 @@ class MovieProject:
                 hi = mid
         return mid
 
-    def total_revenue(self, scenario: str, critical_score: Optional[float] = None) -> float:
-        return sum(cash for _, cash in self.windowed_cashflows(scenario, critical_score))
+    def total_revenue(self, scenario: str, critical_score: Optional[float] = None,
+                       pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> float:
+        return sum(cash for _, cash in
+                    self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult))
 
 
 # ── Portfolio / scoring helpers ────────────────────────────────────────────────

@@ -18,6 +18,7 @@ from utils.movie_models import (
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
+    draw_production_trouble, draw_ancillary_surprise,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -125,6 +126,41 @@ def render():
         _complete(ss)
 
 
+# ── Last Cycle recap ──────────────────────────────────────────────────────────
+def _last_cycle_recap(prev: dict):
+    """Pinned strip at the top of Decisions showing the previous cycle's
+    actual outcome — the Movies-side parallel to pages/simulation.py's
+    _last_year_recap, added 2026-08-03 per user request. Unlike TV/Streaming
+    (which gets a synthetic "Starting Position" baseline for Year 1, built
+    from the incoming show roster's own built-in economics), Cycle 1 has no
+    equivalent to show — there's no inherited slate; every movie is a fresh,
+    standalone bet — so this only ever fires for cycle > 1, when a real
+    prior outcome actually exists in ss.movie_log."""
+    npv_ok = prev["npv"] >= 0
+    npv_c  = SUCCESS if npv_ok else DANGER
+    title  = prev["project_kwargs"]["title"]
+    strat  = prev["project_kwargs"]["release_strategy"]
+    cs     = prev["critical_score"]
+    cs_c   = SUCCESS if cs >= 55 else (WARN if cs >= 35 else DANGER)
+    st.markdown(f"""
+    <div class="rounded-lg border border-line bg-surface2 p-4 mb-4">
+      <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-2">
+        Cycle {prev['cycle']} — "{title}" — Last Cycle's Actuals
+      </div>
+      <div class="flex gap-8 flex-wrap items-end">
+        <div><div class="text-[9px] text-muted font-mono">NPV</div>
+          <div class="text-xl font-serif" style="color:{npv_c};">{_fmt_money(prev['npv'])}</div></div>
+        <div><div class="text-[9px] text-muted font-mono">IRR</div>
+          <div class="text-xl font-serif text-ink">{_irr_label(prev['irr'])}</div></div>
+        <div><div class="text-[9px] text-muted font-mono">CRITICAL RECEPTION</div>
+          <div class="text-xl font-serif" style="color:{cs_c};">{cs:.0f}/100</div></div>
+        <div><div class="text-[9px] text-muted font-mono">RELEASE STRATEGY</div>
+          <div class="text-sm text-ink mt-1">{RELEASE_LABELS[strat]}</div></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # ── Phase 1: Decisions (Greenlight + Release Strategy) ───────────────────────
 def _decisions(ss):
     """Single scrolling page (redesigned 2026-07-27, replacing the old
@@ -134,6 +170,11 @@ def _decisions(ss):
     decisions render unconditionally, top to bottom, ending in one
     button that does what the old "Lock Strategy -> See Results" button
     did."""
+    prev = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle - 1), None) \
+           if ss.movie_cycle > 1 else None
+    if prev:
+        _last_cycle_recap(prev)
+
     st.markdown(
         '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
         '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
@@ -293,6 +334,28 @@ def _decisions(ss):
         # modestly and find acclaim. Neither draw is known to the
         # student until this exact moment.
         critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
+
+        # Production Trouble — a real, independent creative/talent risk axis
+        # (director/actor/VFX/producer setbacks), rare (~5%), applied as a
+        # haircut on the resolved box-office multiplier rather than zeroing
+        # the cycle outright — a movie IS the whole bet, unlike a TV show
+        # inside a 20-show portfolio. See utils/movie_models.py.
+        trouble = draw_production_trouble(ss.team_name, ss.movie_cycle)
+        trouble_reason = None
+        if trouble:
+            trouble_reason, haircut = trouble
+            multiplier *= haircut
+
+        # Ancillary Markets Surprise — PVOD rentals and theme-park/merchandise
+        # licensing, genuinely movie-specific (TV has neither window at all),
+        # independent of both box office and critical reception.
+        ancillary = draw_ancillary_surprise(ss.team_name, ss.movie_cycle)
+        ancillary_reason = None
+        pvod_mult = theme_park_mult = 1.0
+        if ancillary:
+            ancillary_reason, ancillary_mult = ancillary
+            pvod_mult = theme_park_mult = ancillary_mult
+
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
         outcome = {
             "cycle":            ss.movie_cycle,
@@ -301,16 +364,18 @@ def _decisions(ss):
             "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
             "critical_score":   critical_score,
             "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
-            "npv":              project.npv(multiplier, critical_score),
-            "irr":              project.irr(multiplier, critical_score),
-            "total_revenue":    project.total_revenue(multiplier, critical_score),
+            "production_trouble": trouble_reason,
+            "ancillary_surprise": ancillary_reason,
+            "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
+            "irr":              project.irr(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
+            "total_revenue":    project.total_revenue(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
             "domestic_bo":      project.domestic_box_office(multiplier),
             "theatrical_net":   project.theatrical_studio_net(multiplier),
-            "pvod":             project.pvod_revenue(multiplier),
+            "pvod":             project.pvod_revenue(multiplier) * pvod_mult,
             "sub_value":        project.subscriber_value(multiplier),
             "longtail":         project.library_longtail(multiplier, critical_score),
             "awards_bump":      project.awards_season_bump(multiplier, critical_score),
-            "theme_park":       project.theme_park_value(multiplier),
+            "theme_park":       project.theme_park_value(multiplier) * theme_park_mult,
             "capital_at_risk":  project.capital_at_risk(),
         }
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
@@ -331,12 +396,18 @@ def _results(ss):
     title = result["project_kwargs"]["title"]
     strat = result["project_kwargs"]["release_strategy"]
     concept_type = result["project_kwargs"].get("concept_type", "New IP")
+    trouble_reason   = result.get("production_trouble")
+    ancillary_reason = result.get("ancillary_surprise")
+    scenario_framing = (
+        "landed below plan — Production Trouble hit" if trouble_reason
+        else f"landed near your {result['scenario_label'].title()} Case"
+    )
 
     st.markdown(f"""
     <div class="rounded-lg p-5 mb-4" style="background:rgba({'102,187,106' if npv_ok else '239,83,80'},.07);
          border:1px solid rgba({'102,187,106' if npv_ok else '239,83,80'},.3);">
       <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-3">
-        "{title}" ({concept_type}) — {RELEASE_LABELS[strat]} — Actual Results (landed near your {result['scenario_label'].title()} Case)
+        "{title}" ({concept_type}) — {RELEASE_LABELS[strat]} — Actual Results ({scenario_framing})
       </div>
       <div class="flex gap-8 flex-wrap">
         <div><div class="text-[9px] text-muted font-mono">TOTAL REVENUE</div>
@@ -350,6 +421,27 @@ def _results(ss):
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Production Trouble — a real, involuntary setback, not a choice ────────
+    if trouble_reason:
+        st.markdown(f"""
+        <div class="rounded-lg p-4 mb-3" style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.3);">
+          <div class="text-sm" style="color:{DANGER};font-weight:600;">🎬 Production Trouble</div>
+          <div class="text-xs text-ink2 mt-1">{trouble_reason} — this dragged down the resolved
+          box-office outcome before you ever saw a number.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Ancillary Markets Surprise — PVOD rentals / theme park / merchandise ──
+    if ancillary_reason:
+        surprise_c = ACCENT2
+        st.markdown(f"""
+        <div class="rounded-lg p-4 mb-3" style="background:rgba(26,107,181,.08);border:1px solid rgba(26,107,181,.3);">
+          <div class="text-sm" style="color:{surprise_c};font-weight:600;">🎢 Ancillary Markets Surprise</div>
+          <div class="text-xs text-ink2 mt-1">{ancillary_reason} — this moved PVOD rental and
+          theme-park/merchandise revenue independently of box office and reviews.</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Critical reception — a genuinely separate outcome from box office ──────
     cs = result["critical_score"]
@@ -568,6 +660,7 @@ def _complete(ss):
                     team_name=ss.team_name, network=MOVIE_NETWORK_KEY,
                     attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
                     school=ss.school, class_section=ss.class_section,
+                    class_abbrev=ss.get("class_abbrev", ""),
                     slate_summary=slate_summary,
                     notables=compute_movie_notables(sorted_log),
                 )
