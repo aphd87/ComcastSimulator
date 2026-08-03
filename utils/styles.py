@@ -200,5 +200,18 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 }
 
 #MainMenu,footer,header,[data-testid="stToolbar"] { display:none !important; }
+
+/* Team registration form — bigger, easier-to-hit text boxes (2026-08-03,
+   per user request). Scoped to the st.container(key="registration_form")
+   wrapper in app.py so it doesn't blow up every compact number_input across
+   the renewal/greenlight card grids elsewhere in the app. */
+.st-key-registration_form [data-testid="stTextInput"] input {
+    font-size: 17px !important;
+    padding: 12px 14px !important;
+    height: auto !important;
+}
+.st-key-registration_form [data-testid="stTextInput"] label p {
+    font-size: 15px !important;
+}
 </style>
 """

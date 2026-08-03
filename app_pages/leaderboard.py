@@ -108,8 +108,10 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
             icon = RANK_ICONS.get(entry["rank"], "")
             mc   = RANK_COLORS.get(entry["rank"], TEXT2)
             glow_class = "crown-glow" if entry["rank"] == 1 else ""
+            abbrev      = entry.get("class_abbrev", "")
             school_line = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:2px;">'
-                            f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                            f'{entry.get("school","")} · {entry.get("class_section","")}'
+                            f'{f" ({abbrev})" if abbrev else ""}</div>'
                             if show_school_col else "")
             st.markdown(f"""
             <div class="{glow_class}" style="background:#1a1d26;border:2px solid {mc};border-radius:10px;
@@ -137,8 +139,10 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
         is_me  = entry["team_name"] == team
         bg     = "rgba(232,197,71,.08)" if is_me else "#1a1d26"
         border = "border:1px solid rgba(232,197,71,.3);" if is_me else "border:1px solid #252836;"
+        abbrev     = entry.get("class_abbrev", "")
         school_tag = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:1px;">'
-                       f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                       f'{entry.get("school","")} · {entry.get("class_section","")}'
+                       f'{f" ({abbrev})" if abbrev else ""}</div>'
                        if show_school_col else "")
         breakdown_badges = "".join(
             f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#b0b5c4;">'
@@ -199,8 +203,10 @@ def _render_board_tab(team: str, net: str, info: dict,
             ts     = datetime.fromtimestamp(entry["timestamp"]).strftime("%b %d %H:%M")
             passes = "✅" if entry["passed"] else "❌"
             glow_class = "crown-glow" if entry["rank"] == 1 else ""
+            abbrev      = entry.get("class_abbrev", "")
             school_line = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:2px;">'
-                            f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                            f'{entry.get("school","")} · {entry.get("class_section","")}'
+                            f'{f" ({abbrev})" if abbrev else ""}</div>'
                             if show_school_col else "")
             st.markdown(f"""
             <div class="{glow_class}" style="background:#1a1d26;border:2px solid {mc};border-radius:10px;
@@ -237,8 +243,10 @@ def _render_board_tab(team: str, net: str, info: dict,
         bar_c  = SUCCESS if entry["score"] >= 70 else (WARN if entry["score"] >= 50 else DANGER)
 
         details = entry.get("details", {})
+        abbrev     = entry.get("class_abbrev", "")
         school_tag = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:1px;">'
-                       f'{entry.get("school","")} · {entry.get("class_section","")}</div>'
+                       f'{entry.get("school","")} · {entry.get("class_section","")}'
+                       f'{f" ({abbrev})" if abbrev else ""}</div>'
                        if show_school_col else "")
         # Live attempt count -- entry['attempt'] is always 1 (the official
         # first attempt is all the leaderboard ranks on), so this looks up

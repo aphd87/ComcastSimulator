@@ -10,6 +10,7 @@ from __future__ import annotations   # list[...]/dict[...]/tuple[...] type hints
 import json
 import os
 import time
+import streamlit as st
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 from pathlib import Path
@@ -20,11 +21,49 @@ MAX_ATTEMPTS     = 3          # After 3 fails, still unlock next level
 MAX_NEW_SHOWS_PER_YEAR = 3    # Greenlighting cap, added 2026-07-27 — real TV networks greenlight
                                # a handful of new titles per season, not dozens; budget already
                                # gates spending, this caps pacing/portfolio growth on top of that
-YEARS_PER_LEVEL  = 5          # Each network runs a real 5-calendar-year era — see LEVEL_START_YEAR
-LEVEL_START_YEAR = {           # First in-game year of each network's era (2026-07-27, per user request)
-    "oxygen":  2012,          # 2012-2016 — saving a sinking channel
-    "bravo":   2017,          # 2017-2021
-    "peacock": 2022,          # 2022-2026 — clean handoff from Bravo, no calendar overlap
+
+
+def _read_years_per_level() -> int:
+    """Each network level's length in years — instructor-tailorable per
+    deployment (2026-08-03, per user request), via this Streamlit
+    deployment's own Secrets (Settings -> Secrets on Streamlit Cloud). Same
+    BYOK-style, per-school mechanism as ANTHROPIC_API_KEY in
+    utils/ai_grading.py — this tool ships as a business case run by many
+    independent school deployments, not one central instance, so any
+    instructor-facing knob has to live in that school's own deployment
+    config, never a shared/committed value. See README.md's deployment
+    note for the instructor-facing instructions.
+
+    Falls back to 4 (this engine's current default calibration) when unset
+    — true for every deployment until an instructor opts in — and also
+    when no secrets.toml exists at all for this deployment, which
+    st.secrets.get() treats as a hard StreamlitSecretNotFoundError rather
+    than an empty mapping (confirmed directly against this Streamlit
+    install), hence the try/except rather than a bare .get() call.
+
+    Clamped to [2, 8] so a typo'd secret (e.g. "40") can't produce a
+    multi-decade level or a degenerate 0/negative-year one — this is a
+    convenience guard against fat-fingering a deployment secret, not a
+    pedagogical judgment about what level lengths make sense.
+
+    Read once at module import — Streamlit caches this module for the life
+    of the server process, which exactly matches an instructor-set
+    deployment secret: it doesn't change without a redeploy anyway."""
+    try:
+        val = int(st.secrets.get("YEARS_PER_LEVEL", 4))
+    except Exception:
+        val = 4
+    return min(max(val, 2), 8)
+
+
+YEARS_PER_LEVEL  = _read_years_per_level()   # Each network runs a real N-calendar-year era — see LEVEL_START_YEAR
+LEVEL_START_YEAR = {           # First in-game year of each network's era — computed off YEARS_PER_LEVEL
+                                # so every boundary stays a clean handoff (no calendar overlap) for
+                                # whatever level length this deployment configured. Oxygen's start
+                                # (2012, the cord-cutting-era premise) is the one fixed anchor point.
+    "oxygen":  2012,
+    "bravo":   2012 + YEARS_PER_LEVEL,
+    "peacock": 2012 + YEARS_PER_LEVEL * 2,
 }
 PASS_THRESHOLD   = {          # Minimum OCF margin % to pass each level
     "bravo":   15.0,          # 15% OCF margin to pass Bravo
@@ -220,6 +259,7 @@ def save_leaderboard(board: list[dict]) -> None:
 def record_attempt(team_name: str, network: str, attempt_num: int,
                    score: float, passed: bool, details: dict,
                    school: str = "", class_section: str = "",
+                   class_abbrev: str = "",
                    slate_summary: Optional[list[dict]] = None,
                    notables: Optional[dict] = None) -> dict:
     """
@@ -247,6 +287,13 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
     plain-language playthrough highlights dict — best year, most improved,
     consistency score, genre-diversity trend, shows greenlit. Same
     own-top-level-field reasoning as slate_summary.
+
+    class_abbrev (added 2026-08-03): an optional short course code (e.g.
+    "MBA6120") collected at registration purely as an extra, instructor-
+    facing way to locate a team later — deliberately NOT part of the
+    (school, class_section, team_name) identity/scoping key used everywhere
+    else in this file, since it's optional and free-text class_section
+    already carries the real scoping responsibility.
     """
     board = load_leaderboard()
 
@@ -254,6 +301,7 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
         "team_name":     team_name,
         "school":        school,
         "class_section": class_section,
+        "class_abbrev":  class_abbrev,
         "network":       network,
         "attempt":       attempt_num,
         "score":         round(score, 1),

@@ -40,7 +40,7 @@ def test_registration_with_all_fields_succeeds():
     at = _fresh_app()
     assert not at.exception
     assert at.session_state["registered"] is False
-    assert len(at.text_input) == 4
+    assert len(at.text_input) == 5   # +1 for the optional Class Abbreviation field, added 2026-08-03
     # Register Team + the "Just check the Leaderboard" shortcut added
     # 2026-07-30 -- button[0] (Register Team, rendered first) is what
     # _fill_and_submit clicks.
@@ -53,6 +53,23 @@ def test_registration_with_all_fields_succeeds():
     assert at.session_state["team_name"] == "Team Alpha"
     assert at.session_state["school"] == "Test School of Business, Test University"
     assert at.session_state["class_section"] == "Fall 2026 Sec A"
+    # Class Abbreviation is optional -- left blank here, registration still succeeds.
+    assert at.session_state["class_abbrev"] == ""
+
+
+def test_registration_captures_class_abbreviation_when_filled_in():
+    at = _fresh_app()
+    at.text_input(key="university_input_field").set_value("Test University")
+    at.text_input(key="college_input_field").set_value("Test School of Business")
+    at.text_input(key="class_input_field").set_value("Fall 2026 Sec A")
+    at.text_input(key="class_abbrev_input_field").set_value("MBA6120")
+    at.text_input(key="team_input_field").set_value("Team Alpha")
+    at.button[0].click()
+    at.run()
+
+    assert not at.exception
+    assert at.session_state["registered"] is True
+    assert at.session_state["class_abbrev"] == "MBA6120"
 
 
 def test_registration_shows_the_simulation_nav_afterward():

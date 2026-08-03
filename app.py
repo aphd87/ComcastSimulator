@@ -235,7 +235,7 @@ if not ss.registered and ss.active_section != "leaderboard":
     st.markdown('<div class="section-title" style="text-align:center;">Sign In — Register Your Team</div>',
                 unsafe_allow_html=True)
     rcol1, rcol2, rcol3 = st.columns([1, 2, 1])
-    with rcol2:
+    with rcol2, st.container(key="registration_form"):
         st.markdown(
             '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;text-align:center;">'
             '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
@@ -249,6 +249,12 @@ if not ss.registered and ss.active_section != "leaderboard":
             )
             class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
                                          max_chars=60, key="class_input_field")
+            class_abbrev_input = st.text_input(
+                "Class Abbreviation (optional)", placeholder="e.g. MBA6120",
+                max_chars=20, key="class_abbrev_input_field",
+                help="A short course code, if your class has one. Optional — just an extra way "
+                     "for your instructor to find your team later."
+            )
         with icol2:
             college_input = st.text_input(
                 "School / College", placeholder="e.g. Darden School of Business", key="college_input_field",
@@ -269,6 +275,7 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.team_name     = team_input.strip()
                 ss.school        = f"{college_input.strip()}, {university_input.strip()}"
                 ss.class_section = class_input.strip()
+                ss.class_abbrev  = class_abbrev_input.strip()
                 ss.registered    = True
                 st.rerun()
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
@@ -469,8 +476,10 @@ else:
     # ── Level Brief ──────────────────────────────────────────────────────────
     # Calendar spans read from utils.game_state.LEVEL_START_YEAR/YEARS_PER_LEVEL
     # (single source of truth, also drives pages/simulation.py's year engine) —
-    # reshaped 2026-07-27 to real per-network eras (Oxygen 2012-2016, Bravo
-    # 2017-2021, Peacock 2022-2026) rather than every network resetting to 2012.
+    # reshaped 2026-07-27 to real per-network eras (each starting exactly
+    # YEARS_PER_LEVEL after the last, clean handoff, no overlap) rather than
+    # every network resetting to 2012. YEARS_PER_LEVEL defaults to 4 but is
+    # instructor-tailorable per deployment (2026-08-03) — see README.md.
     _end_year = {n: LEVEL_START_YEAR[n] + YEARS_PER_LEVEL - 1 for n in NETWORK_ORDER}
     LEVEL_BRIEFS = {
         "oxygen": {
