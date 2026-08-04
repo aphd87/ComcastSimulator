@@ -27,6 +27,22 @@ def render():
     ss   = st.session_state
     year = ss.get("year", 1)
 
+    # Slot tracking moved up here (2026-08-04) so the AI Pitch Generator
+    # below can know how many greenlight slots are left before generating
+    # another idea — previously this only got computed right before the
+    # Greenlight button, well after the pitch generator had already rendered.
+    if "greenlit_ids_this_year" not in ss:
+        ss.greenlit_ids_this_year = set()
+    if "greenlit_ids_this_level" not in ss:
+        ss.greenlit_ids_this_level = set()
+    if "total_shows_greenlit" not in ss:
+        ss.total_shows_greenlit = 0
+    if "next_show_id" not in ss:
+        ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
+
+    slots_used = len(ss.greenlit_ids_this_year)
+    slots_left = MAX_NEW_SHOWS_PER_YEAR - slots_used
+
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
          border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
@@ -45,12 +61,22 @@ def render():
     if api_key_configured():
         gp1, gp2 = st.columns([3, 1])
         with gp1:
-            st.markdown(
-                '<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
-                'concept to start from — you can still edit every field below before greenlighting.</div>',
-                unsafe_allow_html=True)
+            if slots_left > 0:
+                st.markdown(
+                    f'<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
+                    f'concept to start from — you can still edit every field below before greenlighting. '
+                    f'You have <b style="color:#e8eaf0;">{slots_left} of {MAX_NEW_SHOWS_PER_YEAR}</b> '
+                    f'greenlight slots left this year, so keep asking for another pitch until one '
+                    f'clicks.</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div style="font-size:14px;color:#b0b5c4;">You\'ve filled all your greenlight '
+                    'slots for this year — no need for another pitch until next year.</div>',
+                    unsafe_allow_html=True)
         with gp2:
-            if st.button("🤖 Get an AI Pitch Idea", key="gl_generate_pitch", use_container_width=True):
+            pitch_label = "🎲 Hear Another Pitch" if ss.get("gl_ai_pitch_text") else "🤖 Get an AI Pitch Idea"
+            if slots_left > 0 and st.button(pitch_label, key="gl_generate_pitch", use_container_width=True):
                 with st.spinner("Generating a pitch..."):
                     idea = generate_show_pitch(NETWORK_INFO[ss.active_network]["display_name"])
                 if idea is None:
@@ -64,7 +90,7 @@ def render():
                     st.session_state["gl_appeal"]     = idea.suggested_svod_appeal
                     ss.gl_ai_pitch_text = idea.pitch
                     st.rerun()
-        if ss.get("gl_ai_pitch_text"):
+        if slots_left > 0 and ss.get("gl_ai_pitch_text"):
             st.markdown(
                 f'<div style="background:#12141a;border:1px solid #252836;border-radius:6px;'
                 f'padding:10px 14px;margin-bottom:10px;font-size:15px;color:#e0e2ea;">'
@@ -185,19 +211,9 @@ def render():
     # sandbox that never touched real game state. Cap of MAX_NEW_SHOWS_PER_YEAR
     # matches real network development slates (a handful of new titles per
     # season against a 20-40 show base) — budget already gates spending on
-    # top of this, this caps pacing/portfolio growth.
-    if "greenlit_ids_this_year" not in ss:
-        ss.greenlit_ids_this_year = set()
-    if "greenlit_ids_this_level" not in ss:
-        ss.greenlit_ids_this_level = set()
-    if "total_shows_greenlit" not in ss:
-        ss.total_shows_greenlit = 0
-    if "next_show_id" not in ss:
-        ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
-
+    # top of this, this caps pacing/portfolio growth. (Slot tracking itself
+    # now lives at the top of render() -- see the comment there.)
     net_display = NETWORK_INFO[ss.active_network]["display_name"]
-    slots_used  = len(ss.greenlit_ids_this_year)
-    slots_left  = MAX_NEW_SHOWS_PER_YEAR - slots_used
 
     st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
     st.markdown(

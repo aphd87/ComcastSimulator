@@ -10,6 +10,7 @@ from utils.models import (
     distribution_revenue, renewal_decision, CONTENT_COST_ESC,
     performance_linked_growth, genre_demo,
     PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
+    slot_rating_multiplier,
 )
 from utils.game_state import NETWORK_INFO
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -416,11 +417,48 @@ def render():
     real industry "death slot" — the weakest slot costs a show up to
     <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus, no
     penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
+    <br><br>
+    🖱️ <b style="color:#e8eaf0;">To assign a show:</b> double-click a cell in the grid below to open its
+    dropdown, then pick a show. Single-clicking won't open it.
     </div>
     """, unsafe_allow_html=True)
 
     show_by_label = {f"{s.name} (#{s.id})": s for s in shows}
     show_labels   = ["— none —"] + sorted(show_by_label.keys())
+
+    # Auto-Fill — a one-click starting point, not a drag-and-drop substitute.
+    # Streamlit's data_editor has no drag-across-cells interaction (that
+    # would need a custom JS component, real added complexity/maintenance
+    # for a teaching tool); this is the practical speed-up instead: ranks
+    # shows by rating and slots by slot_rating_multiplier() and pairs them
+    # off best-to-best, so most of the grid is already sensible and the
+    # student only needs to double-click a handful of cells to adjust.
+    grid_ver_key = f"primetime_grid_ver_{net}_{year}"
+    if grid_ver_key not in ss:
+        ss[grid_ver_key] = 0
+    af_col, af_hint_col = st.columns([1, 2])
+    with af_col:
+        if st.button("⚡ Auto-Fill by Rating", key=f"primetime_autofill_{net}_{year}",
+                     use_container_width=True,
+                     help="Ranks your shows by rating and drops the top ones into the best slots "
+                          "first — a fast starting point you can still tweak cell by cell."):
+            slots_ranked = sorted(
+                ((d, h) for h in PRIMETIME_HOURS for d in PRIMETIME_DAYS),
+                key=lambda dh: slot_rating_multiplier(dh[0], dh[1]), reverse=True,
+            )
+            shows_ranked = sorted(shows, key=lambda s: -s.rating)
+            for s in shows:
+                s.slot_day  = None
+                s.slot_hour = None
+            for s, (d, h) in zip(shows_ranked, slots_ranked):
+                s.slot_day, s.slot_hour = d, h
+            ss[grid_ver_key] += 1
+            st.rerun()
+    with af_hint_col:
+        st.markdown(
+            '<div style="font-size:13px;color:#b0b5c4;padding-top:8px;">'
+            'Fills every slot from your top-rated shows down, best slot first — '
+            'a starting point, not a final answer.</div>', unsafe_allow_html=True)
 
     grid_rows = []
     for h in PRIMETIME_HOURS:
@@ -434,8 +472,13 @@ def render():
 
     col_config = {d: st.column_config.SelectboxColumn(d, options=show_labels, required=True)
                   for d in PRIMETIME_DAYS}
+    # Key includes grid_ver_key's value so Auto-Fill's st.rerun() above forces
+    # a fresh widget instance -- st.data_editor otherwise ignores a changed
+    # `grid_df` and keeps showing whatever the widget already has cached
+    # under the same key (the standard Streamlit "data changed underneath an
+    # existing widget key" gotcha).
     edited_df = st.data_editor(grid_df, column_config=col_config, use_container_width=True,
-                                key=f"primetime_grid_{net}_{year}")
+                                key=f"primetime_grid_{net}_{year}_{ss[grid_ver_key]}")
 
     # Persist the grid onto the real Show objects — same instances living in
     # ss.oxygen_shows/etc. (shows[:] above is a shallow copy), same "write
@@ -466,13 +509,17 @@ def render():
     # and the day/hour grid are the two real scheduling decisions, so they
     # read naturally back to back.
     st.divider()
-    st.markdown('<div class="section-title">This Year\'s Schedule</div>',
+    st.markdown('<div class="section-title">This Year\'s Schedule — Premiere Calendar</div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        'Which shows premiere each month, updating live as you set premiere months above. '
-        'Months stacked with several premieres pile up amortization cost — spread them out if '
-        'your cash cows can\'t cover the gap.</div>',
+        '📋 <b>Read-only preview, not its own decision:</b> this calendar just mirrors the premiere '
+        'months you\'ve already set above (in each show\'s Renewal card, or in "New this year" below) — '
+        'it doesn\'t take any input of its own. What actually changes the math is the premiere month '
+        'on each show and the primetime day/hour grid above; this view exists so you can '
+        'spot months stacked with several premieres before you Simulate, since piled-up amortization '
+        'bills are exactly the cash-trough problem covered on the Scheduling tab — spread premieres '
+        'out if your cash cows can\'t cover the gap.</div>',
         unsafe_allow_html=True)
 
     month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
