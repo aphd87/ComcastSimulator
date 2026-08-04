@@ -31,6 +31,10 @@ from utils.game_state import (
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
     YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
 )
+from utils.sports_models import (
+    SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
+    resolve_auction, SportsContract, held_this_year, sports_year_pnl,
+)
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 
@@ -76,25 +80,36 @@ def _annual_cost(shows, year: int, prev_cancelled: set, new_cancel: set) -> floa
 
 
 def _preview_pnl(shows, year: int, mkt: float,
-                 prev_cancelled: set, new_cancel: set) -> dict:
-    """Expected (no-variance) P&L for the live preview card."""
+                 prev_cancelled: set, new_cancel: set,
+                 sports_rev_m: float = 0.0, sports_cost_m: float = 0.0) -> dict:
+    """Expected (no-variance) P&L for the live preview card. sports_rev_m/
+    sports_cost_m (Peacock only — see utils/sports_models.py) are added as
+    real revenue/cost lines, same treatment as ad/distribution revenue and
+    content cost, so a held sports contract's structural loss shows up in
+    OCF margin exactly like any other business decision."""
     cancelled = prev_cancelled | new_cancel
     active    = _active_shows(shows, cancelled)
     per       = mkt / max(len(active), 1)
 
     ad_rev   = sum(s.ad_revenue(year, per) for s in active)
     dist_rev = distribution_revenue(year)
-    rev      = ad_rev + dist_rev
-    cost     = _annual_cost(shows, year, prev_cancelled, new_cancel)
+    rev      = ad_rev + dist_rev + sports_rev_m
+    cost     = _annual_cost(shows, year, prev_cancelled, new_cancel) + sports_cost_m
     ga       = rev * 0.06
     ocf      = rev - cost - mkt - ga
     margin   = (ocf / rev * 100) if rev > 0 else 0.0
     return {"rev": rev, "ad_rev": ad_rev, "dist_rev": dist_rev,
+            "sports_rev": sports_rev_m, "sports_cost": sports_cost_m,
             "cost": cost, "ga": ga, "ocf": ocf, "margin": margin}
 
 
-def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -> dict:
-    """Apply seeded ±7% rating variance and compute the year's actual P&L."""
+def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
+                  sports_rev_m: float = 0.0, sports_cost_m: float = 0.0) -> dict:
+    """Apply seeded ±7% rating variance and compute the year's actual P&L.
+    sports_rev_m/sports_cost_m (Peacock only) fold straight into total
+    revenue/cost, same as _preview_pnl above — everything downstream
+    (Results banner, Complete-phase totals, score) reads result["revenue"]/
+    ["cost"] and so already reflects the sports P&L without further changes."""
     seed = (abs(hash(ss.team_name)) + year * 1337) % (2 ** 31)
     rng  = np.random.default_rng(seed)
 
@@ -150,8 +165,8 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
                                "cost": round(s.annual_amort_expense(year), 2)})
 
     dist_rev   = distribution_revenue(year)
-    total_rev  = adj_ad_rev + dist_rev
-    total_cost = sum(r["cost"] for r in show_rows)
+    total_rev  = adj_ad_rev + dist_rev + sports_rev_m
+    total_cost = sum(r["cost"] for r in show_rows) + sports_cost_m
     ga         = total_rev * 0.06
     ocf        = total_rev - total_cost - mkt - ga
     margin     = (ocf / total_rev * 100) if total_rev > 0 else 0.0
@@ -162,6 +177,8 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str) -
         "revenue": round(total_rev, 2),
         "ad_rev":  round(adj_ad_rev, 2),
         "dist_rev":round(dist_rev, 2),
+        "sports_rev":  round(sports_rev_m, 2),
+        "sports_cost": round(sports_cost_m, 2),
         "cost":    round(total_cost, 2),
         "mkt":     round(mkt, 2),
         "ga":      round(ga, 2),
@@ -187,6 +204,10 @@ def _init(ss, net_info):
         ss.sim_phase = "decisions"
     if not ss.get("level_budget"):
         ss.level_budget = float(net_info["budget_base"])
+    if not isinstance(ss.get("sports_contracts"), list):
+        ss.sports_contracts = []
+    if not isinstance(ss.get("sports_bid_log"), dict):
+        ss.sports_bid_log = {}
 
 
 # ── Progress bar ───────────────────────────────────────────────────────────────
@@ -486,6 +507,129 @@ def _section_financing(ss, shows, year, net_info, level_budget):
             f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
 
 
+def _section_sports_rights(ss, shows, year, net, new_cancel, sec_num):
+    """Peacock-only (2026-08-04, see utils/sports_models.py): real 5-7yr
+    rights auctions against seeded rival tech/media bidders. Rendered after
+    Renewal/Greenlighting so this year's Peacock originals spend is already
+    final by the time retained_fraction() needs it. Returns this year's
+    sports P&L dict (revenue_m/cost_m/net_m) so _decisions() can fold it
+    into the Simulate preview and the actual computed year."""
+    st.markdown(f'<div class="section-title">{sec_num} · 🏈 Sports Rights</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+        'Real multi-year rights deals (5-7 years), auctioned sealed-bid against seeded '
+        'tech/media rivals — highest bid wins and pays <i>its own</i> bid, so overpaying is a '
+        'real risk. Sports rights are a deliberate <b>loss leader</b>: the rights fee usually '
+        'exceeds the direct revenue a package generates on its own. The subscriber spike a '
+        'season creates only becomes lasting value if your Peacock originals slate is strong '
+        'enough to retain it — otherwise it churns back out once the season ends.</div>',
+        unsafe_allow_html=True)
+
+    anchor = LEVEL_START_YEAR["peacock"]
+    held   = held_this_year(ss.sports_contracts, year)
+
+    if held:
+        st.markdown('<div style="font-size:14px;color:#b0b5c4;margin-bottom:6px;">Currently held:</div>',
+                    unsafe_allow_html=True)
+        for c in held:
+            info       = SPORTS_LEAGUES[c.league]
+            years_left = c.end_year - year
+            st.markdown(f"""
+            <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;
+                 padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;
+                 flex-wrap:wrap;gap:10px;">
+              <div><b style="color:#e8eaf0;">{c.league}</b>
+                <span style="color:#b0b5c4;font-size:13px;"> · {info['tier']} · held through {c.end_year}
+                ({years_left} yr{'s' if years_left != 1 else ''} left)</span></div>
+              <div style="font-family:DM Mono,monospace;font-size:14px;color:{WARN};">-${c.annual_cost_m:.1f}M/yr</div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="font-size:14px;color:#b0b5c4;margin-bottom:10px;">No sports rights currently held.</div>',
+                    unsafe_allow_html=True)
+
+    # Finalized Peacock originals spend this year — Renewal/Greenlighting
+    # have already rendered above, so ss.renewal_decisions and the roster
+    # in `shows` are settled for this run.
+    peacock_shows_now = [s for s in shows if s.network == "Peacock"]
+    originals_spend_m = _annual_cost(peacock_shows_now, year, ss.cancelled_shows, new_cancel)
+    year_pnl = sports_year_pnl(held, year, originals_spend_m)
+
+    if held:
+        net_c = SUCCESS if year_pnl["net_m"] >= 0 else DANGER
+        st.markdown(f"""
+        <div style="background:#12141a;border:1px solid #252836;border-radius:6px;
+             padding:10px 14px;margin-bottom:14px;font-size:14px;color:#e0e2ea;">
+          This year's sports rights P&L:
+          <b style="font-family:DM Mono,monospace;color:{SUCCESS};">+${year_pnl['revenue_m']:.1f}M</b> revenue
+          &minus; <b style="font-family:DM Mono,monospace;color:{WARN};">${year_pnl['cost_m']:.1f}M</b> rights cost
+          = <b style="font-family:DM Mono,monospace;color:{net_c};">${year_pnl['net_m']:+.1f}M</b> net
+          &mdash; your Peacock originals slate (${originals_spend_m:.1f}M this year) has to help cover that gap.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── This year's auctions ────────────────────────────────────────────────
+    up      = leagues_up_for_bid(year, anchor)
+    already = ss.sports_bid_log.get(year, {})
+    pending = [lg for lg in up if lg not in already]
+
+    if pending:
+        st.markdown(
+            f'<div style="font-size:14px;color:#e0e2ea;margin:6px 0 8px;"><b>'
+            f'{len(pending)} rights package{"s" if len(pending) != 1 else ""} up for auction this year:'
+            f'</b></div>', unsafe_allow_html=True)
+        for lg in pending:
+            info = SPORTS_LEAGUES[lg]
+            _, start, end = cycle_for_year(lg, year, anchor)
+            term = end - start + 1
+            st.markdown(
+                f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:2px;"><b>{lg}</b> '
+                f'<span style="color:#b0b5c4;">({info["tier"]} · {term}-yr term, {start}-{end} · '
+                f'~${info["base_rights_cost_m"]:.0f}M/yr market range)</span></div>',
+                unsafe_allow_html=True)
+            st.number_input(f"Your annual bid for {lg} ($M/yr — 0 = don't bid)",
+                             min_value=0.0, max_value=300.0, step=1.0, value=0.0,
+                             key=f"sports_bid_{year}_{lg}")
+
+        if st.button("📡 Submit Sports Bids", use_container_width=True, key=f"sports_submit_{year}"):
+            ss.sports_bid_log.setdefault(year, {})
+            for lg in pending:
+                bid = float(ss.get(f"sports_bid_{year}_{lg}", 0.0))
+                idx, start, end = cycle_for_year(lg, year, anchor)
+                rivals = draw_rival_bids(lg, idx)
+                result = resolve_auction(bid, rivals)
+                ss.sports_bid_log[year][lg] = result
+                if result["won_by_team"]:
+                    ss.sports_contracts.append(SportsContract(
+                        league=lg, start_year=start, end_year=end,
+                        annual_cost_m=result["winning_bid_m"],
+                    ))
+            st.rerun()
+
+    if already:
+        st.markdown('<div style="font-size:14px;color:#b0b5c4;margin-top:8px;">Auction results this year:</div>',
+                    unsafe_allow_html=True)
+        for lg, result in already.items():
+            rival_bids = [b for b in result["all_bids"] if b["bidder"] != "You"]
+            best_rival = max((b["bid_m"] for b in rival_bids), default=None)
+            if result["won_by_team"]:
+                rival_note = f" ({len(rival_bids)} rivals bid, best was ${best_rival:.1f}M)" if best_rival else " (no rivals bid)"
+                st.markdown(f'<div style="color:{SUCCESS};font-size:14px;">✅ Won <b>{lg}</b> at '
+                             f'${result["winning_bid_m"]:.1f}M/yr{rival_note}</div>', unsafe_allow_html=True)
+            elif result["winner"]:
+                st.markdown(f'<div style="color:{WARN};font-size:14px;">❌ Lost <b>{lg}</b> — '
+                             f'{result["winner"]} won at ${result["winning_bid_m"]:.1f}M/yr</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="color:{TEXT2};font-size:14px;">No bidders for <b>{lg}</b> this '
+                             f'cycle — it went unclaimed.</div>', unsafe_allow_html=True)
+
+    if not pending and not up:
+        st.markdown('<div style="font-size:14px;color:#b0b5c4;">No rights packages up for auction this '
+                     'year — check back as existing contracts approach expiration.</div>', unsafe_allow_html=True)
+
+    return year_pnl
+
+
 def _decisions(ss, shows, net_info, year, net):
     """Single scrolling page (redesigned 2026-07-27, replacing the old
     Back/Next 4-step wizard per user request: "students should have
@@ -507,15 +651,21 @@ def _decisions(ss, shows, net_info, year, net):
     if len(ss.yearly_log) >= 2:
         _progress_chart(ss, threshold)
 
+    nav_links = [
+        '<a href="#financing" style="color:#e8c547;">Financing</a>',
+        '<a href="#renewal" style="color:#e8c547;">Renewal</a>',
+        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
+    ]
+    if net == "peacock":
+        nav_links.append('<a href="#sports-rights" style="color:#e8c547;">Sports Rights</a>')
+    nav_links += [
+        '<a href="#scheduling" style="color:#e8c547;">Scheduling</a>',
+        '<a href="#simulate" style="color:#e8c547;">Simulate</a>',
+    ]
     st.markdown(
         '<div style="font-size:14px;color:#b0b5c4;margin-bottom:14px;">'
         'Work through each decision as you scroll, then simulate the year at the bottom. '
-        '<a href="#financing" style="color:#e8c547;">Financing</a> · '
-        '<a href="#renewal" style="color:#e8c547;">Renewal</a> · '
-        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a> · '
-        '<a href="#scheduling" style="color:#e8c547;">Scheduling</a> · '
-        '<a href="#simulate" style="color:#e8c547;">Simulate</a>'
-        '</div>', unsafe_allow_html=True)
+        + ' · '.join(nav_links) + '</div>', unsafe_allow_html=True)
 
     st.markdown('<a id="financing"></a>', unsafe_allow_html=True)
     _section_financing(ss, shows, year, net_info, level_budget)
@@ -541,10 +691,26 @@ def _decisions(ss, shows, net_info, year, net):
     # deducts real production cost from ss.level_budget immediately.
     level_budget = ss.level_budget
 
+    # Read once, now that Renewal/Greenlighting have both rendered and
+    # written their widgets to session state — needed here (not just at the
+    # bottom) because Sports Rights' retention math depends on this year's
+    # finalized Peacock originals spend, which depends on new_cancel.
+    mkt = ss.get("mkt_budget", 5.0)
+    active_now = _active_shows(shows, ss.cancelled_shows)
+    new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
+
+    next_sec = 4
+    sports_pnl = {"revenue_m": 0.0, "cost_m": 0.0, "net_m": 0.0}
+    if net == "peacock":
+        st.divider()
+        st.markdown('<a id="sports-rights"></a>', unsafe_allow_html=True)
+        sports_pnl = _section_sports_rights(ss, shows, year, net, new_cancel, next_sec)
+        next_sec += 1
+
     st.divider()
     st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-title">4 · 📅 Scheduling & Cash-Flow Reference '
+        f'<div class="section-title">{next_sec} · 📅 Scheduling & Cash-Flow Reference '
         '<span style="font-size:14px;color:#b0b5c4;">(reference — the premiere-month and '
         'primetime-slot calls above in Renewal already drive the real math)</span></div>',
         unsafe_allow_html=True)
@@ -553,17 +719,10 @@ def _decisions(ss, shows, net_info, year, net):
 
     st.divider()
 
-    # Read once, after every section above has actually executed and
-    # written its widgets to session state — always current-as-of-this-run,
-    # unlike the old per-step wizard which could only reflect whichever
-    # step was on screen.
-    mkt = ss.get("mkt_budget", 5.0)
-    active_now = _active_shows(shows, ss.cancelled_shows)
-    new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
-
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
-    p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel)
+    p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel,
+                     sports_rev_m=sports_pnl["revenue_m"], sports_cost_m=sports_pnl["cost_m"])
 
     ocf_c    = SUCCESS if p["ocf"] >= 0 else DANGER
     margin_c = SUCCESS if p["margin"] >= threshold else (WARN if p["margin"] >= 0 else DANGER)
@@ -572,7 +731,14 @@ def _decisions(ss, shows, net_info, year, net):
     items = [
         ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
         ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
-        ("Content Cost",  f"-${p['cost']:.2f}M",   WARN),
+        ("Content Cost",  f"-${p['cost'] - p['sports_cost']:.2f}M", WARN),
+    ]
+    if p["sports_rev"] or p["sports_cost"]:
+        items += [
+            ("Sports Rights Revenue", f"${p['sports_rev']:.2f}M", ACCENT2),
+            ("Sports Rights Cost",    f"-${p['sports_cost']:.2f}M", WARN),
+        ]
+    items += [
         ("Marketing",     f"-${mkt:.2f}M",           WARN),
         ("G&A (6%)",      f"-${p['ga']:.2f}M",      TEXT2),
     ]
@@ -665,7 +831,9 @@ def _decisions(ss, shows, net_info, year, net):
     # ── Simulate the year ──────────────────────────────────────────────────────
     if st.button(f"▶  Simulate Year {year}  →  See Results",
                  type="primary", use_container_width=True, key="sim_end_year"):
-        result           = _compute_year(ss, shows, year, mkt, new_cancel, net)
+        result           = _compute_year(ss, shows, year, mkt, new_cancel, net,
+                                         sports_rev_m=sports_pnl["revenue_m"],
+                                         sports_cost_m=sports_pnl["cost_m"])
         result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
         ss.yearly_log.append(result)
         ss.cancelled_shows = ss.cancelled_shows | new_cancel
@@ -727,6 +895,20 @@ def _results(ss, shows, net_info, year, team, net):
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Sports rights contribution (Peacock only, held contracts only) ────────
+    if result.get("sports_rev") or result.get("sports_cost"):
+        sp_net_c = SUCCESS if (result["sports_rev"] - result["sports_cost"]) >= 0 else DANGER
+        st.markdown(f"""
+        <div style="font-size:14px;color:#b0b5c4;margin:-8px 0 16px;">
+          Includes sports rights: <span style="font-family:DM Mono,monospace;color:{SUCCESS};">
+          +${result['sports_rev']:.1f}M</span> revenue &minus;
+          <span style="font-family:DM Mono,monospace;color:{WARN};">${result['sports_cost']:.1f}M</span> rights cost
+          = <span style="font-family:DM Mono,monospace;color:{sp_net_c};">
+          ${result['sports_rev'] - result['sports_cost']:+.1f}M</span> net — the rest of this year's
+          OCF is what your Peacock originals slate actually earned.
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Rating movers ─────────────────────────────────────────────────────────
     active_rows = [r for r in result["shows"] if r["status"] == "active"]
@@ -840,6 +1022,14 @@ def _results(ss, shows, net_info, year, team, net):
             ss.greenlit_ids_this_level = ss.get("greenlit_ids_this_level", set()) - this_year_ids
             ss.total_shows_greenlit    = max(0, ss.get("total_shows_greenlit", 0) - len(this_year_ids))
             ss.greenlit_ids_this_year  = set()
+            # Undo any sports rights bids placed during the year being
+            # redone — a won contract's start_year always equals the
+            # auction year (see utils/sports_models.py::cycle_for_year),
+            # so filtering on that is exact, same posture as greenlit-show
+            # undo above (bid amounts committed aren't refunded, only the
+            # resulting contract/log entry is removed).
+            ss.sports_bid_log.pop(year, None)
+            ss.sports_contracts = [c for c in ss.sports_contracts if c.start_year != year]
             ss.sim_phase       = "decisions"
             st.rerun()
     with nav2:
