@@ -180,7 +180,58 @@ def render():
 
     st.divider()
 
+    # ── Greenlight This Show — actually adds it to the real roster ─────────────
+    # Added 2026-07-27: Greenlighting was previously a standalone P&L
+    # sandbox that never touched real game state. Cap of MAX_NEW_SHOWS_PER_YEAR
+    # matches real network development slates (a handful of new titles per
+    # season against a 20-40 show base) — budget already gates spending on
+    # top of this, this caps pacing/portfolio growth.
+    if "greenlit_ids_this_year" not in ss:
+        ss.greenlit_ids_this_year = set()
+    if "greenlit_ids_this_level" not in ss:
+        ss.greenlit_ids_this_level = set()
+    if "total_shows_greenlit" not in ss:
+        ss.total_shows_greenlit = 0
+    if "next_show_id" not in ss:
+        ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
+
+    net_display = NETWORK_INFO[ss.active_network]["display_name"]
+    slots_used  = len(ss.greenlit_ids_this_year)
+    slots_left  = MAX_NEW_SHOWS_PER_YEAR - slots_used
+
+    st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+        f'Adds this concept to {net_display}\'s real roster — production cost (${linear["cost"]:.2f}M) '
+        f'comes out of this year\'s budget immediately, and it starts earning/costing real money '
+        f'starting this year. You\'ve greenlit {slots_used} of {MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
+        unsafe_allow_html=True)
+
+    if slots_left <= 0:
+        st.warning(f"⚠ You've used all {MAX_NEW_SHOWS_PER_YEAR} greenlight slots for this year — "
+                    "come back next year for more.")
+    elif st.button(f"🎬 Greenlight \"{show_name}\" for {net_display}", type="primary", use_container_width=True):
+        new_show = Show(
+            id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=eps,
+            ep_cost_k=ep_cost, rating=rating, ip_score=_NEW_SHOW_IP_SCORE,
+            air_month=air_month, network=net_display,
+        )
+        roster_key = f"{ss.active_network}_shows"
+        ss[roster_key] = ss[roster_key] + [new_show]
+        ss.level_budget = ss.get("level_budget", 0) - linear["cost"]   # production cost, unescalated (year-1 basis)
+        ss.greenlit_ids_this_year.add(new_show.id)
+        ss.greenlit_ids_this_level.add(new_show.id)
+        ss.total_shows_greenlit += 1
+        ss.next_show_id += 1
+        st.rerun()   # note: a st.success() here would never render — rerun replaces the DOM
+                     # immediately. The updated "X of N greenlit" count above is the confirmation.
+
+    st.divider()
+
     # ── Side-by-side P&L ──────────────────────────────────────────────────────
+    # Moved to after Greenlight This Show 2026-08-04 per user request -- the
+    # comparison reads as reference/justification for the greenlight call,
+    # so it belongs after the actual action, not gating it.
     st.markdown('<div class="section-title">Platform P&L Comparison</div>', unsafe_allow_html=True)
 
     def pl_card(title, color, data, winner=False):
@@ -239,54 +290,6 @@ def render():
         st.success(f"📺 **Linear wins in Year {year}** — Faster cash recovery. Ad revenue beats SVOD LTV at current cord-cut levels.")
     else:
         st.info(f"📱 **SVOD+ wins in Year {year}** — Subscription LTV outpaces declining linear ad market. Long-term play.")
-
-    st.divider()
-
-    # ── Greenlight This Show — actually adds it to the real roster ─────────────
-    # Added 2026-07-27: Greenlighting was previously a standalone P&L
-    # sandbox that never touched real game state. Cap of MAX_NEW_SHOWS_PER_YEAR
-    # matches real network development slates (a handful of new titles per
-    # season against a 20-40 show base) — budget already gates spending on
-    # top of this, this caps pacing/portfolio growth.
-    if "greenlit_ids_this_year" not in ss:
-        ss.greenlit_ids_this_year = set()
-    if "greenlit_ids_this_level" not in ss:
-        ss.greenlit_ids_this_level = set()
-    if "total_shows_greenlit" not in ss:
-        ss.total_shows_greenlit = 0
-    if "next_show_id" not in ss:
-        ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
-
-    net_display = NETWORK_INFO[ss.active_network]["display_name"]
-    slots_used  = len(ss.greenlit_ids_this_year)
-    slots_left  = MAX_NEW_SHOWS_PER_YEAR - slots_used
-
-    st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        f'Adds this concept to {net_display}\'s real roster — production cost (${linear["cost"]:.2f}M) '
-        f'comes out of this year\'s budget immediately, and it starts earning/costing real money '
-        f'starting this year. You\'ve greenlit {slots_used} of {MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
-        unsafe_allow_html=True)
-
-    if slots_left <= 0:
-        st.warning(f"⚠ You've used all {MAX_NEW_SHOWS_PER_YEAR} greenlight slots for this year — "
-                    "come back next year for more.")
-    elif st.button(f"🎬 Greenlight \"{show_name}\" for {net_display}", type="primary", use_container_width=True):
-        new_show = Show(
-            id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=eps,
-            ep_cost_k=ep_cost, rating=rating, ip_score=_NEW_SHOW_IP_SCORE,
-            air_month=air_month, network=net_display,
-        )
-        roster_key = f"{ss.active_network}_shows"
-        ss[roster_key] = ss[roster_key] + [new_show]
-        ss.level_budget = ss.get("level_budget", 0) - linear["cost"]   # production cost, unescalated (year-1 basis)
-        ss.greenlit_ids_this_year.add(new_show.id)
-        ss.greenlit_ids_this_level.add(new_show.id)
-        ss.total_shows_greenlit += 1
-        ss.next_show_id += 1
-        st.rerun()   # note: a st.success() here would never render — rerun replaces the DOM
-                     # immediately. The updated "X of N greenlit" count above is the confirmation.
 
     st.divider()
 
