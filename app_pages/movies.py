@@ -20,6 +20,7 @@ from utils.movie_models import (
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
     draw_production_trouble, draw_ancillary_surprise,
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, TAX_CREDIT_PCT, participation_waterfall,
+    TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -45,6 +46,21 @@ def _init(ss):
         ss.movie_log = []          # finished cycles: [{project_kwargs, multiplier, npv, irr, ...}, ...]
     if not isinstance(ss.get("movie_draft"), dict):
         ss.movie_draft = {}        # in-progress project kwargs for the current cycle
+    # Talent Deals (2026-08-04) -- ss.movie_overall_deal: partner_key or None,
+    # a standing relationship for the rest of the level. ss.movie_talent_holds:
+    # {partner_key: {"status": "pending"|"succeeded"|"failed"|"rival_claimed", ...}}.
+    # ss.movie_rival_exclusive: {partner_key: rival_name} for partners a rival
+    # studio has permanently signed while unclaimed by the team.
+    if "movie_overall_deal" not in ss:
+        ss.movie_overall_deal = None
+    if not isinstance(ss.get("movie_talent_holds"), dict):
+        ss.movie_talent_holds = {}
+    if not isinstance(ss.get("movie_rival_exclusive"), dict):
+        ss.movie_rival_exclusive = {}
+    if "movie_rival_poach_checked_through" not in ss:
+        ss.movie_rival_poach_checked_through = 0
+    if "movie_talent_total_spend" not in ss:
+        ss.movie_talent_total_spend = 0.0
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -60,20 +76,220 @@ def _irr_label(irr) -> str:
     return f"{irr * 100:.0f}%"
 
 
+def _active_talent_bonus(ss, genre: str) -> dict:
+    """Star-power/critical-score bonus from an active Overall Deal or a
+    Holding Deal that resolved successfully for THIS cycle -- gated on the
+    partner's specialty matching the chosen genre, a real incentive to keep
+    the slate aligned with whichever relationship was paid for. Overall
+    Deal takes priority if both are somehow true for the same partner.
+    Returns {} when nothing applies."""
+    key = ss.get("movie_overall_deal")
+    if not key:
+        for k, h in ss.get("movie_talent_holds", {}).items():
+            if h.get("status") == "succeeded" and h.get("available_cycle") == ss.movie_cycle:
+                key = k
+                break
+    if not key:
+        return {}
+    partner = TALENT_PARTNERS[key]
+    if partner["specialty"] != genre:
+        return {}
+    return {"partner_name": partner["name"],
+            **{k: v for k, v in partner.items() if k in ("star_power_bonus", "critical_score_bonus")}}
+
+
 def _current_project(ss) -> MovieProject:
     d = ss.movie_draft
+    genre = d.get("genre", GENRES[0])
+    bonus = _active_talent_bonus(ss, genre)
+    star_power = d.get("star_power", 50) + bonus.get("star_power_bonus", 0)
     return MovieProject(
         title=d.get("title", f"Untitled Cycle {ss.movie_cycle} Release"),
-        genre=d.get("genre", GENRES[0]),
+        genre=genre,
         budget_m=d.get("budget_m", 60.0),
         pa_spend_m=d.get("pa_spend_m", 40.0),
-        star_power=d.get("star_power", 50),
+        star_power=min(100, star_power),
         screens=d.get("screens", 3000),
         cycle=ss.movie_cycle,
         release_strategy=d.get("release_strategy", "wide_theatrical"),
         concept_type=d.get("concept_type", CONCEPT_TYPES[0]),
         financing_structure=d.get("financing_structure", "self_finance"),
     )
+
+
+# ── Talent Partnerships — Overall/First-Look Deals, Holding Deals, rivals ────
+def _resolve_talent_cycle_transitions(ss):
+    """Two deterministic, seeded resolutions run at the top of every
+    Decisions render (safe to call repeatedly -- gated so each only fires
+    once per real cycle transition, same posture as preview_show_variance's
+    replay-safety on the TV side):
+    1. Any hold placed last cycle (status 'pending') resolves to
+       succeeded/failed.
+    2. Any partner not yet claimed by the team may have been poached by a
+       rival studio -- the real cost of passing on a relationship.
+    Returns (resolved_hold_key_or_None, newly_poached: dict) for the caller
+    to render as this-render notices."""
+    resolved_hold_key = None
+    for key, h in ss.movie_talent_holds.items():
+        if h.get("status") == "pending" and h.get("cycle_placed") == ss.movie_cycle - 1:
+            forfeit = draw_hold_forfeit(ss.team_name, h["cycle_placed"], key)
+            if forfeit:
+                h["status"] = "failed"
+                h["forfeit_reason"] = forfeit
+            else:
+                h["status"] = "succeeded"
+                h["available_cycle"] = ss.movie_cycle
+            resolved_hold_key = key
+
+    newly_poached = {}
+    checked_through = ss.movie_rival_poach_checked_through
+    if ss.movie_cycle > checked_through:
+        for c in range(checked_through + 1, ss.movie_cycle + 1):
+            for key in TALENT_PARTNERS:
+                if key == ss.movie_overall_deal or key in ss.movie_rival_exclusive:
+                    continue
+                if ss.movie_talent_holds.get(key, {}).get("status") in ("pending", "succeeded"):
+                    continue   # actively engaged with them -- not up for grabs
+                rival = draw_rival_poach(ss.team_name, key, c)
+                if rival:
+                    ss.movie_rival_exclusive[key] = rival
+                    newly_poached[key] = rival
+        ss.movie_rival_poach_checked_through = ss.movie_cycle
+    return resolved_hold_key, newly_poached
+
+
+def _section_talent_partnerships(ss):
+    """Level-wide talent relationships, rendered before Greenlight -- a
+    standing partnership (or a held window) should shape what gets built,
+    not the other way around, same placement rationale as TV/Streaming's
+    Sports Rights section. Two mechanics: a standing Overall/First-Look
+    Deal (signed once, benefits every remaining cycle whose genre matches
+    the partner's specialty) and one-off Holding Deals (pay to reserve a
+    partner's window for next cycle -- a rival studio may have already
+    claimed it, resolved instantly, and even a successful hold can still
+    fall through by the time it converts). Partners not claimed by anyone
+    can be poached permanently by a rival studio each cycle -- passing on a
+    relationship isn't a neutral no-op."""
+    resolved_hold_key, newly_poached = _resolve_talent_cycle_transitions(ss)
+
+    st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">1 · Talent Partnerships '
+                '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">Sign a standing Overall/First-Look Deal, or place a cheaper '
+        'one-off Holding Deal on a partner\'s window for next cycle. Either way, a rival studio can beat '
+        'you to it -- and a partner nobody claims can quietly get signed away for good.</p>',
+        unsafe_allow_html=True)
+
+    if resolved_hold_key:
+        h = ss.movie_talent_holds[resolved_hold_key]
+        ok = h["status"] == "succeeded"
+        st.markdown(f"""
+        <div class="rounded-lg p-3 mb-2" style="background:rgba({'102,187,106' if ok else '239,83,80'},.08);
+             border:1px solid rgba({'102,187,106' if ok else '239,83,80'},.3);">
+          <div class="text-sm font-semibold" style="color:{SUCCESS if ok else DANGER};">
+            {'✅' if ok else '❌'} Holding Deal Update — {TALENT_PARTNERS[resolved_hold_key]['name']}</div>
+          <div class="text-xs text-ink2 mt-1">{'The window held together — available this cycle if it fits your genre.' if ok else h['forfeit_reason']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    for key, rival in newly_poached.items():
+        st.markdown(f"""
+        <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
+          <div class="text-sm font-semibold" style="color:{WARN};">🚨 {rival} signed {TALENT_PARTNERS[key]['name']} to an exclusive deal</div>
+          <div class="text-xs text-ink2 mt-1">No longer available to you for the rest of this level.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # This cycle's hold attempts -- rival-claim results are instant.
+    for key, h in ss.movie_talent_holds.items():
+        if h.get("cycle_placed") == ss.movie_cycle and h["status"] in ("pending", "rival_claimed"):
+            if h["status"] == "rival_claimed":
+                st.markdown(f"""
+                <div class="rounded-lg p-3 mb-2" style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.3);">
+                  <div class="text-sm" style="color:{DANGER};">❌ {h['rival']} had already locked up
+                  {TALENT_PARTNERS[key]['name']}'s window — the hold fee is gone either way.</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="rounded-lg p-3 mb-2" style="background:rgba(26,107,181,.08);border:1px solid rgba(26,107,181,.3);">
+                  <div class="text-sm" style="color:{ACCENT2};">🤞 Hold placed on {TALENT_PARTNERS[key]['name']}
+                  — you'll know whether it held together at the start of next cycle.</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ── Overall/First-Look Deal ──────────────────────────────────────────────
+    if ss.movie_overall_deal:
+        partner = TALENT_PARTNERS[ss.movie_overall_deal]
+        bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
+                       else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
+        st.markdown(f"""
+        <div class="rounded-lg border border-line bg-surface2 p-3 mb-3">
+          <div class="text-sm" style="color:{ACCENT};">🤝 Overall Deal active: <b>{partner['name']}</b>
+          ({partner['specialty']} specialty) — {bonus_label} on {partner['specialty']} projects for the
+          rest of your slate.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        signable = {k: p for k, p in TALENT_PARTNERS.items() if k not in ss.movie_rival_exclusive}
+        cols = st.columns(len(TALENT_PARTNERS))
+        for col, key in zip(cols, TALENT_PARTNERS):
+            partner = TALENT_PARTNERS[key]
+            with col:
+                poached_by = ss.movie_rival_exclusive.get(key)
+                bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
+                               else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
+                opacity = "opacity:.45;" if poached_by else ""
+                st.markdown(f"""
+                <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;{opacity}">
+                  <div class="text-sm font-semibold text-ink">{partner['name']}</div>
+                  <div class="text-[10px] text-muted font-mono mb-2">{partner['specialty']}</div>
+                  <div class="text-xs text-ink2">{bonus_label}</div>
+                  <div class="text-xs text-warn mt-1">${partner['overall_deal_cost_m']:.0f}M</div>
+                  {f'<div class="text-[10px] mt-1" style="color:{DANGER};">Signed by {poached_by}</div>' if poached_by else ''}
+                </div>
+                """, unsafe_allow_html=True)
+                if not poached_by and st.button("Sign", key=f"sign_overall_{key}", use_container_width=True):
+                    ss.movie_overall_deal = key
+                    ss.movie_talent_total_spend += partner["overall_deal_cost_m"]
+                    st.rerun()
+
+    # ── Holding Deals ──────────────────────────────────────────────────────
+    st.markdown(
+        '<p class="text-xs text-ink2 mt-3 mb-1">Or place a cheaper one-off Holding Deal on a partner\'s '
+        'window for <b>next</b> cycle.</p>', unsafe_allow_html=True)
+    holdable = [k for k in TALENT_PARTNERS
+                if k != ss.movie_overall_deal
+                and k not in ss.movie_rival_exclusive
+                and ss.movie_talent_holds.get(k, {}).get("status") != "pending"]
+    if holdable:
+        hcols = st.columns(len(holdable))
+        for col, key in zip(hcols, holdable):
+            partner = TALENT_PARTNERS[key]
+            with col:
+                st.markdown(f"""
+                <div class="rounded-lg border border-line bg-surface p-2" style="height:100%;">
+                  <div class="text-xs font-semibold text-ink">{partner['name']}</div>
+                  <div class="text-[10px] text-muted font-mono">${partner['hold_cost_m']:.1f}M hold fee</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
+                    ss.movie_talent_total_spend += partner["hold_cost_m"]
+                    rival = draw_rival_claim(ss.team_name, ss.movie_cycle, key)
+                    if rival:
+                        ss.movie_talent_holds[key] = {"status": "rival_claimed",
+                                                       "cycle_placed": ss.movie_cycle, "rival": rival}
+                    else:
+                        ss.movie_talent_holds[key] = {"status": "pending", "cycle_placed": ss.movie_cycle}
+                    st.rerun()
+
+    if ss.movie_talent_total_spend > 0:
+        st.caption(f"💸 Total spent on talent relationships so far: ${ss.movie_talent_total_spend:.1f}M "
+                   f"(a real cash cost, tracked separately from any single project's NPV — see the "
+                   f"Slate Complete summary).")
+
+    st.divider()
 
 
 # ── Progress indicator ───────────────────────────────────────────────────────
@@ -203,13 +419,19 @@ def _decisions(ss):
 
     st.markdown(
         '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
+        '<a href="#talent" style="color:#1a6bb5;">Talent Partnerships</a> · '
         '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
         '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'
         '</div>', unsafe_allow_html=True)
 
+    # A standing partnership (or a held window) should shape what gets
+    # greenlit, not the other way around -- rendered before Greenlight,
+    # same placement rationale as TV/Streaming's Sports Rights section.
+    _section_talent_partnerships(ss)
+
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">1 · Greenlight the Concept</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">2 · Greenlight the Concept</div>', unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Both budget and P&A spend are cash out today, before any '
         'revenue visibility — unlike Day 1\'s amortized TV cost.</p>', unsafe_allow_html=True)
@@ -222,6 +444,11 @@ def _decisions(ss):
         gc1, gc2 = st.columns(2)
         genre = gc1.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
                                help="Drives international box-office reach and Peacock streaming appeal.")
+        active_bonus = _active_talent_bonus(ss, genre)
+        if active_bonus:
+            bonus_txt = (f"+{active_bonus['star_power_bonus']} Star Power" if "star_power_bonus" in active_bonus
+                         else f"+{active_bonus['critical_score_bonus']:.0f} Critical Reception")
+            st.caption(f"🤝 {active_bonus['partner_name']} bonus active for {genre}: {bonus_txt}")
         concept_type = gc2.selectbox(
             "Concept Type", CONCEPT_TYPES,
             index=CONCEPT_TYPES.index(d.get("concept_type", CONCEPT_TYPES[0])) if d.get("concept_type") in CONCEPT_TYPES else 0,
@@ -325,7 +552,7 @@ def _decisions(ss):
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
     project_base = project   # already reflects this run's Greenlight inputs above
 
-    st.markdown('<div class="section-title">2 · Release Strategy</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">3 · Release Strategy</div>', unsafe_allow_html=True)
 
     # Progressive windowing — Zach Schlessel's brief: the theatrical vs.
     # streaming vs. PVOD tradeoff is a "Year 3 Introduction," not available
@@ -393,6 +620,9 @@ def _decisions(ss):
         # modestly and find acclaim. Neither draw is known to the
         # student until this exact moment.
         critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
+        talent_bonus = _active_talent_bonus(ss, project.genre)
+        if "critical_score_bonus" in talent_bonus:
+            critical_score = min(100.0, critical_score + talent_bonus["critical_score_bonus"])
 
         # Production Trouble — a real, independent creative/talent risk axis
         # (director/actor/VFX/producer setbacks), rare (~5%), applied as a
@@ -442,6 +672,7 @@ def _decisions(ss):
             "talent_take":      waterfall["talent_take"],
             "producer_take":    waterfall["producer_take"],
             "studio_residual":  waterfall["residual"],
+            "talent_partner_bonus": talent_bonus.get("partner_name"),
         }
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
         ss.movie_phase = "results"
@@ -636,6 +867,9 @@ def _complete(ss):
         <div><div class="text-[9px] text-muted font-mono">SCORE</div>
           <div class="text-3xl font-serif" style="color:{total_c};">{score['total']:.0f}</div>
           <div class="text-[9px] text-muted font-mono">/ 100 pts</div></div>
+        <div><div class="text-[9px] text-muted font-mono">TALENT DEAL SPEND</div>
+          <div class="text-3xl font-serif" style="color:{WARN};">${ss.get('movie_talent_total_spend', 0.0):.1f}M</div>
+          <div class="text-[9px] text-muted font-mono">tracked separately, not folded into Score above</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)

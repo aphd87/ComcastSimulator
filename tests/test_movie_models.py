@@ -29,6 +29,8 @@ from utils.movie_models import (
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
     participation_waterfall, TALENT_GROSS_GUARANTEE_M, TALENT_GROSS_PARTICIPATION,
     PRODUCER_NET_PARTICIPATION,
+    TALENT_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
+    draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
 )
 
 
@@ -587,3 +589,100 @@ class TestOscarThresholds:
         # must clear the bar at least sometimes, or it'd be unreachable.
         hi_bounds = [hi for (_lo, _mode, hi) in CRITICAL_RECEPTION_BOUNDS.values()]
         assert AWARDS_WIN_THRESHOLD < max(hi_bounds)
+
+
+class TestTalentPartners:
+    """2026-08-04: TALENT_PARTNERS data integrity -- every partner must
+    carry exactly one bonus type (star_power_bonus XOR critical_score_bonus)
+    so app_pages/movies.py's bonus-label logic (`if 'star_power_bonus' in
+    partner else ...`) never silently picks the wrong branch."""
+
+    def test_every_partner_has_exactly_one_bonus_type(self):
+        for key, partner in TALENT_PARTNERS.items():
+            has_star = "star_power_bonus" in partner
+            has_critical = "critical_score_bonus" in partner
+            assert has_star != has_critical, f"{key} must have exactly one bonus type"
+
+    def test_every_partner_has_positive_costs(self):
+        for partner in TALENT_PARTNERS.values():
+            assert partner["overall_deal_cost_m"] > 0
+            assert partner["hold_cost_m"] > 0
+            assert partner["overall_deal_cost_m"] > partner["hold_cost_m"]   # standing > one-off, always
+
+    def test_every_partner_specialty_is_a_real_genre(self):
+        from utils.movie_models import GENRES
+        for partner in TALENT_PARTNERS.values():
+            assert partner["specialty"] in GENRES
+
+
+class TestRivalStudioDynamics:
+    """2026-08-04, per user request ("is there any game theory... where you
+    can see how your choices impact rival studios?" and "students should
+    [see opportunities] that may or may not be taken up by rival studios").
+    Three independent, seeded, deterministic draws -- rival claiming a held
+    window instantly, a placed hold still falling through, and a rival
+    permanently poaching an unclaimed partner."""
+
+    def test_rival_claim_rate_matches_the_configured_chance(self):
+        fired = sum(1 for i in range(1500) if draw_rival_claim(f"Team{i}", 1, "meridian"))
+        rate = fired / 1500
+        assert abs(rate - RIVAL_CLAIM_CHANCE) < 0.05
+
+    def test_rival_claim_returns_a_real_rival_name(self):
+        claims = [draw_rival_claim(f"Team{i}", 1, "meridian") for i in range(500)]
+        fired = [c for c in claims if c is not None]
+        assert fired   # should fire at least once in 500 draws at a 20% rate
+        assert all(r in RIVAL_STUDIOS for r in fired)
+
+    def test_rival_claim_is_deterministic_per_team_cycle_partner(self):
+        a = draw_rival_claim("Reproducible Team", 2, "northbench")
+        b = draw_rival_claim("Reproducible Team", 2, "northbench")
+        assert a == b
+
+    def test_hold_forfeit_rate_matches_the_configured_chance(self):
+        fired = sum(1 for i in range(1500) if draw_hold_forfeit(f"Team{i}", 1, "afterdark"))
+        rate = fired / 1500
+        assert abs(rate - HOLD_FORFEIT_CHANCE) < 0.05
+
+    def test_hold_forfeit_returns_a_reason_string_when_it_fires(self):
+        fired = [draw_hold_forfeit(f"Team{i}", 1, "brightlane") for i in range(500)]
+        reasons = [r for r in fired if r is not None]
+        assert reasons
+        assert all(isinstance(r, str) and len(r) > 10 for r in reasons)
+
+    def test_rival_claim_and_hold_forfeit_are_independent_axes(self):
+        # Same (team, cycle, partner) triple -- clearing the rival-claim
+        # check must not correlate with the hold-forfeit outcome, since
+        # they're resolved at different points in the flow (placement vs.
+        # next-cycle) and use different seed offsets.
+        claim_hits = sum(1 for i in range(800) if draw_rival_claim(f"IndepTeam{i}", 1, "meridian"))
+        forfeit_hits = sum(1 for i in range(800) if draw_hold_forfeit(f"IndepTeam{i}", 1, "meridian"))
+        # Both individually near their configured rates -- if they were
+        # accidentally sharing a seed/correlated, one of these would drift
+        # far from its own configured chance.
+        assert abs(claim_hits / 800 - RIVAL_CLAIM_CHANCE) < 0.06
+        assert abs(forfeit_hits / 800 - HOLD_FORFEIT_CHANCE) < 0.06
+
+    def test_rival_poach_rate_matches_the_configured_chance(self):
+        fired = sum(1 for i in range(1500) if draw_rival_poach(f"Team{i}", "meridian", 1))
+        rate = fired / 1500
+        assert abs(rate - RIVAL_POACH_CHANCE) < 0.05
+
+    def test_rival_poach_is_deterministic_per_team_partner_cycle(self):
+        a = draw_rival_poach("Reproducible Team", "brightlane", 2)
+        b = draw_rival_poach("Reproducible Team", "brightlane", 2)
+        assert a == b
+
+    def test_rival_poach_differs_across_cycles_for_the_same_team(self):
+        # Different cycles must use different seeds -- not literally
+        # guaranteed to differ every time, but across many teams the
+        # cycle-1 and cycle-2 outcomes shouldn't be identical for all of them.
+        c1 = [draw_rival_poach(f"CycleTeam{i}", "meridian", 1) for i in range(200)]
+        c2 = [draw_rival_poach(f"CycleTeam{i}", "meridian", 2) for i in range(200)]
+        assert c1 != c2
+
+    def test_rival_poach_returns_a_real_rival_name(self):
+        poaches = [draw_rival_poach(f"Team{i}", "afterdark", 1) for i in range(500)]
+        fired = [p for p in poaches if p is not None]
+        assert fired
+        assert all(r in RIVAL_STUDIOS for r in fired)

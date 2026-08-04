@@ -37,6 +37,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.game_state as gs
+from utils.movie_models import TALENT_PARTNERS, RIVAL_STUDIOS
 
 
 @pytest.fixture(autouse=True)
@@ -77,15 +78,16 @@ def test_decisions_phase_has_expected_widgets():
     # Merged 2026-07-27: Greenlight + Release Strategy render on one
     # scrolling page now, ending in a single "Simulate" button. At Cycle
     # 1, windowing is still locked (WINDOWING_UNLOCK_CYCLE=3), so no
-    # "Choose <strategy>" buttons are reachable yet -- Simulate is the
-    # only button on the page.
+    # "Choose <strategy>" buttons are reachable yet. Talent Partnerships
+    # (2026-08-04) adds a variable number of Sign/Place Hold buttons
+    # (depends on the deterministic-but-not-obvious rival-poach roll for
+    # this team/cycle) -- Simulate must still be present and last.
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
     assert len(at.selectbox) == 3      # genre, concept type, financing structure
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
-    assert len(at.button) == 1
-    assert "Simulate" in at.button[0].label
+    assert "Simulate" in at.button[-1].label
 
 
 def test_decisions_phase_shows_bear_base_bull_preview():
@@ -102,12 +104,19 @@ def test_decisions_phase_shows_both_decisions_on_one_page():
     assert "Release Strategy" in text
 
 
+def _simulate_button(at):
+    """The Simulate button's index shifts now that Talent Partnerships
+    (2026-08-04) adds a variable number of Sign/Place Hold buttons before
+    it -- find it by label rather than assuming position."""
+    return next(b for b in at.button if "Simulate" in b.label)
+
+
 def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     # Exactly one click, from a fresh session -- the FIRST interaction,
     # not a second one after an earlier phase transition, so this is
     # inside the AppTest safe zone documented at the top of this file.
     at = _movies_app()
-    at.button[0].click().run()
+    _simulate_button(at).click().run()
     assert not at.exception, f"Simulate click raised: {list(at.exception)}"
     assert at.session_state["movie_phase"] == "results"
     assert len(at.session_state["movie_log"]) == 1
@@ -119,7 +128,7 @@ def test_simulate_outcome_includes_financing_and_waterfall_fields():
     # waterfall fields must be present on every real outcome, not just
     # backfilled test fixtures.
     at = _movies_app()
-    at.button[0].click().run()
+    _simulate_button(at).click().run()
     assert not at.exception
     outcome = at.session_state["movie_log"][0]
     assert outcome["project_kwargs"]["financing_structure"] == "self_finance"
@@ -141,6 +150,147 @@ def test_financing_structure_selectbox_offers_all_three_options():
     # exposed there), so check count + the underlying selected value instead.
     assert len(fin_box.options) == 3
     assert fin_box.value == "self_finance"
+
+
+# ── Talent Partnerships (2026-08-04) ─────────────────────────────────────────
+# IMPORTANT: draw_rival_claim/draw_hold_forfeit/draw_rival_poach are all
+# seeded off Python's built-in hash() of the team name, which is
+# PER-PROCESS-RANDOMIZED (PYTHONHASHSEED) unless pinned -- "AppTest Team"'s
+# outcome for a given (cycle, partner) is reproducible *within* one process
+# run but NOT across separate `python` invocations. These tests must
+# therefore never hardcode "AppTest Team resolves to X" (verified once in a
+# throwaway script, then baked into an assertion) -- that value silently
+# drifts every time the test process restarts. Two safe patterns instead:
+# (1) seed the relevant session_state directly (bypasses the draw entirely,
+# tests the app's own resolution/rendering logic against known input), or
+# (2) monkeypatch the draw_* function the click handler calls, so the real
+# button-click code path still executes end-to-end against a controlled
+# result. draw_* functions' actual odds/behavior are covered separately in
+# tests/test_movie_models.py::TestRivalStudioDynamics.
+
+def _movies_app_no_poaching() -> AppTest:
+    """Fresh Cycle 1 Decisions with rival-poaching pre-marked as already
+    resolved through cycle 1 with nothing poached -- makes Sign/Hold tests
+    deterministic regardless of hash randomization (see note above)."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_rival_exclusive = {}
+        st.session_state.movie_rival_poach_checked_through = 1
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_poached_partner_is_shown_disabled_not_as_a_sign_or_hold_button():
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_rival_exclusive = {"northbench": "Paragon Pictures"}
+        st.session_state.movie_rival_poach_checked_through = 1
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Signed by Paragon Pictures" in text
+    button_keys = [b.key for b in at.button if b.key]
+    assert "sign_overall_northbench" not in button_keys
+    assert "hold_northbench" not in button_keys
+    # Untouched partners are still fully available.
+    assert "sign_overall_meridian" in button_keys
+    assert "hold_meridian" in button_keys
+
+
+def test_signing_overall_deal_updates_state_and_tracks_spend():
+    at = _movies_app_no_poaching()
+    at.button(key="sign_overall_brightlane").click().run()
+    assert not at.exception, f"Sign click raised: {list(at.exception)}"
+    assert at.session_state["movie_overall_deal"] == "brightlane"
+    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["brightlane"]["overall_deal_cost_m"]
+
+
+def test_holding_a_rival_claimed_partner_costs_the_fee_for_nothing(monkeypatch):
+    import app_pages.movies as movies_module
+    monkeypatch.setattr(movies_module, "draw_rival_claim", lambda team, cycle, key: "Paragon Pictures")
+    at = _movies_app_no_poaching()
+    at.button(key="hold_meridian").click().run()
+    assert not at.exception, f"Hold click raised: {list(at.exception)}"
+    hold = at.session_state["movie_talent_holds"]["meridian"]
+    assert hold["status"] == "rival_claimed"
+    assert hold["rival"] == "Paragon Pictures"
+    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["meridian"]["hold_cost_m"]
+
+
+def test_holding_a_clear_partner_succeeds_as_pending(monkeypatch):
+    import app_pages.movies as movies_module
+    monkeypatch.setattr(movies_module, "draw_rival_claim", lambda team, cycle, key: None)
+    at = _movies_app_no_poaching()
+    at.button(key="hold_afterdark").click().run()
+    assert not at.exception, f"Hold click raised: {list(at.exception)}"
+    hold = at.session_state["movie_talent_holds"]["afterdark"]
+    assert hold["status"] == "pending"
+    assert hold["cycle_placed"] == 1
+    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["afterdark"]["hold_cost_m"]
+
+
+def _movies_app_with_overall_deal(partner_key: str) -> AppTest:
+    """Seeds an active Overall Deal directly rather than a live click --
+    sidesteps the AppTest + st.rerun() 'second interaction' limitation
+    documented at the top of this file (sign, then simulate, would be two
+    live interactions). partner_key is passed via AppTest's own `args=`,
+    not a default-argument closure -- AppTest.from_function re-execs the
+    script via inspect.getsourcelines as standalone text, so neither a free
+    variable nor a default expression referencing the enclosing scope
+    survives (both raise NameError)."""
+    def script(partner_key):
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_overall_deal = partner_key
+        st.session_state.movie_rival_exclusive = {}
+        st.session_state.movie_rival_poach_checked_through = 1
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30, args=(partner_key,))
+    at.run()
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_star_power_bonus_flows_into_the_resolved_outcome_when_genre_matches():
+    # meridian's specialty is Action/Tentpole, GENRES[0] -- the default
+    # Genre selectbox value -- so this Overall Deal applies without needing
+    # to change any other widget.
+    at = _movies_app_with_overall_deal("meridian")
+    _simulate_button(at).click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    outcome = at.session_state["movie_log"][0]
+    assert outcome["project_kwargs"]["genre"] == "Action/Tentpole"
+    assert outcome["project_kwargs"]["star_power"] == 50 + TALENT_PARTNERS["meridian"]["star_power_bonus"]
+    assert outcome["talent_partner_bonus"] == TALENT_PARTNERS["meridian"]["name"]
+
+
+def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
+    at = _movies_app_no_poaching()
+    _simulate_button(at).click().run()
+    assert not at.exception
+    outcome = at.session_state["movie_log"][0]
+    assert outcome["project_kwargs"]["star_power"] == 50   # unboosted default
+    assert outcome["talent_partner_bonus"] is None
+    assert outcome["talent_partner_bonus"] is None
 
 
 def _results_app_with_outcome(outcome: dict) -> AppTest:

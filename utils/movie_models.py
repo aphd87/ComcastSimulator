@@ -272,6 +272,91 @@ def draw_ancillary_surprise(team_name: str, cycle: int) -> Optional[tuple[str, f
     return reason, mult
 
 
+# ── Talent Deals — Overall/First-Look Partnerships & Holding Deals ─────────
+# 2026-08-04, per user request to build out talent-negotiation content from
+# the Movie Business and Deal Mechanisms note, plus rival-studio competitive
+# dynamics ("can you see how your choices impact rival studios?") -- mirrors
+# utils/sports_models.py's seeded-rival-bidder precedent (real companies
+# bidding against you for league rights), scoped down to talent scheduling.
+#
+# Partners are fictional, modeled on real archetypes (an action-forward
+# producer-star collective, a prestige awards banner, a family-franchise
+# banner, a horror specialist) rather than naming real individuals --
+# distinct from Sports Rights' real company names or the Bravo/Oxygen/
+# Peacock slates' real show titles, since a talent deal is inherently about
+# an individual's persona/likeness, not a corporate brand or a title. Rival
+# studio names are fictional for the same reason (a "rival beat you to a
+# named real actor" framing would read as a claim about a real person).
+TALENT_PARTNERS = {
+    "meridian":   {"name": "Meridian Collective",  "specialty": "Action/Tentpole",
+                    "overall_deal_cost_m": 25.0, "hold_cost_m": 4.0, "star_power_bonus": 15},
+    "northbench": {"name": "Northbench Pictures",   "specialty": "Awards/Prestige",
+                    "overall_deal_cost_m": 18.0, "hold_cost_m": 3.0, "critical_score_bonus": 8.0},
+    "brightlane": {"name": "Brightlane Family",     "specialty": "Animated",
+                    "overall_deal_cost_m": 15.0, "hold_cost_m": 2.5, "star_power_bonus": 10},
+    "afterdark":  {"name": "Afterdark Studio",      "specialty": "Horror",
+                    "overall_deal_cost_m": 10.0, "hold_cost_m": 2.0, "star_power_bonus": 8},
+}
+
+RIVAL_STUDIOS = ["Paragon Pictures", "Constellation Studios", "Anchor Bay Media", "Vantage Films"]
+RIVAL_CLAIM_CHANCE  = 0.20   # chance a rival has already locked the talent's window when you try to hold it
+HOLD_FORFEIT_CHANCE = 0.30   # chance a *successfully placed* hold still falls through by next cycle --
+                              # "no guarantee the movie comes together in time" is the whole point of a hold
+RIVAL_POACH_CHANCE  = 0.12   # per cycle, per unclaimed partner -- the cost of passing: a partner you
+                              # could have signed doesn't just wait for you (per user request, 2026-08-04:
+                              # "game theory should also come into movies that students pass on that may
+                              # or may not be taken up by rival studios"). Once poached, permanently
+                              # unavailable for the rest of the level -- real, not a warning shot.
+
+
+def draw_rival_claim(team_name: str, cycle: int, partner_key: str) -> Optional[str]:
+    """Resolved the instant a Holding Deal is placed -- a rival studio may
+    have already locked up this partner's window before you got there.
+    Seeded off (team, cycle, partner) so trying a different partner isn't
+    correlated with a rival claim on the first one. Returns the rival's
+    name if claimed, else None."""
+    seed = (abs(hash(team_name)) + cycle * 8191 + abs(hash(partner_key)) % 4001 + 11) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > RIVAL_CLAIM_CHANCE:
+        return None
+    return RIVAL_STUDIOS[int(rng.integers(0, len(RIVAL_STUDIOS)))]
+
+
+def draw_hold_forfeit(team_name: str, cycle_placed: int, partner_key: str) -> Optional[str]:
+    """Resolved at the START of the cycle *after* a hold was successfully
+    placed (not rival-claimed) -- does the production actually come
+    together in time? Own independent seed offset from draw_rival_claim, so
+    clearing the rival-claim check doesn't correlate with clearing this
+    one. Returns a forfeit reason if the hold falls through, else None."""
+    seed = (abs(hash(team_name)) + cycle_placed * 5237 + abs(hash(partner_key)) % 4001 + 71) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > HOLD_FORFEIT_CHANCE:
+        return None
+    reasons = [
+        "The attached filmmaker exited over creative differences before the hold converted",
+        "A scheduling conflict with another commitment made the window impossible to honor",
+        "The project didn't clear financing in time and the hold lapsed",
+        "Rewrites pushed past the held window and the talent moved on",
+    ]
+    return reasons[int(rng.integers(0, len(reasons)))]
+
+
+def draw_rival_poach(team_name: str, partner_key: str, cycle: int) -> Optional[str]:
+    """Per-(team, partner, cycle) chance a rival studio signs an EXCLUSIVE
+    deal with a partner the team hasn't claimed by that cycle -- the actual
+    game-theory answer: passing on a relationship isn't a neutral no-op,
+    someone else can take it. Own independent seed offset from
+    draw_rival_claim/draw_hold_forfeit. Callers should only roll this for
+    partners not already claimed by the team (an already-claimed partner
+    isn't up for grabs) and should treat a returned rival as permanent for
+    the rest of the level, not re-rolled."""
+    seed = (abs(hash(team_name)) + cycle * 3541 + abs(hash(partner_key)) % 4001 + 211) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > RIVAL_POACH_CHANCE:
+        return None
+    return RIVAL_STUDIOS[int(rng.integers(0, len(RIVAL_STUDIOS)))]
+
+
 # ── Financing Structure ──────────────────────────────────────────────────────
 # 2026-08-04, per user request to build out the "raising funds" section of a
 # Movie Business and Deal Mechanisms teaching note. self_finance is the
