@@ -86,6 +86,7 @@ def init_state():
         "team_name":       "",
         "school":          "",
         "class_section":   "",
+        "class_abbrev":    "",
         "registered":      False,
         "active_section":  None,   # "leaderboard" / "tv" / "movies" — chosen on the post-registration landing screen
         "active_network":  "oxygen",
@@ -145,6 +146,7 @@ if ss.registered:
             ss.team_name      = ""
             ss.school         = ""
             ss.class_section  = ""
+            ss.class_abbrev   = ""
             ss.active_section = None   # back to the landing screen for the next team
             st.rerun()
 
@@ -247,21 +249,39 @@ if not ss.registered and ss.active_section != "leaderboard":
                 "University", placeholder="e.g. University of Virginia", key="university_input_field",
                 help="Your parent institution — scopes your leaderboard to your own school."
             )
-            class_input = st.text_input("Class / Section", placeholder="e.g. Fall 2026 — Media Strategy, Section A",
-                                         max_chars=60, key="class_input_field")
+            college_input = st.text_input(
+                "School / College", placeholder="e.g. Darden School of Business", key="college_input_field",
+                help="The specific business school within your university."
+            )
+        with icol2:
+            team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
+                                        max_chars=30, key="team_input_field")
+
+        # Class Title / Semester-Year / Class Abbreviation as their own boxes
+        # (previously one merged "Class / Section" field, split out 2026-08-04
+        # per user request for a dedicated Semester/Year box) — combined back
+        # into ss.class_section on submit below, since class_section is the
+        # identity-key field read everywhere else in the app (leaderboard,
+        # game_state gating) and splitting the underlying data model isn't
+        # worth the churn for what's really just a display-clarity change.
+        ccol1, ccol2, ccol3 = st.columns(3)
+        with ccol1:
+            class_title_input = st.text_input(
+                "Class Title", placeholder="e.g. Media Strategy, Section A",
+                max_chars=40, key="class_title_input_field"
+            )
+        with ccol2:
+            semester_input = st.text_input(
+                "Semester / Year", placeholder="e.g. Fall 2026",
+                max_chars=20, key="semester_input_field"
+            )
+        with ccol3:
             class_abbrev_input = st.text_input(
                 "Class Abbreviation (optional)", placeholder="e.g. MBA6120",
                 max_chars=20, key="class_abbrev_input_field",
                 help="A short course code, if your class has one. Optional — just an extra way "
                      "for your instructor to find your team later."
             )
-        with icol2:
-            college_input = st.text_input(
-                "School / College", placeholder="e.g. Darden School of Business", key="college_input_field",
-                help="The specific business school within your university."
-            )
-            team_input = st.text_input("Team Name", placeholder="e.g. Team Alpha, Studio 5...",
-                                        max_chars=30, key="team_input_field")
         if st.button("Register Team →", use_container_width=True, type="primary"):
             if not team_input.strip():
                 st.error("Please enter a team name.")
@@ -269,12 +289,14 @@ if not ss.registered and ss.active_section != "leaderboard":
                 st.error("Please enter your university.")
             elif not college_input.strip():
                 st.error("Please enter your school/college.")
-            elif not class_input.strip():
-                st.error("Please enter your class/section.")
+            elif not class_title_input.strip():
+                st.error("Please enter your class title.")
+            elif not semester_input.strip():
+                st.error("Please enter your semester/year.")
             else:
                 ss.team_name     = team_input.strip()
                 ss.school        = f"{college_input.strip()}, {university_input.strip()}"
-                ss.class_section = class_input.strip()
+                ss.class_section = f"{semester_input.strip()} — {class_title_input.strip()}"
                 ss.class_abbrev  = class_abbrev_input.strip()
                 ss.registered    = True
                 st.rerun()
