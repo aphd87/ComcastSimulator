@@ -17,6 +17,7 @@ from utils.movie_models import (
     genre_scenario_multipliers, scenario_multipliers_for, SCENARIO_MULTIPLIERS,
     GENRE_VARIANCE_SPREAD, WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
+    AWARDS_WIN_THRESHOLD,
     CRITICAL_RECEPTION_BOUNDS, CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
     SEQUEL_OPENING_BONUS_BY_CYCLE, KIDS_OPENING_MULT, KIDS_LONGTAIL_MULT,
     WINDOWING_UNLOCK_CYCLE, CYCLES_TOTAL,
@@ -25,6 +26,9 @@ from utils.movie_models import (
     PRODUCTION_TROUBLE_REASONS,
     draw_ancillary_surprise, ANCILLARY_SURPRISE_CHANCE, ANCILLARY_SURPRISE_RANGE,
     ANCILLARY_SURPRISE_REASONS_UP, ANCILLARY_SURPRISE_REASONS_DOWN,
+    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
+    participation_waterfall, TALENT_GROSS_GUARANTEE_M, TALENT_GROSS_PARTICIPATION,
+    PRODUCER_NET_PARTICIPATION,
 )
 
 
@@ -474,3 +478,112 @@ class TestAncillaryMultipliersWireIntoRevenue:
         base_total = p.total_revenue("base")
         assert base_tp > 0
         assert p.total_revenue("base", theme_park_mult=2.0) == pytest.approx(base_total + base_tp)
+
+
+class TestFinancingStructure:
+    """2026-08-04: Self-Finance/Territorial Pre-Sales/Tax-Incentive -- see
+    utils/movie_models.py's Financing Structure section. self_finance must
+    stay the exact unadjusted baseline every project used before this field
+    existed (additive, not a replacement of the calibrated engine)."""
+
+    def test_self_finance_is_the_unadjusted_baseline(self):
+        p = _tentpole()
+        assert p.financing_structure == "self_finance"
+        assert p.capital_at_risk() == p.budget_m + p.pa_spend_m
+
+    def test_presale_reduces_capital_at_risk(self):
+        base = _tentpole()
+        presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
+        expected = base.budget_m * (1 - PRESALE_ADVANCE_PCT) + base.pa_spend_m
+        assert presale.capital_at_risk() == pytest.approx(expected)
+        assert presale.capital_at_risk() < base.capital_at_risk()
+
+    def test_tax_incentive_reduces_capital_at_risk(self):
+        base = _tentpole()
+        tax = MovieProject(**{**base.__dict__, "financing_structure": "tax_incentive"})
+        expected = base.budget_m * (1 - TAX_CREDIT_PCT) + base.pa_spend_m
+        assert tax.capital_at_risk() == pytest.approx(expected)
+        assert tax.capital_at_risk() < base.capital_at_risk()
+
+    def test_presale_caps_international_box_office(self):
+        base = _tentpole()   # Action/Tentpole: GENRE_INTL_MULT=2.3, real upside to give up
+        presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
+        dom = 100.0
+        full_intl = base.international_box_office(dom)
+        presale_intl = presale.international_box_office(dom)
+        assert presale_intl == pytest.approx(full_intl * PRESALE_INTL_RETAINED_PCT)
+        assert presale_intl < full_intl
+
+    def test_tax_incentive_does_not_touch_international_box_office(self):
+        base = _tentpole()
+        tax = MovieProject(**{**base.__dict__, "financing_structure": "tax_incentive"})
+        dom = 100.0
+        assert tax.international_box_office(dom) == base.international_box_office(dom)
+
+    def test_all_three_structures_produce_valid_positive_capital_at_risk(self):
+        assert FINANCING_STRUCTURES == ["self_finance", "presale", "tax_incentive"]
+        for fs in FINANCING_STRUCTURES:
+            p = MovieProject(**{**_tentpole().__dict__, "financing_structure": fs})
+            assert p.capital_at_risk() > 0
+
+
+class TestParticipationWaterfall:
+    """2026-08-04: Deal Waterfall -- talent gross participation is paid off
+    top-line revenue regardless of profitability, before the studio even
+    recoups its capital; the producer's net participation only comes out
+    of whatever's left after that. Studio residual is deliberately never
+    floored at zero -- a 'gross deal' can leave a studio underwater even on
+    a nominal box-office win, and that's the actual lesson."""
+
+    def test_components_sum_to_the_residual(self):
+        p = _tentpole()
+        wf = participation_waterfall(p, "base")
+        computed_residual = wf["revenue"] - wf["talent_take"] - wf["recoupment"] - wf["producer_take"]
+        assert wf["residual"] == pytest.approx(computed_residual)
+
+    def test_talent_take_is_at_least_the_guarantee(self):
+        p = _indie()
+        wf = participation_waterfall(p, "bear")
+        assert wf["talent_take"] >= TALENT_GROSS_GUARANTEE_M
+
+    def test_talent_take_scales_with_gross_once_it_exceeds_the_guarantee(self):
+        p = _tentpole()   # big movie -- revenue * 10% comfortably exceeds the flat guarantee
+        wf = participation_waterfall(p, "bull")
+        assert wf["talent_take"] == pytest.approx(wf["revenue"] * TALENT_GROSS_PARTICIPATION)
+        assert wf["talent_take"] > TALENT_GROSS_GUARANTEE_M
+
+    def test_producer_take_is_zero_and_residual_is_negative_when_recoupment_isnt_cleared(self):
+        # A small platform-release indie in its bear case: revenue doesn't
+        # clear the talent guarantee plus the full $25M capital at risk --
+        # deterministic at these calibrated numbers, not just "possible."
+        p = _indie()
+        wf = participation_waterfall(p, "bear")
+        after_recoupment = wf["revenue"] - wf["talent_take"] - wf["recoupment"]
+        assert after_recoupment < 0
+        assert wf["producer_take"] == 0.0
+        assert wf["residual"] < 0
+        assert wf["residual"] == pytest.approx(after_recoupment)
+
+    def test_financing_structure_lowers_recoupment_in_the_waterfall(self):
+        base = _tentpole()
+        presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
+        wf_base = participation_waterfall(base, "base")
+        wf_presale = participation_waterfall(presale, "base")
+        assert wf_presale["recoupment"] < wf_base["recoupment"]
+        assert wf_presale["recoupment"] == pytest.approx(presale.capital_at_risk())
+
+
+class TestOscarThresholds:
+    """2026-08-04: Oscar Win reuses the same critical_score draw as the
+    existing Oscar Nomination (awards_contender) threshold, just a higher
+    bar -- a win should never be reachable without also clearing the
+    nomination bar first."""
+
+    def test_win_threshold_is_stricter_than_nomination_threshold(self):
+        assert AWARDS_WIN_THRESHOLD > AWARDS_CONTENDER_THRESHOLD
+
+    def test_win_threshold_is_within_the_realistic_critical_score_range(self):
+        # A win should be rare but reachable -- the highest genre ceiling
+        # must clear the bar at least sometimes, or it'd be unreachable.
+        hi_bounds = [hi for (_lo, _mode, hi) in CRITICAL_RECEPTION_BOUNDS.values()]
+        assert AWARDS_WIN_THRESHOLD < max(hi_bounds)

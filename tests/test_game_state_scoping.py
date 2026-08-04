@@ -297,12 +297,15 @@ class TestComputeLevelNotables:
         assert entry["notables"] == {}
 
 
-def _cycle_row(cycle, title, genre, npv, irr=0.15):
+def _cycle_row(cycle, title, genre, npv, irr=0.15, awards_contender=False, oscar_win=False):
     """Minimal movie_log row matching pages/movies.py's real shape (only
     the fields compute_movie_notables reads: cycle, project_kwargs.title/
-    genre, npv, irr)."""
+    genre, npv, irr, awards_contender, oscar_win). awards_contender/
+    oscar_win default False so every pre-existing call site (written
+    before Oscar tracking existed) keeps its original behavior."""
     return {"cycle": cycle, "project_kwargs": {"title": title, "genre": genre},
-            "npv": npv, "irr": irr}
+            "npv": npv, "irr": irr,
+            "awards_contender": awards_contender, "oscar_win": oscar_win}
 
 
 class TestComputeMovieNotables:
@@ -317,6 +320,7 @@ class TestComputeMovieNotables:
         assert gs.compute_movie_notables([]) == {
             "best_cycle": None, "most_improved": None,
             "consistency_score": None, "genre_variety": None,
+            "oscar_nominations": None, "oscar_wins": None,
         }
 
     def test_single_cycle_is_perfectly_consistent_with_no_improvement_delta(self):
@@ -351,6 +355,31 @@ class TestComputeMovieNotables:
         ]
         notables = gs.compute_movie_notables(log)
         assert notables["genre_variety"] == 2   # Drama, Drama, Comedy -> 2 distinct
+
+    def test_oscar_nominations_and_wins_are_counted_across_the_slate(self):
+        log = [
+            _cycle_row(1, "Bomb", "Drama", npv=5.0, awards_contender=False, oscar_win=False),
+            _cycle_row(2, "Nominee", "Drama", npv=10.0, awards_contender=True, oscar_win=False),
+            _cycle_row(3, "Winner", "Awards/Prestige", npv=15.0, awards_contender=True, oscar_win=True),
+        ]
+        notables = gs.compute_movie_notables(log)
+        assert notables["oscar_nominations"] == 2   # both awards_contender=True rows
+        assert notables["oscar_wins"] == 1
+
+    def test_oscar_fields_default_to_zero_not_none_when_no_movie_won_or_was_nominated(self):
+        log = [_cycle_row(1, "Ordinary", "Comedy", npv=5.0)]
+        notables = gs.compute_movie_notables(log)
+        assert notables["oscar_nominations"] == 0
+        assert notables["oscar_wins"] == 0
+
+    def test_oscar_fields_default_to_zero_for_pre_feature_log_entries(self):
+        # Entries recorded before Oscar tracking existed carry neither key
+        # at all -- must not raise, must read as 0, not None/missing.
+        legacy_row = {"cycle": 1, "project_kwargs": {"title": "Old Movie", "genre": "Drama"},
+                      "npv": 5.0, "irr": 0.1}
+        notables = gs.compute_movie_notables([legacy_row])
+        assert notables["oscar_nominations"] == 0
+        assert notables["oscar_wins"] == 0
 
     def test_volatile_npvs_score_lower_consistency_than_steady_ones(self):
         steady = [_cycle_row(y, f"Movie {y}", "Drama", npv=10.0) for y in (1, 2, 3)]

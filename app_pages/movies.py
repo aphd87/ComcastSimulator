@@ -16,9 +16,10 @@ from utils.movie_models import (
     MovieProject, GENRES, GENRE_INTL_MULT, GENRE_SVOD_APPEAL, RELEASE_STRATEGIES,
     SCENARIO_MULTIPLIERS, CYCLES_TOTAL, risk_adjusted_npv, capital_efficiency,
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
-    draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
+    draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD, AWARDS_WIN_THRESHOLD,
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
     draw_production_trouble, draw_ancillary_surprise,
+    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, TAX_CREDIT_PCT, participation_waterfall,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -71,6 +72,7 @@ def _current_project(ss) -> MovieProject:
         cycle=ss.movie_cycle,
         release_strategy=d.get("release_strategy", "wide_theatrical"),
         concept_type=d.get("concept_type", CONCEPT_TYPES[0]),
+        financing_structure=d.get("financing_structure", "self_finance"),
     )
 
 
@@ -241,6 +243,30 @@ def _decisions(ss):
                           help="Lifts opening awareness, moderately — doesn't compound with P&A.")
         screens = c4.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
 
+        fin_labels = {
+            "self_finance": "Self-Finance — full capital at risk, full upside",
+            "presale": "Territorial Pre-Sales — lower capital at risk, caps international upside",
+            "tax_incentive": "Tax-Incentive Location — cuts budget cost, no upside cap",
+        }
+        financing_structure = st.selectbox(
+            "Financing Structure", FINANCING_STRUCTURES,
+            index=FINANCING_STRUCTURES.index(d.get("financing_structure", "self_finance"))
+                  if d.get("financing_structure") in FINANCING_STRUCTURES else 0,
+            format_func=lambda k: fin_labels[k],
+            help="How this movie gets funded before a single ticket sells.",
+        )
+        fin_notes = {
+            "self_finance": "You fund 100% of budget + P&A yourself and keep every dollar of "
+                             "revenue, domestic and international.",
+            "presale": f"An international distributor advances ~{PRESALE_ADVANCE_PCT:.0%} of your "
+                       f"production budget before you shoot, in exchange for owning most of the "
+                       f"international box office outright — real cash relief now, a capped upside later.",
+            "tax_incentive": f"Shooting in a tax-friendly location cuts your effective production "
+                              f"budget by ~{TAX_CREDIT_PCT:.0%} (net of the discount most non-local "
+                              f"studios take to monetize the credit) — no revenue trade-off.",
+        }
+        st.caption(fin_notes[financing_structure])
+
         capital = budget + pa
         realistic_max_screens = capital * 18   # rough real-world benchmark: a wide-release
                                                 # distribution deal scales screen count with
@@ -254,21 +280,30 @@ def _decisions(ss):
             )
 
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
-                 release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type)
+                 release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
+                 financing_structure=financing_structure)
     ss.movie_draft = draft
     project = _current_project(ss)
 
     with right:
         st.markdown('<div class="section-title">Capital at Risk</div>', unsafe_allow_html=True)
+        raw_capital = budget + pa
+        financed_capital = project.capital_at_risk()
+        savings_line = ""
+        if financed_capital < raw_capital:
+            savings_line = (f'<div class="flex justify-between text-sm py-1" style="color:{SUCCESS};">'
+                             f'<span class="text-ink2">Financing Savings</span>'
+                             f'<span class="font-mono">-${raw_capital - financed_capital:.1f}M</span></div>')
         st.markdown(f"""
         <div class="rounded-lg border border-line bg-surface p-4">
           <div class="flex justify-between text-sm py-1"><span class="text-ink2">Production Budget</span>
             <span class="font-mono text-warn">${budget:.1f}M</span></div>
           <div class="flex justify-between text-sm py-1 border-b border-line pb-2"><span class="text-ink2">P&A Spend</span>
             <span class="font-mono text-warn">${pa:.1f}M</span></div>
+          {savings_line}
           <div class="flex justify-between text-base font-semibold pt-2">
-            <span class="text-ink">Total Committed</span>
-            <span class="font-mono text-danger">${project.capital_at_risk():.1f}M</span></div>
+            <span class="text-ink">Capital At Risk</span>
+            <span class="font-mono text-danger">${financed_capital:.1f}M</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -381,6 +416,8 @@ def _decisions(ss):
             pvod_mult = theme_park_mult = ancillary_mult
 
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
+        waterfall = participation_waterfall(project, multiplier, critical_score,
+                                             pvod_mult=pvod_mult, theme_park_mult=theme_park_mult)
         outcome = {
             "cycle":            ss.movie_cycle,
             "project_kwargs":   dict(project.__dict__),
@@ -388,6 +425,7 @@ def _decisions(ss):
             "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
             "critical_score":   critical_score,
             "awards_contender": awards_eligible and critical_score >= AWARDS_CONTENDER_THRESHOLD,
+            "oscar_win":        awards_eligible and critical_score >= AWARDS_WIN_THRESHOLD,
             "production_trouble": trouble_reason,
             "ancillary_surprise": ancillary_reason,
             "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
@@ -401,6 +439,9 @@ def _decisions(ss):
             "awards_bump":      project.awards_season_bump(multiplier, critical_score),
             "theme_park":       project.theme_park_value(multiplier) * theme_park_mult,
             "capital_at_risk":  project.capital_at_risk(),
+            "talent_take":      waterfall["talent_take"],
+            "producer_take":    waterfall["producer_take"],
+            "studio_residual":  waterfall["residual"],
         }
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
         ss.movie_phase = "results"
@@ -476,11 +517,15 @@ def _results(ss):
     st.markdown('<div class="section-title">Critical Reception</div>', unsafe_allow_html=True)
     awards_note = ""
     if genre in AWARDS_ELIGIBLE_GENRES:
-        if result["awards_contender"]:
+        if result.get("oscar_win"):
+            awards_note = (f'<div class="text-xs mt-2" style="color:{ACCENT};">'
+                            f'🏆 Oscar Win — cleared the {AWARDS_WIN_THRESHOLD:.0f} threshold, on top of '
+                            f'the nomination-level rerelease bump: +${result["awards_bump"]:.2f}M.</div>')
+        elif result["awards_contender"]:
             awards_note = (f'<div class="text-xs mt-2" style="color:{SUCCESS};">'
-                            f'🏆 Awards contender — cleared the {AWARDS_CONTENDER_THRESHOLD:.0f} threshold, '
-                            f'triggering a For-Your-Consideration rerelease bump: '
-                            f'+${result["awards_bump"]:.2f}M.</div>')
+                            f'🎬 Oscar Nomination — cleared the {AWARDS_CONTENDER_THRESHOLD:.0f} threshold '
+                            f'(win needs {AWARDS_WIN_THRESHOLD:.0f}+), triggering a For-Your-Consideration '
+                            f'rerelease bump: +${result["awards_bump"]:.2f}M.</div>')
         else:
             awards_note = (f'<div class="text-xs text-muted mt-2">Didn\'t clear the '
                             f'{AWARDS_CONTENDER_THRESHOLD:.0f} awards-contender threshold — no rerelease bump.</div>')
@@ -512,6 +557,27 @@ def _results(ss):
     vals.append(result["total_revenue"])
     fig = waterfall_chart(labels, vals, title="Revenue by Window ($M)", height=300)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ── Deal Waterfall — where revenue goes, not where it comes from ─────────
+    # 2026-08-04: the chart above answers "where did the money come from";
+    # this answers "who gets paid, and in what order" -- see
+    # utils/movie_models.py::participation_waterfall. `.get()`-guarded since
+    # movie_log entries recorded before this feature existed won't carry
+    # these keys.
+    if all(k in result for k in ("talent_take", "producer_take", "studio_residual")):
+        st.markdown('<div class="section-title mt-4">Deal Waterfall — Who Gets Paid</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="text-xs text-ink2 mb-2">Revenue doesn\'t all stay with the studio. Talent gross '
+            'participation is paid off top-line revenue regardless of profitability, before capital is '
+            'even recouped; the producer\'s net participation only comes out of whatever\'s left after '
+            'that. Studio Residual can go negative even on a nominal box-office win.</p>',
+            unsafe_allow_html=True)
+        wf_labels = ["Total Revenue", "Talent Gross Participation", "Capital Recoupment",
+                     "Producer Net Participation", "Studio Residual"]
+        wf_vals = [result["total_revenue"], -result["talent_take"], -result["capital_at_risk"],
+                   -result["producer_take"], result["studio_residual"]]
+        fig_wf = waterfall_chart(wf_labels, wf_vals, title="Distribution & Participation ($M)", height=300)
+        st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
 
     if ss.movie_log:
         st.markdown('<div class="section-title mt-2">Slate So Far — NPV by Cycle</div>', unsafe_allow_html=True)
@@ -634,13 +700,19 @@ def _complete(ss):
     cs_c     = SUCCESS if (cs or 0) >= 85 else (WARN if (cs or 0) >= 65 else DANGER)
     cs_val   = f"{cs:.0f}/100" if cs is not None else "—"
     cs_label = ("Rock-solid" if cs >= 85 else "Steady" if cs >= 65 else "Volatile") if cs is not None else "not enough data"
+    ow = notables.get("oscar_wins") or 0
+    on = notables.get("oscar_nominations") or 0
+    oscar_val = f"{ow} win{'s' if ow != 1 else ''}" if ow else (f"{on} nom{'s' if on != 1 else ''}" if on else "—")
+    oscar_c   = ACCENT if ow else (SUCCESS if on else TEXT2)
+    oscar_sub = f"{on} total nomination{'s' if on != 1 else ''}" if ow and on > ow else "across the slate"
 
-    n_cols = st.columns(4)
+    n_cols = st.columns(5)
     cards = [
         ("BEST CYCLE",     bc_val, SUCCESS, bc_sub),
         ("MOST IMPROVED",  mi_val, mi_c,    "NPV, first → last cycle"),
         ("CONSISTENCY",    cs_val, cs_c,    cs_label),
         ("GENRE VARIETY",  str(gv), ACCENT, "distinct genres attempted"),
+        ("OSCAR RECOGNITION", oscar_val, oscar_c, oscar_sub),
     ]
     for col, (title, val, color, sub) in zip(n_cols, cards):
         with col:

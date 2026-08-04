@@ -81,7 +81,7 @@ def test_decisions_phase_has_expected_widgets():
     # only button on the page.
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
-    assert len(at.selectbox) == 2      # genre, concept type
+    assert len(at.selectbox) == 3      # genre, concept type, financing structure
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert len(at.button) == 1
@@ -112,6 +112,117 @@ def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     assert at.session_state["movie_phase"] == "results"
     assert len(at.session_state["movie_log"]) == 1
     assert at.session_state["movie_log"][0]["cycle"] == 1
+
+
+def test_simulate_outcome_includes_financing_and_waterfall_fields():
+    # 2026-08-04: default financing_structure (self_finance) and the deal
+    # waterfall fields must be present on every real outcome, not just
+    # backfilled test fixtures.
+    at = _movies_app()
+    at.button[0].click().run()
+    assert not at.exception
+    outcome = at.session_state["movie_log"][0]
+    assert outcome["project_kwargs"]["financing_structure"] == "self_finance"
+    assert outcome["capital_at_risk"] == outcome["project_kwargs"]["budget_m"] + outcome["project_kwargs"]["pa_spend_m"]
+    for key in ("oscar_win", "talent_take", "producer_take", "studio_residual"):
+        assert key in outcome
+    assert outcome["talent_take"] >= 0
+    # residual must equal revenue minus every deducted component -- the
+    # actual accounting identity the Deal Waterfall chart depends on.
+    computed = (outcome["total_revenue"] - outcome["talent_take"]
+                - outcome["capital_at_risk"] - outcome["producer_take"])
+    assert outcome["studio_residual"] == pytest.approx(computed)
+
+
+def test_financing_structure_selectbox_offers_all_three_options():
+    at = _movies_app()
+    fin_box = at.selectbox[2]   # genre, concept_type, financing_structure in that order
+    # .options is the format_func-rendered display text (raw keys aren't
+    # exposed there), so check count + the underlying selected value instead.
+    assert len(fin_box.options) == 3
+    assert fin_box.value == "self_finance"
+
+
+def _results_app_with_outcome(outcome: dict) -> AppTest:
+    """Seeds a single resolved outcome directly into movie_log and lands on
+    the Results phase for it -- same 'seed state, single .run(), no
+    interaction' pattern as _complete_movies_app, sidesteps the AppTest +
+    st.rerun() limitation documented at the top of this file.
+
+    Passed via AppTest's own `args=`, not a default-argument closure --
+    AppTest.from_function re-execs the script via inspect.getsourcelines as
+    standalone text, so neither a free variable nor a default expression
+    referencing the enclosing scope survives (both raise NameError)."""
+    def script(outcome):
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_cycle = outcome["cycle"]
+        st.session_state.movie_phase = "results"
+        st.session_state.movie_log = [outcome]
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30, args=(outcome,))
+    at.run()
+    assert not at.exception, f"Results phase raised: {list(at.exception)}"
+    return at
+
+
+def _full_outcome(**overrides) -> dict:
+    """A complete, current-shape movie_log outcome (all keys _results()
+    can possibly read), so tests only need to override what they care about."""
+    base = {
+        "cycle": 1,
+        "project_kwargs": {"title": "Test Movie", "genre": "Awards/Prestige", "budget_m": 40,
+                            "pa_spend_m": 20, "star_power": 60, "screens": 1500, "cycle": 1,
+                            "release_strategy": "wide_theatrical", "concept_type": "New IP",
+                            "financing_structure": "self_finance"},
+        "multiplier": 2.8, "scenario_label": "base", "critical_score": 60.0,
+        "awards_contender": False, "oscar_win": False,
+        "production_trouble": None, "ancillary_surprise": None,
+        "npv": 10.0, "irr": 0.2, "total_revenue": 80.0, "domestic_bo": 40.0,
+        "theatrical_net": 30.0, "pvod": 10.0, "sub_value": 5.0, "longtail": 5.0,
+        "awards_bump": 0.0, "theme_park": 0.0, "capital_at_risk": 60.0,
+        "talent_take": 8.0, "producer_take": 2.0, "studio_residual": 10.0,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_results_phase_shows_deal_waterfall_when_fields_present():
+    at = _results_app_with_outcome(_full_outcome())
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Deal Waterfall" in text
+
+
+def test_results_phase_skips_deal_waterfall_for_legacy_outcomes():
+    # An outcome recorded before this feature existed -- no talent_take/
+    # producer_take/studio_residual keys at all. Must render cleanly and
+    # simply omit the new chart, not raise a KeyError.
+    legacy = _full_outcome()
+    for key in ("talent_take", "producer_take", "studio_residual"):
+        del legacy[key]
+    at = _results_app_with_outcome(legacy)
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Deal Waterfall" not in text
+
+
+def test_results_phase_shows_oscar_win_over_nomination_copy():
+    at = _results_app_with_outcome(_full_outcome(
+        awards_contender=True, oscar_win=True, critical_score=90.0))
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Oscar Win" in text
+    assert "Oscar Nomination" not in text
+
+
+def test_results_phase_shows_oscar_nomination_when_not_a_win():
+    at = _results_app_with_outcome(_full_outcome(
+        awards_contender=True, oscar_win=False, critical_score=75.0))
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Oscar Nomination" in text
+    assert "Oscar Win" not in text
 
 
 def _movies_app_at_cycle_3() -> AppTest:

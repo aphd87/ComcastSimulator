@@ -210,7 +210,8 @@ def compute_movie_notables(movie_log: list[dict]) -> dict:
     """
     if not movie_log:
         return {"best_cycle": None, "most_improved": None,
-                "consistency_score": None, "genre_variety": None}
+                "consistency_score": None, "genre_variety": None,
+                "oscar_nominations": None, "oscar_wins": None}
 
     sorted_log = sorted(movie_log, key=lambda r: r["cycle"])
 
@@ -236,11 +237,20 @@ def compute_movie_notables(movie_log: list[dict]) -> dict:
 
     genre_variety = len({r["project_kwargs"]["genre"] for r in sorted_log})
 
+    # Oscar tracking (2026-08-04) -- .get()-guarded since entries recorded
+    # before this feature existed won't carry these keys; treated as 0
+    # (not "unknown"), same posture as most_improved/consistency defaulting
+    # cleanly for a short log rather than surfacing a missing-data state.
+    oscar_nominations = sum(1 for r in sorted_log if r.get("awards_contender"))
+    oscar_wins         = sum(1 for r in sorted_log if r.get("oscar_win"))
+
     return {
         "best_cycle":        best_cycle,
         "most_improved":     most_improved,
         "consistency_score": consistency_score,
         "genre_variety":     genre_variety,
+        "oscar_nominations": oscar_nominations,
+        "oscar_wins":        oscar_wins,
     }
 
 # ── FERPA-Safe Leaderboard ────────────────────────────────────────────────────

@@ -166,6 +166,14 @@ CRITICAL_RECEPTION_BOUNDS = {
 AWARDS_ELIGIBLE_GENRES = {"Awards/Prestige", "Drama"}
 AWARDS_CONTENDER_THRESHOLD = 72   # critical score needed to trigger the rerelease bump
 
+# Oscar Win — 2026-08-04, per user request to surface awards outcomes
+# students can track year over year (mirrors real Oscars: a nomination
+# doesn't guarantee a win). Deliberately reuses the same already-drawn
+# critical_score rather than adding a second RNG draw -- a higher bar on
+# the same signal, not an independent coin flip, so a team that clearly
+# outperformed critically is the one that wins, not luck on top of luck.
+AWARDS_WIN_THRESHOLD = 88
+
 # Theme park / merchandise / Universal licensing — Zach Schlessel's brief:
 # "genre determines theme park eligibility." Only genres with the scale and
 # durability to support a themed attraction or a real merchandise line
@@ -264,6 +272,30 @@ def draw_ancillary_surprise(team_name: str, cycle: int) -> Optional[tuple[str, f
     return reason, mult
 
 
+# ── Financing Structure ──────────────────────────────────────────────────────
+# 2026-08-04, per user request to build out the "raising funds" section of a
+# Movie Business and Deal Mechanisms teaching note. self_finance is the
+# original, unadjusted behavior every project used before this field
+# existed (additive, not a replacement of the calibrated engine -- same
+# posture as Concept Type). The other two are real, asymmetric trade-offs,
+# not just discounts:
+#   - presale: an international distributor advances part of the budget
+#     before production even starts (the note's "bridging the gap"
+#     framing) in exchange for owning those territories' box office
+#     outright -- lower capital at risk now, capped international upside
+#     later, which matters most for the wide-reach genres (GENRE_INTL_MULT).
+#   - tax_incentive: a real, close-to-free cost reduction when available
+#     (the note cites ~30% headline credits) -- deliberately NOT given an
+#     artificial downside just to make three choices symmetric; the real
+#     lesson is a studio should almost always take this when production
+#     logistics allow it.
+FINANCING_STRUCTURES = ["self_finance", "presale", "tax_incentive"]
+PRESALE_ADVANCE_PCT       = 0.40   # fraction of production budget covered by the advance
+PRESALE_INTL_RETAINED_PCT = 0.15   # studio's residual/overage share of the international b.o. it gave away
+TAX_CREDIT_PCT            = 0.22   # net-of-discount effective credit (headline ~30%, but non-refundable
+                                     # credits are commonly sold at a discount -- see the note)
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -275,9 +307,17 @@ class MovieProject:
     cycle: int                # 1, 2, or 3
     release_strategy: str = "wide_theatrical"   # "wide_theatrical" | "platform" | "day_and_date"
     concept_type: str = "New IP"                # "New IP" | "Sequel" | "Family/Kids" | "Indie-Horror"
+    financing_structure: str = "self_finance"   # "self_finance" | "presale" | "tax_incentive"
 
     def capital_at_risk(self) -> float:
-        """Total upfront cash committed before any revenue arrives."""
+        """Total upfront cash committed before any revenue arrives --
+        reduced by financing_structure's chosen structure (see
+        FINANCING_STRUCTURES above); self_finance is the unadjusted
+        budget_m + pa_spend_m baseline."""
+        if self.financing_structure == "presale":
+            return self.budget_m * (1 - PRESALE_ADVANCE_PCT) + self.pa_spend_m
+        if self.financing_structure == "tax_incentive":
+            return self.budget_m * (1 - TAX_CREDIT_PCT) + self.pa_spend_m
         return self.budget_m + self.pa_spend_m
 
     def window_days(self) -> int:
@@ -335,7 +375,15 @@ class MovieProject:
         return self.opening_weekend() * multiplier * self.cannibalization_factor()
 
     def international_box_office(self, domestic_gross: float) -> float:
-        return domestic_gross * GENRE_INTL_MULT.get(self.genre, 1.4)
+        """International box office the studio itself keeps. Under a
+        Territorial Pre-Sales financing structure, most of this was already
+        sold away to the distributor who fronted the advance (see
+        capital_at_risk()) -- the studio retains only a small residual/
+        overage share (PRESALE_INTL_RETAINED_PCT), not the full territory."""
+        intl = domestic_gross * GENRE_INTL_MULT.get(self.genre, 1.4)
+        if self.financing_structure == "presale":
+            return intl * PRESALE_INTL_RETAINED_PCT
+        return intl
 
     def theatrical_studio_net(self, scenario: str) -> float:
         """Studio's net rental after the exhibitor split, domestic + international."""
@@ -493,6 +541,42 @@ class MovieProject:
                        pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> float:
         return sum(cash for _, cash in
                     self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult))
+
+
+# ── Deal Waterfall — Distribution & Participation ───────────────────────────
+# 2026-08-04: windowed_cashflows()/total_revenue() already model WHERE money
+# comes FROM (the theatrical->PVOD->Peacock->library waterfall); this models
+# WHERE it goes once it arrives, per the teaching note's "Profits" section.
+# The ordering below IS the lesson: gross participants (star talent) get
+# paid off top-line revenue regardless of profitability, before the studio
+# even recoups its own capital; net participants (the producer) only get
+# paid out of whatever's left after recoupment. A "gross deal" can leave a
+# studio with a thin or negative residual even on a nominal box-office win
+# -- residual is deliberately not floored at zero, since that's real.
+TALENT_GROSS_GUARANTEE_M   = 2.0    # lead-actor upfront guarantee -- the note's own example
+TALENT_GROSS_PARTICIPATION = 0.10   # % of total revenue, above the guarantee
+PRODUCER_NET_PARTICIPATION = 0.12   # % of net profit after recoupment, if any
+
+
+def participation_waterfall(project: MovieProject, scenario, critical_score: Optional[float] = None,
+                             pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> dict:
+    """Distribution/participation breakdown for a resolved (or previewed)
+    outcome. `scenario` follows the same named-string-or-raw-multiplier
+    convention as MovieProject.total_revenue()."""
+    revenue      = project.total_revenue(scenario, critical_score, pvod_mult, theme_park_mult)
+    talent_take  = max(TALENT_GROSS_GUARANTEE_M, revenue * TALENT_GROSS_PARTICIPATION)
+    after_talent = revenue - talent_take
+    recoupment   = project.capital_at_risk()
+    after_recoupment = after_talent - recoupment
+    producer_take = max(0.0, after_recoupment) * PRODUCER_NET_PARTICIPATION
+    residual      = after_recoupment - producer_take
+    return {
+        "revenue":       revenue,
+        "talent_take":   talent_take,
+        "recoupment":    recoupment,
+        "producer_take": producer_take,
+        "residual":      residual,
+    }
 
 
 # ── Portfolio / scoring helpers ────────────────────────────────────────────────

@@ -76,6 +76,12 @@ def _format_notables_badges(notables: dict) -> str:
     gv = notables.get("genre_variety")
     if gv:
         badges.append(f"🎭 {gv} genre{'s' if gv != 1 else ''}")
+    ow = notables.get("oscar_wins")
+    if ow:
+        badges.append(f"🏆 {ow} Oscar win{'s' if ow != 1 else ''}")
+    on = notables.get("oscar_nominations")
+    if on:
+        badges.append(f"🎬 {on} Oscar nom{'s' if on != 1 else ''}")
     if not badges:
         return ""
     return ('<div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;">' +
