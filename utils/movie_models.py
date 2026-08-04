@@ -1,5 +1,5 @@
 """
-VideoOS Day 2 — Movie/Theatrical financial engine ("Universal Pictures")
+The Slate Day 2 — Movie/Theatrical financial engine ("Universal Pictures")
 All monetary values in $M unless noted. Mirrors utils/models.py's structure
 and conventions, but the underlying economics are deliberately different —
 see DESIGN_NOTES.md's "Day 2" section for the full rationale:

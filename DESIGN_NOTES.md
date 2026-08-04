@@ -1,6 +1,8 @@
-# VideoOS — Design Notes
+# The Slate — Design Notes
 
 **Renamed from CableOS 2026-07-24** — the simulator spans both TV/Streaming and Movies now, so "Cable" undersold it; "Video Network Portfolio Simulator" is the actual scope. Code, docs, and UI all use VideoOS going forward; historical entries below that predate the rename keep the old name where it's part of the historical record (commit messages, past session summaries) rather than rewriting history.
+
+**Renamed VideoOS → The Slate, tagline dropped "2012," 2026-08-04** — per the user, "The Slate" is the actual industry term for a studio/network's portfolio of shows and films (what students manage each turn), and reads as a case-study title rather than a software product name. The "2012" in the old tagline ("Video Network Portfolio Simulator · 2012") was stale since the 2026-07-27 timeline reshape spread TV networks across 2012-2026 and Movies was never tied to a calendar year at all — new tagline is "Media Portfolio Simulation." Code, docs, and UI all use The Slate going forward; historical entries below that predate this rename keep VideoOS/CableOS where it's part of the historical record.
 
 A Streamlit business simulation for teaching video network portfolio economics through the lens of Comcast/NBCUniversal's networks. Each network's level runs its own real calendar era, each starting exactly `YEARS_PER_LEVEL` after the last (clean handoff, no overlap) — **defaults to 4 years/level** (Oxygen 2012-2015, Bravo 2016-2019, Peacock 2020-2023), **instructor-tailorable per deployment via Streamlit Secrets** (2026-08-03, see README.md's "Instructor settings" section and `utils/game_state.py::_read_years_per_level`/`LEVEL_START_YEAR`). Was a hardcoded 5 years/level (2026-07-27) before today. FERPA-safe: students register with a pseudonym team name only, no PII is stored (see `app.py`, `utils/game_state.py`).
 

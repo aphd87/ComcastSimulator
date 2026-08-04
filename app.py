@@ -1,9 +1,15 @@
 """
-VideoOS — Video Network Portfolio Simulator
+The Slate — Media Portfolio Simulation
 Streamlit entry point · app.py
 
 Renamed from CableOS 2026-07-24, per the user: the simulator now spans both
 TV/Streaming and Movies, so "Cable" undersold what it actually covers.
+Renamed VideoOS → The Slate 2026-08-04, per the user: "The Slate" is the
+actual industry term for a studio/network's portfolio of shows and films,
+which is what students manage — reads as a case-study title instead of a
+software product name. Tagline dropped "2012" (stale since the 2026-07-27
+timeline reshape spread networks across 2012-2026, and Movies was never
+tied to a calendar year at all) in favor of "Media Portfolio Simulation".
 
 Run locally:
     pip install streamlit plotly pandas numpy
@@ -15,7 +21,7 @@ Leaderboard stores: team_name, network, attempt#, score, timestamp, pass/fail.
 import streamlit as st
 
 st.set_page_config(
-    page_title="VideoOS — Video Network Portfolio Simulator",
+    page_title="The Slate — Media Portfolio Simulation",
     page_icon="📺",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -121,10 +127,10 @@ ss = st.session_state
 # problem, not two: registration and nav both lived only in the sidebar).
 st.markdown(
     '<div style="text-align:center;margin-bottom:2px;">'
-    '<span style="font-family:DM Serif Display,serif;font-size:28px;color:#e8c547;">VideoOS</span>'
+    '<span style="font-family:DM Serif Display,serif;font-size:28px;color:#e8c547;">The Slate</span>'
     '</div>'
     '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;'
-    'letter-spacing:.1em;margin-bottom:16px;">VIDEO NETWORK PORTFOLIO SIMULATOR · 2012</div>',
+    'letter-spacing:.1em;margin-bottom:16px;">MEDIA PORTFOLIO SIMULATION</div>',
     unsafe_allow_html=True
 )
 

@@ -1,6 +1,6 @@
-# VideoOS — Video Network Portfolio Simulator
+# The Slate — Media Portfolio Simulation
 
-A Streamlit business simulation teaching video network portfolio economics through the lens of Comcast/NBCUniversal's networks (TV/Streaming) and Universal Pictures (Movies). Set in 2012, at the start of the cord-cutting shift.
+A Streamlit business simulation teaching media portfolio economics through the lens of Comcast/NBCUniversal's networks (TV/Streaming) and Universal Pictures (Movies). Each network runs its own real calendar era (2012-2026); Movies runs on production cycles rather than a fixed year.
 
 Full design intent, mechanics, and session history: see `DESIGN_NOTES.md`.
 
