@@ -507,13 +507,18 @@ def _section_financing(ss, shows, year, net_info, level_budget):
             f'Already cancelled (prior years): {", ".join(already)}</div>', unsafe_allow_html=True)
 
 
-def _section_sports_rights(ss, shows, year, net, new_cancel, sec_num):
+def _section_sports_rights_bidding(ss, year, net, sec_num):
     """Peacock-only (2026-08-04, see utils/sports_models.py): real 5-7yr
-    rights auctions against seeded rival tech/media bidders. Rendered after
-    Renewal/Greenlighting so this year's Peacock originals spend is already
-    final by the time retained_fraction() needs it. Returns this year's
-    sports P&L dict (revenue_m/cost_m/net_m) so _decisions() can fold it
-    into the Simulate preview and the actual computed year."""
+    rights auctions against seeded rival tech/media bidders.
+
+    Rendered BEFORE Greenlighting (2026-08-04, per explicit user feedback
+    after using the feature: "is this right before entertainment show
+    selection stuff?") — sports rights is a big, multi-year commitment
+    students should weigh before building their originals slate around it,
+    not an afterthought once the slate is already locked. The bid/auction
+    decision itself doesn't need to know this year's originals spend, only
+    the retention math does (see _sports_pnl_recap below, which runs after
+    Greenlighting once that spend is final)."""
     st.markdown(f'<div class="section-title">{sec_num} · 🏈 Sports Rights</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
@@ -547,26 +552,6 @@ def _section_sports_rights(ss, shows, year, net, new_cancel, sec_num):
     else:
         st.markdown('<div style="font-size:14px;color:#b0b5c4;margin-bottom:10px;">No sports rights currently held.</div>',
                     unsafe_allow_html=True)
-
-    # Finalized Peacock originals spend this year — Renewal/Greenlighting
-    # have already rendered above, so ss.renewal_decisions and the roster
-    # in `shows` are settled for this run.
-    peacock_shows_now = [s for s in shows if s.network == "Peacock"]
-    originals_spend_m = _annual_cost(peacock_shows_now, year, ss.cancelled_shows, new_cancel)
-    year_pnl = sports_year_pnl(held, year, originals_spend_m)
-
-    if held:
-        net_c = SUCCESS if year_pnl["net_m"] >= 0 else DANGER
-        st.markdown(f"""
-        <div style="background:#12141a;border:1px solid #252836;border-radius:6px;
-             padding:10px 14px;margin-bottom:14px;font-size:14px;color:#e0e2ea;">
-          This year's sports rights P&L:
-          <b style="font-family:DM Mono,monospace;color:{SUCCESS};">+${year_pnl['revenue_m']:.1f}M</b> revenue
-          &minus; <b style="font-family:DM Mono,monospace;color:{WARN};">${year_pnl['cost_m']:.1f}M</b> rights cost
-          = <b style="font-family:DM Mono,monospace;color:{net_c};">${year_pnl['net_m']:+.1f}M</b> net
-          &mdash; your Peacock originals slate (${originals_spend_m:.1f}M this year) has to help cover that gap.
-        </div>
-        """, unsafe_allow_html=True)
 
     # ── This year's auctions ────────────────────────────────────────────────
     up      = leagues_up_for_bid(year, anchor)
@@ -627,6 +612,37 @@ def _section_sports_rights(ss, shows, year, net, new_cancel, sec_num):
         st.markdown('<div style="font-size:14px;color:#b0b5c4;">No rights packages up for auction this '
                      'year — check back as existing contracts approach expiration.</div>', unsafe_allow_html=True)
 
+
+def _sports_pnl_recap(ss, shows, year, net, new_cancel) -> dict:
+    """Peacock-only: this year's actual sports-rights P&L, computed AFTER
+    Greenlighting (2026-08-04) so retained_fraction() sees this year's
+    finalized Peacock originals spend — the bidding decision itself
+    (_section_sports_rights_bidding above) happens earlier in the page and
+    doesn't need this number, only the retention math does. Renders a
+    small recap card when a contract is held, and always returns the P&L
+    dict so _decisions() can fold it into the Simulate preview/actual
+    computation regardless of whether anything is displayed."""
+    if net != "peacock":
+        return {"revenue_m": 0.0, "cost_m": 0.0, "net_m": 0.0, "rows": []}
+
+    held = held_this_year(ss.sports_contracts, year)
+    peacock_shows_now = [s for s in shows if s.network == "Peacock"]
+    originals_spend_m = _annual_cost(peacock_shows_now, year, ss.cancelled_shows, new_cancel)
+    year_pnl = sports_year_pnl(held, year, originals_spend_m)
+
+    if held:
+        net_c = SUCCESS if year_pnl["net_m"] >= 0 else DANGER
+        st.markdown(f"""
+        <div style="background:#12141a;border:1px solid #252836;border-radius:6px;
+             padding:10px 14px;margin-bottom:14px;font-size:14px;color:#e0e2ea;">
+          🏈 This year's sports rights P&L (now that your originals slate is set):
+          <b style="font-family:DM Mono,monospace;color:{SUCCESS};">+${year_pnl['revenue_m']:.1f}M</b> revenue
+          &minus; <b style="font-family:DM Mono,monospace;color:{WARN};">${year_pnl['cost_m']:.1f}M</b> rights cost
+          = <b style="font-family:DM Mono,monospace;color:{net_c};">${year_pnl['net_m']:+.1f}M</b> net
+          &mdash; your Peacock originals slate (${originals_spend_m:.1f}M this year) {'covered' if year_pnl['net_m'] >= 0 else 'didn' + chr(39) + 't fully cover'} that gap.
+        </div>
+        """, unsafe_allow_html=True)
+
     return year_pnl
 
 
@@ -654,11 +670,11 @@ def _decisions(ss, shows, net_info, year, net):
     nav_links = [
         '<a href="#financing" style="color:#e8c547;">Financing</a>',
         '<a href="#renewal" style="color:#e8c547;">Renewal</a>',
-        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
     ]
     if net == "peacock":
         nav_links.append('<a href="#sports-rights" style="color:#e8c547;">Sports Rights</a>')
     nav_links += [
+        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
         '<a href="#scheduling" style="color:#e8c547;">Scheduling</a>',
         '<a href="#simulate" style="color:#e8c547;">Simulate</a>',
     ]
@@ -679,12 +695,25 @@ def _decisions(ss, shows, net_info, year, net):
     from app_pages.renewal import render as render_renewal
     render_renewal()
 
+    # Sports Rights (Peacock only) sits BEFORE Greenlighting, per explicit
+    # user feedback after using the feature: a multi-year rights commitment
+    # is the kind of decision that should shape the entertainment slate
+    # built around it, not the other way around. Dynamically numbered so
+    # Oxygen/Bravo (which never render this section) don't skip a number.
+    next_sec = 3
+    if net == "peacock":
+        st.divider()
+        st.markdown('<a id="sports-rights"></a>', unsafe_allow_html=True)
+        _section_sports_rights_bidding(ss, year, net, next_sec)
+        next_sec += 1
+
     st.divider()
     st.markdown('<a id="greenlighting"></a>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-title">3 · 🎬 Greenlighting '
+        f'<div class="section-title">{next_sec} · 🎬 Greenlighting '
         '<span style="font-size:14px;color:#b0b5c4;">(optional)</span></div>',
         unsafe_allow_html=True)
+    next_sec += 1
     from app_pages.greenlight import render as render_greenlight
     render_greenlight()
     # Re-read again: Greenlighting's "Greenlight This Show" button also
@@ -692,20 +721,15 @@ def _decisions(ss, shows, net_info, year, net):
     level_budget = ss.level_budget
 
     # Read once, now that Renewal/Greenlighting have both rendered and
-    # written their widgets to session state — needed here (not just at the
-    # bottom) because Sports Rights' retention math depends on this year's
-    # finalized Peacock originals spend, which depends on new_cancel.
+    # written their widgets to session state.
     mkt = ss.get("mkt_budget", 5.0)
     active_now = _active_shows(shows, ss.cancelled_shows)
     new_cancel = {s.id for s in active_now if ss.renewal_decisions.get(s.id) == "Cancel"}
 
-    next_sec = 4
-    sports_pnl = {"revenue_m": 0.0, "cost_m": 0.0, "net_m": 0.0}
-    if net == "peacock":
-        st.divider()
-        st.markdown('<a id="sports-rights"></a>', unsafe_allow_html=True)
-        sports_pnl = _section_sports_rights(ss, shows, year, net, new_cancel, next_sec)
-        next_sec += 1
+    # This year's actual sports P&L (Peacock only) — computed now that the
+    # originals slate above is final, feeding retained_fraction() the real
+    # number rather than a mid-page guess. See _sports_pnl_recap's docstring.
+    sports_pnl = _sports_pnl_recap(ss, shows, year, net, new_cancel)
 
     st.divider()
     st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
