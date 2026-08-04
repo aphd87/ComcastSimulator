@@ -287,6 +287,33 @@ def _last_year_recap(prev: dict, threshold: float):
     """, unsafe_allow_html=True)
 
 
+def _progress_chart(ss, threshold: float):
+    """Compact multi-year trend, shown once 2+ years have real actuals in
+    ss.yearly_log -- added 2026-08-04 per user request: _last_year_recap
+    above is a single-year snapshot, but students asked to see how they're
+    trending across the level before making this year's calls, not just
+    last year's number. Deliberately smaller/lighter than the full
+    'Level P&L — All Years' chart in _complete() (same OCF-bar +
+    cumulative-OCF-line shape for visual consistency) -- that one only
+    ever renders once the whole level is over; this one compounds year
+    by year as the level is played."""
+    log     = sorted(ss.yearly_log, key=lambda r: r["year"])
+    ylabels = [r["label"].split(" · ")[0] for r in log]
+    cum_ocf = np.cumsum([r["ocf"] for r in log]).tolist()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="Annual OCF", x=ylabels, y=[r["ocf"] for r in log],
+                         marker_color=[SUCCESS if r["ocf"] >= 0 else DANGER for r in log],
+                         opacity=0.75))
+    fig.add_trace(go.Scatter(name="Cumulative OCF", x=ylabels, y=cum_ocf,
+                             mode="lines+markers", line=dict(color=ACCENT2, width=2, dash="dot"),
+                             marker=dict(size=7)))
+    fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.3)
+    fig.update_layout(**base_layout("Your Progress So Far — OCF by Year ($M)", height=210))
+    st.markdown('<div style="margin-bottom:16px;">', unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 def _starting_position(net_info, shows, net):
     """Year-1-only card, shown once before Financing: unlike _last_year_recap
     (which reads real yearly_log actuals from year > 1), there is no played
@@ -476,6 +503,9 @@ def _decisions(ss, shows, net_info, year, net):
         _last_year_recap(prev, threshold)
     elif year == 1:
         _starting_position(net_info, shows, net)
+
+    if len(ss.yearly_log) >= 2:
+        _progress_chart(ss, threshold)
 
     st.markdown(
         '<div style="font-size:14px;color:#b0b5c4;margin-bottom:14px;">'

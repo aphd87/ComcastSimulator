@@ -161,6 +161,27 @@ def _last_cycle_recap(prev: dict):
     """, unsafe_allow_html=True)
 
 
+def _progress_chart(ss):
+    """Compact multi-cycle NPV trend, shown once 2+ cycles have real
+    actuals in ss.movie_log -- the TV/Streaming parallel to
+    pages/simulation.py's _progress_chart, added 2026-08-04 per the same
+    user request. Reuses the same bar-of-NPV-per-cycle shape as the
+    'Slate So Far' chart in _results() for visual consistency, but that
+    one only shows after simulating the current cycle -- this compounds
+    it into the Decisions screen too, before the student locks in the
+    next cycle's greenlight/release calls."""
+    log        = sorted(ss.movie_log, key=lambda r: r["cycle"])
+    cyc_labels = [f"Cycle {r['cycle']}" for r in log]
+    npvs       = [r["npv"] for r in log]
+    fig = go.Figure(go.Bar(x=cyc_labels, y=npvs,
+                            marker_color=[SUCCESS if v >= 0 else DANGER for v in npvs]))
+    fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.4)
+    fig.update_layout(**base_layout("Your Progress So Far — NPV by Cycle ($M)", height=210))
+    st.markdown('<div class="mb-4">', unsafe_allow_html=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 # ── Phase 1: Decisions (Greenlight + Release Strategy) ───────────────────────
 def _decisions(ss):
     """Single scrolling page (redesigned 2026-07-27, replacing the old
@@ -174,6 +195,9 @@ def _decisions(ss):
            if ss.movie_cycle > 1 else None
     if prev:
         _last_cycle_recap(prev)
+
+    if len(ss.movie_log) >= 2:
+        _progress_chart(ss)
 
     st.markdown(
         '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'

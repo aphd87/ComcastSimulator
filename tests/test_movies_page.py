@@ -295,3 +295,74 @@ def test_last_cycle_recap_absent_at_cycle_1_with_no_prior_outcome():
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
     assert "Last Cycle's Actuals" not in text
+
+
+# ── Progress chart (2026-08-04) ──────────────────────────────────────────────
+def _movies_app_at_cycle_3_with_two_prior_logs() -> AppTest:
+    """Cycle 3 Decisions with two real cycle outcomes (1, 2) already in
+    ss.movie_log -- the multi-cycle _progress_chart (added 2026-08-04,
+    the Movies-side parallel to pages/simulation.py's _progress_chart)
+    only renders once len(movie_log) >= 2, so this is the fixture that
+    exercises it. Reuses _complete_movies_app's log-entry shape."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.movie_models import (
+            MovieProject, draw_actual_multiplier, draw_critical_reception,
+        )
+        defaults = {
+            "team_name": "AppTest Team",
+            "movie_phase": "decisions",
+            "movie_draft": {},
+            "movie_cycle": 3,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        if "movie_log" not in st.session_state:
+            log = []
+            for cycle, title in [(1, "First Movie"), (2, "Second Movie")]:
+                project = MovieProject(title=title, genre="Drama", budget_m=80,
+                                        pa_spend_m=40, star_power=60, screens=3000, cycle=cycle,
+                                        release_strategy="wide_theatrical", concept_type="New IP")
+                multiplier = draw_actual_multiplier("AppTest Team", cycle, project.genre, project.concept_type)
+                critical_score = draw_critical_reception("AppTest Team", cycle, project.genre)
+                log.append({
+                    "cycle": cycle, "project_kwargs": dict(project.__dict__),
+                    "multiplier": multiplier, "scenario_label": "base",
+                    "critical_score": critical_score, "awards_contender": False,
+                    "npv": project.npv(multiplier, critical_score),
+                    "irr": project.irr(multiplier, critical_score),
+                    "total_revenue": project.total_revenue(multiplier, critical_score),
+                    "domestic_bo": project.domestic_box_office(multiplier),
+                    "theatrical_net": project.theatrical_studio_net(multiplier),
+                    "pvod": project.pvod_revenue(multiplier),
+                    "sub_value": project.subscriber_value(multiplier),
+                    "longtail": project.library_longtail(multiplier, critical_score),
+                    "awards_bump": 0.0,
+                    "theme_park": project.theme_park_value(multiplier),
+                    "capital_at_risk": project.capital_at_risk(),
+                })
+            st.session_state.movie_log = log
+
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Cycle 3 decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_progress_chart_renders_at_cycle_3_with_two_prior_cycles():
+    at = _movies_app_at_cycle_3_with_two_prior_logs()
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert any("Your Progress So Far" in s for s in specs)
+
+
+def test_progress_chart_absent_at_cycle_1_with_no_prior_cycles():
+    at = _movies_app()
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert not any("Your Progress So Far" in s for s in specs)

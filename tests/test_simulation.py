@@ -215,6 +215,69 @@ def test_decisions_phase_has_one_simulate_button():
     assert len(sim_buttons) == 1
 
 
+def _decisions_sim_app_year3_with_two_prior_years() -> AppTest:
+    """Year 3 Decisions with two real played years (1, 2) already in
+    ss.yearly_log -- the multi-year _progress_chart (added 2026-08-04)
+    only renders once len(yearly_log) >= 2, so this is the fixture that
+    exercises it. Mirrors _complete_sim_app's log-entry shape."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [
+                {"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0, "dist_rev": 5.0,
+                 "cost": 9.0, "mkt": 3.0, "ga": 1.0, "ocf": 1.6, "margin": 8.0,
+                 "new_cancellations": [], "shows": [], "budget": 25.0},
+                {"year": 2, "label": "Year 2", "revenue": 22.0, "ad_rev": 16.0, "dist_rev": 6.0,
+                 "cost": 9.5, "mkt": 3.0, "ga": 1.0, "ocf": 2.6, "margin": 12.0,
+                 "new_cancellations": [], "shows": [], "budget": 25.0},
+            ],
+            "year": 3,
+            "sim_phase": "decisions",
+            "level_budget": 25.0,
+            "mkt_budget": 5.0,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import app_pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Year 3 decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_progress_chart_renders_at_year_3_with_two_prior_years():
+    at = _decisions_sim_app_year3_with_two_prior_years()
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert any("Your Progress So Far" in s for s in specs)
+
+
+def test_progress_chart_absent_at_year_1_with_no_prior_years():
+    at = _decisions_sim_app()
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert not any("Your Progress So Far" in s for s in specs)
+
+
 def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     # Exactly one click, from a fresh session -- the FIRST interaction,
     # not a second one after an earlier phase transition, so this is
