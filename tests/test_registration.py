@@ -45,9 +45,9 @@ def test_registration_with_all_fields_succeeds():
     # Class Abbreviation (optional) -- Class Title/Semester split out of the
     # old merged "Class / Section" field 2026-08-04.
     assert len(at.text_input) == 6
-    # Register Team + the "Just check the Leaderboard" shortcut added
-    # 2026-07-30 -- button[0] (Register Team, rendered first) is what
-    # _fill_and_submit clicks.
+    # Register Team + the "View Leaderboard" shortcut added 2026-07-30
+    # (retitled from "Just check the Leaderboard" 2026-08-05) -- button[0]
+    # (Register Team, rendered first) is what _fill_and_submit clicks.
     assert len(at.button) == 2
 
     _fill_and_submit(at)
@@ -138,12 +138,13 @@ def test_registration_blocks_on_missing_university():
 
 
 def test_leaderboard_reachable_without_registering():
-    # "Just check the Leaderboard" (sign-in screen, button[1]) sets
-    # active_section="leaderboard" without ever setting ss.registered --
-    # app.py's top-level branch has to let that win over the not-registered
-    # gate, or an anonymous visitor would just see the sign-in form again.
+    # "View Leaderboard" (sign-in screen, button[1] -- retitled 2026-08-05
+    # from "Just check the Leaderboard") sets active_section="leaderboard"
+    # without ever setting ss.registered -- app.py's top-level branch has
+    # to let that win over the not-registered gate, or an anonymous
+    # visitor would just see the sign-in form again.
     at = _fresh_app()
-    assert at.button[1].label == "🏆 Just check the Leaderboard"
+    assert at.button[1].label == "🏆 View Leaderboard"
     at.button[1].click()
     at.run()
 

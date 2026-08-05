@@ -331,9 +331,10 @@ if not ss.registered and ss.active_section != "leaderboard":
     st.divider()
     lcol, _ = st.columns([1, 2])
     with lcol:
-        if st.button("🏆 Just check the Leaderboard", use_container_width=True):
+        if st.button("🏆 View Leaderboard", use_container_width=True):
             ss.active_section = "leaderboard"
             st.rerun()
+        st.caption("No registration required — just browsing.")
 
     st.divider()
 
@@ -377,7 +378,7 @@ elif ss.active_section in (None, "app"):
     </div>
     """, unsafe_allow_html=True)
 
-    ccol1, ccol2 = st.columns(2)
+    ccol1, ccol2, ccol3 = st.columns(3)
     with ccol1:
         st.markdown("""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
@@ -413,6 +414,28 @@ elif ss.active_section in (None, "app"):
         """, unsafe_allow_html=True)
         if st.button("→ Start Movies", use_container_width=True, type="primary"):
             ss.active_section = "movies"
+            st.rerun()
+    with ccol3:
+        # Third peer card, same visual treatment as TV/Movies (2026-08-05,
+        # per user feedback that "Just check the Leaderboard" was an odd,
+        # orphaned button on the sign-in form) -- a secondary-styled button
+        # (not primary, like TV/Movies) since checking standings isn't the
+        # main action this screen exists for, just a legitimate third choice.
+        st.markdown("""
+        <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
+             padding:28px 20px;text-align:center;height:100%;">
+          <div style="font-size:42px;">🏆</div>
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+            Leaderboard
+          </div>
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
+            See how your team stacks up — your class, your school, or every school running
+            The Slate. Official (first-attempt) scores only.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("→ View Leaderboard", use_container_width=True):
+            ss.active_section = "leaderboard"
             st.rerun()
 
 elif ss.active_section == "leaderboard":
