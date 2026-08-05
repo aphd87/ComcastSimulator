@@ -532,6 +532,62 @@ def draw_ai_tooling_setback(team_name: str, cycle: int) -> Optional[tuple[str, f
     return reason, float(rng.uniform(lo, hi))
 
 
+# ── Seasonality / Debut Timing ───────────────────────────────────────────────
+# 2026-08-05, Phase 5 (deliberately last among the Movies items — reshapes
+# windowed_cashflows()'s previously-fixed month offsets and interacts with
+# the awards-eligibility timing already built, the most delicate change in
+# this backlog). Movies previously had no release-*timing* decision at all
+# (only release *strategy* — wide/platform/day-and-date); this adds the real
+# release-calendar tension the teaching note also covers: Summer/Holiday
+# open bigger but crowd out awards recall; Fall/Awards opens softer but is
+# the ideal on-ramp into the awards calendar (For-Your-Consideration
+# campaigns are timed around exactly this). "Off-Peak" is the true neutral
+# baseline — every effect below is a no-op for it (opening_mult=1.0, no
+# genre synergy, full awards recall, the original hardcoded 11.0-month bump
+# timing) — same "deliberate zero-effect default" posture as New IP/
+# self_finance/standard/keep elsewhere in this file, so every existing call
+# site keeps its exact original calibrated behavior. Framed honestly in the
+# UI as a real strategy too, not a placeholder: many mid-budget films
+# deliberately release in an unremarkable week specifically to dodge
+# summer/holiday crowding.
+DEBUT_SEASONS = ["Off-Peak", "Winter", "Spring", "Summer Tentpole", "Fall/Awards", "Holiday"]
+
+SEASON_OPENING_MULT = {
+    "Off-Peak": 1.00, "Winter": 0.90, "Spring": 0.95,
+    "Summer Tentpole": 1.18, "Fall/Awards": 0.92, "Holiday": 1.12,
+}
+
+# Genre-season synergy: an extra opening-weekend bonus when a genre's real
+# audience actually shows up that season — only the genres/seasons with a
+# real-world pattern get an entry; everything else falls through to 1.0 via
+# .get(). Off-Peak deliberately has no entries (part of its neutral-baseline
+# guarantee, not an oversight).
+SEASON_GENRE_SYNERGY = {
+    "Summer Tentpole": {"Action/Tentpole": 1.10, "Sci-Fi/Fantasy": 1.10, "Animated": 1.05},
+    "Holiday":          {"Animated": 1.15, "Comedy": 1.08},
+    "Fall/Awards":      {"Awards/Prestige": 1.12, "Drama": 1.08},
+}
+
+# How much of awards_season_bump() actually lands, scaled by real-world
+# awards-body recency bias — a summer tentpole released 8+ months before
+# voting rarely gets recalled even with great reviews, while a Fall/Awards
+# or Holiday release is deliberately timed to still be fresh in voters'
+# minds. Off-Peak = 1.0 (neutral baseline, matches original behavior).
+SEASON_AWARDS_RECALL = {
+    "Off-Peak": 1.00, "Winter": 0.70, "Spring": 0.80,
+    "Summer Tentpole": 0.40, "Fall/Awards": 1.00, "Holiday": 1.00,
+}
+
+# Real-world awards season sits around Jan-Feb — how many months after
+# release that actually is depends on when the movie came out. Off-Peak
+# keeps the original flat 11.0-month assumption windowed_cashflows() always
+# used before this feature existed.
+SEASON_AWARDS_BUMP_MONTH = {
+    "Off-Peak": 11.0, "Winter": 12.0, "Spring": 10.0,
+    "Summer Tentpole": 8.0, "Fall/Awards": 3.0, "Holiday": 2.0,
+}
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -547,6 +603,7 @@ class MovieProject:
     exhibitor_posture: str = "standard"         # "standard" | "aggressive" | "exhibitor_friendly"
     pay1_licensing: str = "keep"                 # "keep" | "license_out"
     ai_production_tools: bool = False            # see AI_TOOLS_* below
+    debut_season: str = "Off-Peak"                # see DEBUT_SEASONS above
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -588,6 +645,14 @@ class MovieProject:
             return KIDS_OPENING_MULT
         return 1.0
 
+    def season_opening_mult(self) -> float:
+        """Debut-season crowding/audience-fit effect on opening intensity —
+        SEASON_OPENING_MULT (competitive crowding) times SEASON_GENRE_
+        SYNERGY (does this genre's real audience actually show up that
+        season). "Off-Peak" is the neutral 1.0x baseline for both."""
+        return (SEASON_OPENING_MULT.get(self.debut_season, 1.0)
+                * SEASON_GENRE_SYNERGY.get(self.debut_season, {}).get(self.genre, 1.0))
+
     def opening_weekend(self) -> float:
         """$M opening weekend — scales with screen count off a fixed
         per-screen baseline, moderately boosted by star power and P&A
@@ -600,11 +665,14 @@ class MovieProject:
         screen count actually granted -- self.screens stays the student's
         raw requested number (still used for the "unrealistic screen count"
         warning check in the UI), while a harder negotiating posture nets
-        fewer screens than asked for and a friendlier one nets more."""
+        fewer screens than asked for and a friendlier one nets more.
+        debut_season applies its own crowding/genre-fit multiplier on top
+        (see season_opening_mult) -- 1.0x for the "Off-Peak" baseline."""
         screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
         screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
-        return BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost() * self.awareness_lift()
+        return (BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost()
+                * self.awareness_lift() * self.season_opening_mult())
 
     def cannibalization_factor(self) -> float:
         """Theatrical box-office suppression from the release-strategy
@@ -727,13 +795,19 @@ class MovieProject:
         applies to awards-eligible genres (see AWARDS_ELIGIBLE_GENRES) whose
         critical reception clears AWARDS_CONTENDER_THRESHOLD. A real, if
         modest, extra revenue window that a merely well-reviewed action
-        movie doesn't get access to, no matter how good its reviews are."""
+        movie doesn't get access to, no matter how good its reviews are.
+        Scaled by SEASON_AWARDS_RECALL — a summer release rarely gets
+        recalled by awards voters even with great reviews; a Fall/Awards or
+        Holiday release is deliberately timed to still be fresh in their
+        minds. "Off-Peak" recall is 1.0 (neutral baseline, matches original
+        behavior)."""
         if critical_score is None or self.genre not in AWARDS_ELIGIBLE_GENRES:
             return 0.0
         if critical_score < AWARDS_CONTENDER_THRESHOLD:
             return 0.0
         strength = (critical_score - AWARDS_CONTENDER_THRESHOLD) / (100 - AWARDS_CONTENDER_THRESHOLD)
-        return self.domestic_box_office(scenario) * 0.08 * strength
+        recall = SEASON_AWARDS_RECALL.get(self.debut_season, 1.0)
+        return self.domestic_box_office(scenario) * 0.08 * strength * recall
 
     def windowed_cashflows(self, scenario: str, critical_score: Optional[float] = None,
                             pvod_mult: float = 1.0, theme_park_mult: float = 1.0,
@@ -785,7 +859,11 @@ class MovieProject:
             (24.0,               longtail),                   # library/EST tail, ~2 years out
         ]
         if bump > 0:
-            flows.append((11.0, bump))   # awards season (~Jan-Feb), roughly 11 months after release
+            # Real-world awards season sits around Jan-Feb -- how many
+            # months after release that actually is depends on debut_season
+            # (see SEASON_AWARDS_BUMP_MONTH). "Off-Peak" keeps the original
+            # flat 11.0-month assumption.
+            flows.append((SEASON_AWARDS_BUMP_MONTH.get(self.debut_season, 11.0), bump))
         if theme_park > 0:
             flows.append((30.0, theme_park))   # attractions/merchandise take real time to develop and license
 

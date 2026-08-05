@@ -38,6 +38,8 @@ from utils.movie_models import (
     draw_ai_tooling_setback, multiplier_to_stars,
     draw_ewom_piracy_swing, EWOM_PIRACY_CHANCE, EWOM_PIRACY_RANGE,
     EWOM_REASONS_UP, PIRACY_REASONS_DOWN,
+    DEBUT_SEASONS, SEASON_OPENING_MULT, SEASON_GENRE_SYNERGY, SEASON_AWARDS_RECALL,
+    SEASON_AWARDS_BUMP_MONTH,
 )
 
 
@@ -1006,3 +1008,96 @@ class TestEwomMultipliersWireIntoRevenue:
         base_wf = participation_waterfall(p, "base", 60.0)
         swung_wf = participation_waterfall(p, "base", 60.0, ewom_mult=1.5)
         assert swung_wf["revenue"] > base_wf["revenue"]
+
+
+# ── Seasonality / Debut Timing (Phase 5, 2026-08-05) ─────────────────────────
+def _awards_project(debut_season: str = "Off-Peak") -> MovieProject:
+    return MovieProject(title="Prestige Test", genre="Awards/Prestige", budget_m=40, pa_spend_m=25,
+                         star_power=40, screens=1200, cycle=1, debut_season=debut_season)
+
+
+class TestDebutSeasonBaseline:
+    """Off-Peak (the dataclass default) must reproduce the exact behavior
+    every project had before this field existed -- opening_mult=1.0, no
+    genre synergy, full (1.0) awards recall, the original hardcoded
+    11.0-month bump timing."""
+
+    def test_default_is_off_peak(self):
+        p = _tentpole()
+        assert p.debut_season == "Off-Peak"
+
+    def test_off_peak_is_neutral_on_opening(self):
+        assert SEASON_OPENING_MULT["Off-Peak"] == 1.0
+        assert SEASON_GENRE_SYNERGY.get("Off-Peak", {}) == {}
+        p = _tentpole()
+        p_explicit = MovieProject(**{**p.__dict__, "debut_season": "Off-Peak"})
+        assert p.opening_weekend() == p_explicit.opening_weekend()
+
+    def test_off_peak_awards_recall_is_full_and_bump_month_unchanged(self):
+        assert SEASON_AWARDS_RECALL["Off-Peak"] == 1.0
+        assert SEASON_AWARDS_BUMP_MONTH["Off-Peak"] == 11.0
+        p = _awards_project("Off-Peak")
+        flows = p.windowed_cashflows("base", 80.0)
+        bump = p.awards_season_bump("base", 80.0)
+        assert bump > 0
+        assert (11.0, bump) in [(round(m, 4), c) for m, c in flows]
+
+
+class TestDebutSeasonEffects:
+    def test_all_six_seasons_are_covered_by_every_lookup_table(self):
+        assert len(DEBUT_SEASONS) == 6
+        for table in (SEASON_OPENING_MULT, SEASON_AWARDS_RECALL, SEASON_AWARDS_BUMP_MONTH):
+            assert set(table.keys()) == set(DEBUT_SEASONS)
+
+    def test_summer_and_holiday_open_bigger_than_off_peak(self):
+        off_peak = _tentpole(release_strategy="wide_theatrical")
+        summer = MovieProject(**{**off_peak.__dict__, "debut_season": "Summer Tentpole"})
+        holiday = MovieProject(**{**off_peak.__dict__, "debut_season": "Holiday"})
+        assert summer.opening_weekend() > off_peak.opening_weekend()
+        assert holiday.opening_weekend() > off_peak.opening_weekend()
+
+    def test_genre_synergy_only_applies_to_the_matching_genre(self):
+        # Action/Tentpole gets Summer's synergy bonus; Drama does not.
+        action = MovieProject(title="A", genre="Action/Tentpole", budget_m=120, pa_spend_m=80,
+                               star_power=70, screens=3800, cycle=1)
+        drama = MovieProject(**{**action.__dict__, "genre": "Drama"})
+        action_summer = MovieProject(**{**action.__dict__, "debut_season": "Summer Tentpole"})
+        drama_summer = MovieProject(**{**drama.__dict__, "debut_season": "Summer Tentpole"})
+        # Ratio for the synergy genre should exceed the pure crowding-only ratio.
+        action_ratio = action_summer.opening_weekend() / action.opening_weekend()
+        drama_ratio = drama_summer.opening_weekend() / drama.opening_weekend()
+        assert action_ratio > drama_ratio
+        assert drama_ratio == pytest.approx(SEASON_OPENING_MULT["Summer Tentpole"])
+
+    def test_summer_release_gets_the_weakest_awards_recall(self):
+        # Real-world recency bias: a summer tentpole rarely gets recalled by
+        # awards voters even with great reviews, vs. a Fall/Awards or
+        # Holiday release timed deliberately around the awards calendar.
+        summer = _awards_project("Summer Tentpole")
+        fall = _awards_project("Fall/Awards")
+        assert summer.awards_season_bump("base", 80.0) < fall.awards_season_bump("base", 80.0)
+        assert SEASON_AWARDS_RECALL["Summer Tentpole"] < SEASON_AWARDS_RECALL["Fall/Awards"]
+
+    def test_fall_awards_bump_lands_much_sooner_than_off_peak(self):
+        fall = _awards_project("Fall/Awards")
+        off_peak = _awards_project("Off-Peak")
+        assert SEASON_AWARDS_BUMP_MONTH["Fall/Awards"] < SEASON_AWARDS_BUMP_MONTH["Off-Peak"]
+        fall_bump = fall.awards_season_bump("base", 80.0)
+        flows = fall.windowed_cashflows("base", 80.0)
+        assert (SEASON_AWARDS_BUMP_MONTH["Fall/Awards"], fall_bump) in [(round(m, 4), c) for m, c in flows]
+
+    def test_non_eligible_genre_gets_no_bump_regardless_of_season(self):
+        # Action/Tentpole isn't in AWARDS_ELIGIBLE_GENRES -- no season should
+        # ever produce a nonzero bump for it.
+        for season in DEBUT_SEASONS:
+            p = MovieProject(title="A", genre="Action/Tentpole", budget_m=120, pa_spend_m=80,
+                              star_power=70, screens=3800, cycle=1, debut_season=season)
+            assert p.awards_season_bump("base", 90.0) == 0.0
+
+    def test_strategic_fit_baseline_reconstruction_preserves_debut_season(self):
+        # strategic_fit_score() rebuilds a wide_theatrical baseline from
+        # project.__dict__ -- must carry the project's actual debut_season
+        # through, not silently reset it.
+        p = _awards_project("Fall/Awards")
+        score = strategic_fit_score(p, 80.0)
+        assert 0 <= score <= 100

@@ -24,6 +24,7 @@ from utils.movie_models import (
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
     draw_ai_tooling_setback, multiplier_to_stars, draw_ewom_piracy_swing,
+    DEBUT_SEASONS, SEASON_OPENING_MULT, SEASON_GENRE_SYNERGY, SEASON_AWARDS_RECALL,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -125,6 +126,7 @@ def _current_project(ss) -> MovieProject:
         exhibitor_posture=d.get("exhibitor_posture", "standard"),
         pay1_licensing=d.get("pay1_licensing", "keep"),
         ai_production_tools=d.get("ai_production_tools", False),
+        debut_season=d.get("debut_season", "Off-Peak"),
     )
 
 
@@ -594,7 +596,8 @@ def _decisions(ss):
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
                  release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
                  financing_structure=financing_structure, exhibitor_posture=exhibitor_posture,
-                 pay1_licensing=d.get("pay1_licensing", "keep"), ai_production_tools=ai_production_tools)
+                 pay1_licensing=d.get("pay1_licensing", "keep"), ai_production_tools=ai_production_tools,
+                 debut_season=d.get("debut_season", "Off-Peak"))
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -636,9 +639,39 @@ def _decisions(ss):
 
     # ── Decision 2: Release Strategy ─────────────────────────────────────────
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
-    project_base = project   # already reflects this run's Greenlight inputs above
 
     st.markdown('<div class="section-title">3 · Release Strategy</div>', unsafe_allow_html=True)
+
+    # ── Seasonality / Debut Timing ───────────────────────────────────────────
+    # Phase 5, 2026-08-05: the release-*timing* decision Movies never had
+    # before (release_strategy below is wide/platform/day-and-date -- a
+    # different axis entirely, decided second so a season's crowding/genre-
+    # fit effect is visible on every release-strategy preview card below).
+    # Summer/Holiday open bigger but crowd out awards recall; Fall/Awards
+    # opens softer but is the deliberate on-ramp into the real awards
+    # calendar. "Off-Peak" is a real strategy too, not a placeholder -- many
+    # mid-budget films release in an unremarkable week specifically to dodge
+    # summer/holiday crowding.
+    debut_season = st.selectbox(
+        "Debut Season", DEBUT_SEASONS,
+        index=DEBUT_SEASONS.index(d.get("debut_season", "Off-Peak")) if d.get("debut_season") in DEBUT_SEASONS else 0,
+        help="Summer Tentpole/Holiday open bigger (more audience, more competition) but a summer release "
+             "rarely gets recalled by awards voters even with great reviews. Fall/Awards opens softer but "
+             "is the real industry on-ramp into awards season. Off-Peak is neutral either way -- a genuine "
+             "strategy for dodging crowded weeks, not a placeholder.",
+    )
+    ss.movie_draft["debut_season"] = debut_season
+    project_base = MovieProject(**{**project.__dict__, "debut_season": debut_season})
+    season_open_mult = (SEASON_OPENING_MULT.get(debut_season, 1.0)
+                         * SEASON_GENRE_SYNERGY.get(debut_season, {}).get(genre, 1.0))
+    season_recall = SEASON_AWARDS_RECALL.get(debut_season, 1.0)
+    season_notes = []
+    if season_open_mult != 1.0:
+        season_notes.append(f"{'+' if season_open_mult > 1 else ''}{(season_open_mult - 1) * 100:.0f}% opening intensity")
+    if genre in AWARDS_ELIGIBLE_GENRES and season_recall != 1.0:
+        season_notes.append(f"{season_recall:.0%} awards-bump recall (vs. full recall for a well-timed release)")
+    if season_notes:
+        st.caption(f"📅 {' · '.join(season_notes)} for {genre} released {debut_season}.")
 
     # Progressive windowing — Zach Schlessel's brief: the theatrical vs.
     # streaming vs. PVOD tradeoff is a "Year 3 Introduction," not available

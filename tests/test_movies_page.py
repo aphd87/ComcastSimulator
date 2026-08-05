@@ -85,9 +85,9 @@ def test_decisions_phase_has_expected_widgets():
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
     # genre, concept type, financing structure, exhibitor posture (Greenlight)
-    # + Pay-1 licensing (Release Strategy -- shown even at Cycle 1 since
-    # "wide_theatrical" != "day_and_date")
-    assert len(at.selectbox) == 5
+    # + debut season, Pay-1 licensing (Release Strategy -- shown even at
+    # Cycle 1 since "wide_theatrical" != "day_and_date")
+    assert len(at.selectbox) == 6
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
@@ -377,11 +377,27 @@ def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
 def test_exhibitor_posture_and_pay1_licensing_selectboxes_default_correctly():
     at = _movies_app()
     posture_box = at.selectbox[3]   # genre, concept_type, financing_structure, exhibitor_posture
-    pay1_box = at.selectbox[4]      # Pay-1 licensing, rendered in Release Strategy
+    debut_season_box = at.selectbox[4]   # debut season, rendered first in Release Strategy
+    pay1_box = at.selectbox[5]      # Pay-1 licensing, rendered after debut season
     assert posture_box.value == "standard"
     assert len(posture_box.options) == 3
+    assert debut_season_box.value == "Off-Peak"
+    assert len(debut_season_box.options) == 6
     assert pay1_box.value == "keep"
     assert len(pay1_box.options) == 2
+
+
+def test_selecting_debut_season_updates_draft_and_simulated_outcome():
+    # 2026-08-05: confirms the selector's live value actually reaches both
+    # the release-strategy preview cards (via project_base rebuilt in the
+    # same render, not the stale pre-selector `project`) and the real
+    # Simulate outcome -- a single interaction, the FIRST click from a
+    # fresh session (this file's documented AppTest safe zone).
+    at = _movies_app()
+    debut_season_box = at.selectbox[4]
+    debut_season_box.set_value("Holiday").run()
+    assert not at.exception, f"Debut season click raised: {list(at.exception)}"
+    assert at.session_state["movie_draft"]["debut_season"] == "Holiday"
 
 
 def test_pay1_licensing_selectbox_is_hidden_for_day_and_date():
