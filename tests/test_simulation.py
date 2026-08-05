@@ -476,3 +476,178 @@ def test_clicking_advance_to_next_network_switches_network_and_keeps_greenlit_sh
     # only Restart (tested above) removes them.
     assert [s.id for s in at.session_state["oxygen_shows"]] == [1, 51]
     assert at.session_state["total_shows_greenlit"] == 0
+
+
+# ── Emmy Tracking (Phase 6, 2026-08-05) ──────────────────────────────────────
+def test_simulate_computes_emmy_fields_for_eligible_shows_only(monkeypatch):
+    # Exactly one click, from a fresh session -- the FIRST interaction, same
+    # AppTest safe zone as test_clicking_simulate_transitions_to_results_
+    # with_no_exceptions above. draw_emmy_reception is monkeypatched (never
+    # hardcode which way an unpinned hash()-seeded draw resolves for a
+    # literal team name -- see test_movies_page.py's documented convention)
+    # so this test controls exactly which show wins/nominates.
+    import app_pages.simulation as simulation_module
+    monkeypatch.setattr(simulation_module, "draw_emmy_reception",
+                         lambda team, year, show_id, genre: 92.0 if genre == "Drama" else None)
+
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Prestige Drama", genre="Drama", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+                Show(id=2, name="Reality Show", genre="Reality", episodes=8, ep_cost_k=250,
+                     rating=0.9, ip_score=45, air_month=3, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [],
+            "year": 1,
+            "sim_phase": "decisions",
+            "level_budget": 220.0,
+            "mkt_budget": 5.0,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import app_pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    sim_button = next(b for b in at.button if "Simulate Year" in b.label)
+    sim_button.click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+
+    result = at.session_state["yearly_log"][0]
+    drama_row = next(r for r in result["shows"] if r["id"] == 1)
+    reality_row = next(r for r in result["shows"] if r["id"] == 2)
+    assert drama_row["emmy_score"] == 92.0
+    assert drama_row["emmy_nomination"] is True
+    assert drama_row["emmy_win"] is True
+    assert reality_row["emmy_score"] is None
+    assert reality_row["emmy_nomination"] is False
+    assert reality_row["emmy_win"] is False
+    assert result["emmy_nominations"] == 1
+    assert result["emmy_wins"] == 1
+
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Emmy Buzz" in text
+    assert "WIN" in text
+
+
+def _decisions_sim_app_year2_with_emmy_recap() -> AppTest:
+    """Year 2 Decisions with a completed Year 1 already in yearly_log
+    (carrying emmy_wins/emmy_nominations) -- seeded directly rather than
+    clicked through, same posture as _complete_sim_app_submitted above, so
+    a single no-interaction .run() (the documented AppTest safe zone) is
+    enough to exercise _last_year_recap's Emmy badge."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Drama", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [
+                {"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0,
+                 "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0,
+                 "ocf": 6.0, "margin": 30.0, "new_cancellations": [],
+                 "emmy_nominations": 2, "emmy_wins": 1,
+                 "shows": [{"id": 1, "name": "Show A", "network": "Oxygen", "genre": "Drama",
+                            "status": "active", "cost": 5.0}]},
+            ],
+            "year": 2,
+            "sim_phase": "decisions",
+            "level_budget": 220.0,
+            "mkt_budget": 5.0,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import app_pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_last_year_recap_shows_emmy_win_badge():
+    at = _decisions_sim_app_year2_with_emmy_recap()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Emmy win" in text
+
+
+def test_last_year_recap_omits_emmy_badge_for_legacy_entries_without_the_field():
+    # A yearly_log entry recorded before Emmy Tracking existed won't carry
+    # emmy_wins/emmy_nominations at all -- must render cleanly, not KeyError.
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "oxygen",
+            "oxygen_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            ],
+            "bravo_shows": [],
+            "peacock_shows": [],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [
+                {"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0,
+                 "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0,
+                 "ocf": 6.0, "margin": 30.0, "new_cancellations": [],
+                 "shows": [{"id": 1, "name": "Show A", "network": "Oxygen", "genre": "Reality",
+                            "status": "active", "cost": 5.0}]},
+            ],
+            "year": 2,
+            "sim_phase": "decisions",
+            "level_budget": 220.0,
+            "mkt_budget": 5.0,
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import app_pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Legacy-entry decisions phase raised: {list(at.exception)}"

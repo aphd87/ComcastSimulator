@@ -59,6 +59,22 @@ class TestFormatNotablesBadges:
         assert "1 genre" in html
         assert "1 genres" not in html
 
+    def test_emmy_wins_and_nominations_both_render(self):
+        # 2026-08-05: TV-side parallel to the Movies Oscar badges, same
+        # "wins and noms are independent counts, both can show" posture.
+        html = _format_notables_badges({"emmy_wins": 2, "emmy_nominations": 5})
+        assert "2 Emmy wins" in html
+        assert "5 Emmy noms" in html
+
+    def test_zero_emmy_counts_are_omitted_not_shown_as_zero(self):
+        html = _format_notables_badges({"emmy_wins": 0, "emmy_nominations": 0})
+        assert html == ""
+
+    def test_singular_emmy_win_does_not_pluralize(self):
+        html = _format_notables_badges({"emmy_wins": 1, "emmy_nominations": 0})
+        assert "1 Emmy win" in html
+        assert "1 Emmy wins" not in html
+
 
 def test_leaderboard_renders_attempts_used_and_notables_with_no_exceptions(monkeypatch, tmp_path):
     # AppTest.from_function re-parses the script as standalone source, so it

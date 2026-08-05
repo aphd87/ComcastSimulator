@@ -205,6 +205,7 @@ class TestComputeLevelNotables:
             "best_year": None, "most_improved": None,
             "consistency_score": None, "diversity_trend": None,
             "shows_greenlit": 2,
+            "emmy_nominations": None, "emmy_wins": None,
         }
 
     def test_single_year_log_is_perfectly_consistent_with_no_improvement_delta(self):
@@ -278,6 +279,28 @@ class TestComputeLevelNotables:
     def test_shows_greenlit_passes_through_unchanged(self):
         log = [_year_row(1, margin=10.0, ocf=2.0, genre_costs={"Reality": 100})]
         assert gs.compute_level_notables(log, shows_greenlit=3)["shows_greenlit"] == 3
+
+    def test_emmy_totals_sum_across_years(self):
+        # 2026-08-05: emmy_nominations/emmy_wins on each yearly_log entry
+        # (set by pages/simulation.py::_compute_year) sum across the level.
+        log = [
+            {**_year_row(1, margin=10.0, ocf=2.0, genre_costs={"Drama": 100}),
+             "emmy_nominations": 1, "emmy_wins": 0},
+            {**_year_row(2, margin=15.0, ocf=3.0, genre_costs={"Drama": 100}),
+             "emmy_nominations": 2, "emmy_wins": 1},
+        ]
+        notables = gs.compute_level_notables(log)
+        assert notables["emmy_nominations"] == 3
+        assert notables["emmy_wins"] == 1
+
+    def test_emmy_totals_default_to_zero_for_legacy_entries_without_the_field(self):
+        # An entry recorded before Emmy Tracking existed carries neither
+        # key at all -- must sum as 0, not raise or return None for a
+        # non-empty log.
+        log = [_year_row(1, margin=10.0, ocf=2.0, genre_costs={"Reality": 100})]
+        notables = gs.compute_level_notables(log)
+        assert notables["emmy_nominations"] == 0
+        assert notables["emmy_wins"] == 0
 
     def test_notables_round_trip_through_record_attempt(self):
         notables = {"best_year": {"label": "Year 2", "margin": 15.0, "ocf": 3.0},

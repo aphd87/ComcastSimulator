@@ -302,6 +302,46 @@ def genre_demo(genre: str) -> dict:
     return GENRE_DEMOS.get(genre, GENRE_DEMO_DEFAULT)
 
 
+# ── Emmy Tracking ─────────────────────────────────────────────────────────────
+# 2026-08-05, Phase 6: the TV-side parallel to Movies' Oscar tracking
+# (utils/movie_models.py::draw_critical_reception/AWARDS_ELIGIBLE_GENRES),
+# but genuinely greenfield -- TV/Streaming had no prestige/critical-
+# reception signal at all before this, only the numeric rating-variance
+# draw above. Deliberately its own independent seeded draw (own hash
+# offset -- never perturbs preview_show_variance()'s sequence or
+# draw_production_risk_event's), same "a show can be a ratings hit and get
+# snubbed critically, or a modest performer critics love" reasoning as the
+# Movies side. Only Drama/Scripted/Comedy are eligible -- the genres with a
+# real-world Emmy prestige-category analogue (Drama Series, Limited/
+# Anthology "Scripted," Comedy Series); Reality/Competition/Talk/True Crime
+# aren't chasing the same signal in this sim, a real eligibility gate
+# (mirrors AWARDS_ELIGIBLE_GENRES), not a soft discount.
+EMMY_ELIGIBLE_GENRES = {"Drama", "Scripted", "Comedy"}
+EMMY_RECEPTION_BOUNDS = {
+    "Drama":    (25, 55, 90),
+    "Scripted": (20, 50, 88),
+    "Comedy":   (20, 48, 85),
+}
+EMMY_NOMINATION_THRESHOLD = 70
+EMMY_WIN_THRESHOLD        = 87   # a win is a strict superset of a nomination, same posture as Oscar tracking
+
+
+def draw_emmy_reception(team_name: str, year: int, show_id: int, genre: str) -> Optional[float]:
+    """Continuous, seeded, reproducible-per-team-per-show-per-year draw —
+    only ever meaningful for EMMY_ELIGIBLE_GENRES; returns None for every
+    other genre (no draw consumed, no RNG call at all, so it can't perturb
+    anything even indirectly). Only ever called for shows that actually
+    aired at full value this year (status == "active" in
+    pages/simulation.py::_compute_year) — a cancelled or risk-event show
+    didn't really air, so it can't compete for anything."""
+    if genre not in EMMY_ELIGIBLE_GENRES:
+        return None
+    lo, mode, hi = EMMY_RECEPTION_BOUNDS[genre]
+    seed = (abs(hash(team_name)) + show_id * 7247 + year * 887 + 53) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    return float(rng.triangular(lo, mode, hi))
+
+
 # ── Production-risk event ────────────────────────────────────────────────────
 # Zach Schlessel's feedback: "Shows can fail for legitimate reasons (talent
 # departure, poor script, etc.)" — a real, independent risk axis from the

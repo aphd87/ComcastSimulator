@@ -24,6 +24,7 @@ from utils.models import (
     greenlight_linear, greenlight_svod, performance_linked_growth,
     MIN_MARKETING_PER_SHOW_M, draw_production_risk_event,
     draw_emergency_budget_shock,
+    draw_emmy_reception, EMMY_ELIGIBLE_GENRES, EMMY_NOMINATION_THRESHOLD, EMMY_WIN_THRESHOLD,
 )
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
@@ -156,13 +157,22 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
         else:
             rev = s.ad_revenue(year, per) * v
             adj_ad_rev += rev
+            # Emmy Tracking (Phase 6, 2026-08-05) -- only rolled for shows
+            # that actually aired at full value this year, own independent
+            # seed (never perturbs `rng`'s sequence or draw_production_risk_
+            # event's). None for non-eligible genres -- see EMMY_ELIGIBLE_
+            # GENRES in utils/models.py.
+            emmy_score = draw_emmy_reception(ss.team_name, year, s.id, s.genre)
             show_rows.append({"id": s.id, "name": s.name, "network": s.network, "genre": s.genre,
                                "status": "active",
                                "rating_base": s.rating,
                                "rating_adj": round(s.rating * v, 2),
                                "variance": round(v, 3),
                                "revenue": round(rev, 2),
-                               "cost": round(s.annual_amort_expense(year), 2)})
+                               "cost": round(s.annual_amort_expense(year), 2),
+                               "emmy_score": emmy_score,
+                               "emmy_nomination": emmy_score is not None and emmy_score >= EMMY_NOMINATION_THRESHOLD,
+                               "emmy_win": emmy_score is not None and emmy_score >= EMMY_WIN_THRESHOLD})
 
     dist_rev   = distribution_revenue(year)
     total_rev  = adj_ad_rev + dist_rev + sports_rev_m
@@ -170,6 +180,8 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
     ga         = total_rev * 0.06
     ocf        = total_rev - total_cost - mkt - ga
     margin     = (ocf / total_rev * 100) if total_rev > 0 else 0.0
+    emmy_nominations = sum(1 for r in show_rows if r.get("emmy_nomination"))
+    emmy_wins         = sum(1 for r in show_rows if r.get("emmy_win"))
 
     return {
         "year":    year,
@@ -184,6 +196,8 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
         "ga":      round(ga, 2),
         "ocf":     round(ocf, 2),
         "margin":  round(margin, 1),
+        "emmy_nominations": emmy_nominations,
+        "emmy_wins":        emmy_wins,
         "new_cancellations": list(new_cancel),
         "shows":   show_rows,
     }
@@ -291,6 +305,18 @@ def _last_year_recap(prev: dict, threshold: float):
     making this year's calls, not just a one-time glance in Results."""
     ocf_c    = SUCCESS if prev["ocf"] >= 0 else DANGER
     margin_c = SUCCESS if prev["margin"] >= threshold else (WARN if prev["ocf"] >= 0 else DANGER)
+    # .get()-guarded -- entries recorded before Emmy Tracking existed won't
+    # carry these keys. Wins over nominations, same posture as Movies'
+    # Oscar badge (a win is a strict superset of a nomination).
+    emmy_wins = prev.get("emmy_wins") or 0
+    emmy_noms = prev.get("emmy_nominations") or 0
+    emmy_span = ""
+    if emmy_wins:
+        emmy_span = (f'<span style="font-size:14px;color:{ACCENT};">🏆 '
+                     f'<b style="font-family:DM Mono,monospace;">{emmy_wins} Emmy win{"s" if emmy_wins != 1 else ""}</b></span>')
+    elif emmy_noms:
+        emmy_span = (f'<span style="font-size:14px;color:{SUCCESS};">🎬 '
+                     f'<b style="font-family:DM Mono,monospace;">{emmy_noms} Emmy nom{"s" if emmy_noms != 1 else ""}</b></span>')
     st.markdown(f"""
     <div style="background:#12141a;border:1px solid #252836;border-radius:8px;
          padding:10px 18px;margin-bottom:16px;">
@@ -302,6 +328,7 @@ def _last_year_recap(prev: dict, threshold: float):
           <span style="font-size:14px;color:#e0e2ea;">Cost <b style="font-family:DM Mono,monospace;color:{WARN};">${prev['cost']:.1f}M</b></span>
           <span style="font-size:14px;color:#e0e2ea;">OCF <b style="font-family:DM Mono,monospace;color:{ocf_c};">${prev['ocf']:+.1f}M</b></span>
           <span style="font-size:14px;color:#e0e2ea;">Margin <b style="font-family:DM Mono,monospace;color:{margin_c};">{prev['margin']:.1f}%</b></span>
+          {emmy_span}
         </div>
       </div>
     </div>
@@ -964,6 +991,42 @@ def _results(ss, shows, net_info, year, team, net):
             </div>
             """, unsafe_allow_html=True)
 
+    # ── Emmy Tracking — a genuinely separate outcome from ratings ────────────
+    # Phase 6, 2026-08-05: TV-side parallel to Movies' Oscar-win/nomination
+    # banner. Only shows Drama/Scripted/Comedy shows that actually aired
+    # this year (see EMMY_ELIGIBLE_GENRES) -- a Reality/Competition/Talk/
+    # True Crime show, or one that was cancelled/hit a risk event, never
+    # shows up here at all, same real-eligibility-gate posture as the
+    # Movies side.
+    emmy_rows = [r for r in active_rows if r.get("emmy_score") is not None]
+    if emmy_rows:
+        st.markdown('<div class="section-title" style="margin-top:14px;">🏆 Emmy Buzz</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+            'Critical reception for this year\'s Drama/Scripted/Comedy shows — independent of ratings, '
+            'same as the Movies side\'s critical reception being independent of box office.</div>',
+            unsafe_allow_html=True)
+        emmy_cols = st.columns(min(len(emmy_rows), 5))
+        for i, r in enumerate(sorted(emmy_rows, key=lambda x: x["emmy_score"], reverse=True)[:5]):
+            badge = "🏆 WIN" if r["emmy_win"] else ("🎬 NOMINATED" if r["emmy_nomination"] else "—")
+            badge_c = ACCENT if r["emmy_win"] else (SUCCESS if r["emmy_nomination"] else TEXT2)
+            emmy_cols[i].markdown(f"""
+            <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;
+                 padding:10px;text-align:center;">
+              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
+                   margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {r['name'][:15]}
+              </div>
+              <div style="font-size:18px;font-family:DM Serif Display,serif;color:{badge_c};">
+                {r['emmy_score']:.0f}
+              </div>
+              <div style="font-size:13px;color:{badge_c};font-family:DM Mono,monospace;">
+                {badge}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
     # ── Cumulative P&L chart ──────────────────────────────────────────────────
     if log:
         st.markdown('<div class="section-title" style="margin-top:18px;">Level P&L — Year by Year</div>',
@@ -1279,13 +1342,19 @@ def _complete(ss, shows, net_info, team, net):
     cs_c     = SUCCESS if (cs or 0) >= 85 else (WARN if (cs or 0) >= 65 else DANGER)
     cs_val   = f"{cs:.0f}/100" if cs is not None else "—"
     cs_label = ("Rock-solid" if cs >= 85 else "Steady" if cs >= 65 else "Volatile") if cs is not None else "not enough data"
+    ew = notables.get("emmy_wins") or 0
+    en = notables.get("emmy_nominations") or 0
+    emmy_val = f"{ew} win{'s' if ew != 1 else ''}" if ew else (f"{en} nom{'s' if en != 1 else ''}" if en else "—")
+    emmy_c   = ACCENT if ew else (SUCCESS if en else TEXT2)
+    emmy_sub = f"{en} total nomination{'s' if en != 1 else ''}" if ew and en > ew else "across the level"
 
-    n_cols = st.columns(4)
+    n_cols = st.columns(5)
     cards = [
         ("BEST YEAR",       by_val, SUCCESS, by_sub),
         ("MOST IMPROVED",   mi_val, mi_c,    "margin, first → last year"),
         ("CONSISTENCY",     cs_val, cs_c,    cs_label),
         ("SHOWS GREENLIT",  str(sg), ACCENT, "new titles added this level"),
+        ("EMMY RECOGNITION", emmy_val, emmy_c, emmy_sub),
     ]
     for col, (title, val, color, sub) in zip(n_cols, cards):
         with col:

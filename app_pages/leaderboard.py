@@ -82,6 +82,12 @@ def _format_notables_badges(notables: dict) -> str:
     on = notables.get("oscar_nominations")
     if on:
         badges.append(f"🎬 {on} Oscar nom{'s' if on != 1 else ''}")
+    ew = notables.get("emmy_wins")
+    if ew:
+        badges.append(f"🏆 {ew} Emmy win{'s' if ew != 1 else ''}")
+    en = notables.get("emmy_nominations")
+    if en:
+        badges.append(f"🎬 {en} Emmy nom{'s' if en != 1 else ''}")
     if not badges:
         return ""
     return ('<div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;">' +

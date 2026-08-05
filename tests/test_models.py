@@ -18,6 +18,8 @@ from utils.models import (
     draw_emergency_budget_shock, EMERGENCY_BUDGET_CHANCE, EMERGENCY_BUDGET_CUT_RANGE,
     slot_rating_multiplier, PRIMETIME_DAYS, PRIMETIME_HOURS,
     SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
+    draw_emmy_reception, EMMY_ELIGIBLE_GENRES, EMMY_RECEPTION_BOUNDS,
+    EMMY_NOMINATION_THRESHOLD, EMMY_WIN_THRESHOLD,
 )
 
 
@@ -277,3 +279,58 @@ class TestPrimetimeScheduling:
         s.slot_day, s.slot_hour = "Tue", "8PM"
         second = s.schedule_multiplier()
         assert second > first
+
+
+# ── Emmy Tracking (Phase 6, 2026-08-05) ──────────────────────────────────────
+class TestEmmyTracking:
+    """TV-side parallel to Movies' Oscar tracking (utils/movie_models.py::
+    draw_critical_reception/AWARDS_ELIGIBLE_GENRES) -- genuinely greenfield,
+    TV had no prestige/awards signal at all before this."""
+
+    def test_ineligible_genres_always_return_none(self):
+        for genre in ("Reality", "Competition", "Talk", "True Crime"):
+            assert genre not in EMMY_ELIGIBLE_GENRES
+            assert draw_emmy_reception("Team X", 1, 101, genre) is None
+
+    def test_eligible_genres_match_the_bounds_table(self):
+        assert EMMY_ELIGIBLE_GENRES == set(EMMY_RECEPTION_BOUNDS.keys())
+        assert EMMY_ELIGIBLE_GENRES == {"Drama", "Scripted", "Comedy"}
+
+    def test_reproducible_for_same_team_year_show(self):
+        a = draw_emmy_reception("Team Echo", 2, 501, "Drama")
+        b = draw_emmy_reception("Team Echo", 2, 501, "Drama")
+        assert a == b
+
+    def test_draws_stay_within_this_genres_bounds(self):
+        for genre, (lo, mode, hi) in EMMY_RECEPTION_BOUNDS.items():
+            draws = [draw_emmy_reception(f"Team {i}", y, 900 + i, genre)
+                     for i in range(100) for y in range(1, 4)]
+            assert all(lo <= d <= hi for d in draws)
+            assert min(draws) < mode < max(draws)   # genuine spread, not degenerate
+
+    def test_nomination_and_win_thresholds_are_ordered_and_reachable(self):
+        assert 0 < EMMY_NOMINATION_THRESHOLD < EMMY_WIN_THRESHOLD < 100
+        for genre in EMMY_ELIGIBLE_GENRES:
+            draws = [draw_emmy_reception(f"Team {i}", y, 1500 + i, genre)
+                     for i in range(200) for y in range(1, 4)]
+            noms = [d for d in draws if d >= EMMY_NOMINATION_THRESHOLD]
+            wins = [d for d in draws if d >= EMMY_WIN_THRESHOLD]
+            assert len(noms) > 0   # nominations must be reachable
+            assert len(wins) < len(noms)   # a win is a strict superset of a nomination -- must be rarer
+
+    def test_independent_of_rating_variance_and_production_risk_seeds(self):
+        # If Emmy tracking accidentally shared a seed offset with either
+        # the rating-variance rng or draw_production_risk_event, this would
+        # show up as a suspicious correlation between the two. Confirms
+        # different show IDs (same team/year) can diverge independently.
+        results = {sid: draw_emmy_reception("Team Golf", 1, sid, "Drama") for sid in range(2000, 2300)}
+        assert len(set(results.values())) > 1
+
+    def test_win_requires_higher_score_than_nomination(self):
+        # A win must never fire without the nomination threshold also
+        # clearing -- same "strict superset" invariant Oscar tracking has.
+        for genre in EMMY_ELIGIBLE_GENRES:
+            for i in range(300):
+                score = draw_emmy_reception(f"Team Win Check {i}", 1, 3000 + i, genre)
+                if score >= EMMY_WIN_THRESHOLD:
+                    assert score >= EMMY_NOMINATION_THRESHOLD

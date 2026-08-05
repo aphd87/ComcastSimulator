@@ -148,7 +148,8 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
     if not yearly_log:
         return {"best_year": None, "most_improved": None,
                 "consistency_score": None, "diversity_trend": None,
-                "shows_greenlit": shows_greenlit}
+                "shows_greenlit": shows_greenlit,
+                "emmy_nominations": None, "emmy_wins": None}
 
     sorted_log = sorted(yearly_log, key=lambda r: r["year"])
 
@@ -188,12 +189,21 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
     # Negative delta = HHI went down = more diversified over the level.
     diversity_trend = round(first_hhi - last_hhi, 3) if (first_hhi is not None and last_hhi is not None) else None
 
+    # Emmy Tracking (Phase 6, 2026-08-05) -- .get()-guarded since entries
+    # recorded before this feature existed won't carry these keys, same
+    # posture as Movies' oscar_nominations/oscar_wins in
+    # compute_movie_notables below.
+    emmy_nominations = sum(r.get("emmy_nominations") or 0 for r in sorted_log)
+    emmy_wins         = sum(r.get("emmy_wins") or 0 for r in sorted_log)
+
     return {
         "best_year":         best_year,
         "most_improved":     most_improved,
         "consistency_score": consistency_score,
         "diversity_trend":   diversity_trend,
         "shows_greenlit":    shows_greenlit,
+        "emmy_nominations":  emmy_nominations,
+        "emmy_wins":         emmy_wins,
     }
 
 
