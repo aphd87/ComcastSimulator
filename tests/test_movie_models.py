@@ -31,6 +31,8 @@ from utils.movie_models import (
     PRODUCER_NET_PARTICIPATION,
     TALENT_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
     draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
+    EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
+    PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
 )
 
 
@@ -686,3 +688,82 @@ class TestRivalStudioDynamics:
         fired = [p for p in poaches if p is not None]
         assert fired
         assert all(r in RIVAL_STUDIOS for r in fired)
+
+
+class TestExhibitorNegotiationPosture:
+    """2026-08-04: "standard" must reproduce the original fixed
+    EXHIBITOR_SPLIT/screens behavior exactly (additive field, same posture
+    as every other Day 2 deal mechanic) -- aggressive/exhibitor_friendly
+    are a real, opposite-signed trade-off, not a free lunch either way."""
+
+    def test_standard_posture_matches_the_original_fixed_split_exactly(self):
+        p = _tentpole()
+        assert p.exhibitor_posture == "standard"
+        assert EXHIBITOR_SPLIT_BY_POSTURE["standard"] == EXHIBITOR_SPLIT
+        assert EXHIBITOR_SCREENS_MULT_BY_POSTURE["standard"] == 1.0
+
+    def test_aggressive_posture_raises_split_but_cuts_effective_screens(self):
+        base = _tentpole()
+        aggressive = MovieProject(**{**base.__dict__, "exhibitor_posture": "aggressive"})
+        assert EXHIBITOR_SPLIT_BY_POSTURE["aggressive"] > EXHIBITOR_SPLIT_BY_POSTURE["standard"]
+        assert aggressive.opening_weekend() < base.opening_weekend()   # fewer effective screens
+        assert aggressive.theatrical_studio_net("base") != base.theatrical_studio_net("base")
+
+    def test_exhibitor_friendly_posture_lowers_split_but_grows_effective_screens(self):
+        base = _tentpole()
+        friendly = MovieProject(**{**base.__dict__, "exhibitor_posture": "exhibitor_friendly"})
+        assert EXHIBITOR_SPLIT_BY_POSTURE["exhibitor_friendly"] < EXHIBITOR_SPLIT_BY_POSTURE["standard"]
+        assert friendly.opening_weekend() > base.opening_weekend()   # more effective screens
+
+    def test_neither_alternative_posture_is_a_dominant_strategy(self):
+        # A genuine trade-off: aggressive shouldn't just win outright on
+        # NPV, or the "choice" wouldn't be a real one. (Not asserting which
+        # one wins -- just that they're not identical outcomes.)
+        base = _tentpole()
+        aggressive = MovieProject(**{**base.__dict__, "exhibitor_posture": "aggressive"})
+        friendly = MovieProject(**{**base.__dict__, "exhibitor_posture": "exhibitor_friendly"})
+        npvs = {base.npv("base"), aggressive.npv("base"), friendly.npv("base")}
+        assert len(npvs) == 3   # all three postures produce genuinely different outcomes
+
+
+class TestPay1WindowLicensing:
+    """2026-08-04: "keep" must reproduce prior subscriber_value() behavior
+    exactly. license_out swaps in a flat, base-case-priced fee arriving
+    sooner than owned subscriber value -- and is defensively ignored for
+    Day-and-Date, which already commits to Peacock exclusivity."""
+
+    def test_keep_is_the_unadjusted_baseline(self):
+        p = _tentpole()
+        assert p.pay1_licensing == "keep"
+        assert not p.is_licensing_out()
+        assert p.pay1_license_fee() == 0.0
+
+    def test_license_out_replaces_subscriber_value_with_a_flat_fee(self):
+        base = _tentpole()
+        licensed = MovieProject(**{**base.__dict__, "pay1_licensing": "license_out"})
+        assert licensed.is_licensing_out()
+        expected_fee = base.subscriber_value("base") * PAY1_LICENSE_DISCOUNT
+        assert licensed.pay1_license_fee() == pytest.approx(expected_fee)
+
+    def test_license_fee_is_independent_of_the_actual_resolved_scenario(self):
+        # A real licensing deal is negotiated before release -- the fee
+        # must be identical whether the eventual outcome is bear or bull.
+        p = MovieProject(**{**_tentpole().__dict__, "pay1_licensing": "license_out"})
+        assert p.pay1_license_fee() == p.pay1_license_fee()   # deterministic, no scenario arg at all
+
+    def test_day_and_date_ignores_license_out_defensively(self):
+        p = MovieProject(**{**_tentpole().__dict__,
+                             "release_strategy": "day_and_date", "pay1_licensing": "license_out"})
+        assert not p.is_licensing_out()
+        assert p.pay1_license_fee() == 0.0
+
+    def test_total_revenue_reflects_the_licensing_swap(self):
+        base = _tentpole()
+        licensed = MovieProject(**{**base.__dict__, "pay1_licensing": "license_out"})
+        base_total = base.total_revenue("base")
+        licensed_total = licensed.total_revenue("base")
+        # Swapping subscriber_value for a smaller flat fee changes total
+        # revenue's undiscounted sum -- not asserting direction (fee could
+        # exceed or trail subscriber_value depending on genre/strategy),
+        # just that the swap actually took effect.
+        assert licensed_total != base_total

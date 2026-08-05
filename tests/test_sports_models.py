@@ -60,11 +60,26 @@ class TestCycles:
     def test_most_years_nothing_is_up_for_bid(self):
         # 5-7yr real contracts -- an annual re-bid on everything would
         # defeat the point. Sample a wide range and confirm most years are quiet.
+        #
+        # Found and fixed 2026-08-04 (incidental, while diagnosing an
+        # unrelated hash-seed flakiness class in tests/test_movies_page.py):
+        # this assertion compared quiet_years (counted from the 39-element
+        # counts[1:] slice, deliberately excluding the anchor year) against
+        # a threshold computed from len(counts) -- the full 40-element list
+        # including the anchor. That off-by-one demanded >20/39 (53.8%+)
+        # while the intent was "more than half of the non-anchor years,"
+        # i.e. >19.5/39 -- a real, hash-seed-independent latent flakiness
+        # bug (leagues_up_for_bid's cycle boundaries are seeded off
+        # hash(league_key), which is itself per-process-randomized, so the
+        # exact quiet-year count legitimately varies run to run and
+        # occasionally landed on exactly 20/39, failing the too-strict
+        # threshold). Verified robust across PYTHONHASHSEED 0-15 after the fix.
         years = range(ANCHOR, ANCHOR + 40)
         counts = [len(leagues_up_for_bid(y, ANCHOR)) for y in years]
         assert counts[0] == len(SPORTS_LEAGUES)          # anchor year is the exception
-        quiet_years = sum(1 for c in counts[1:] if c == 0)
-        assert quiet_years > len(counts) * 0.5
+        non_anchor_years = counts[1:]
+        quiet_years = sum(1 for c in non_anchor_years if c == 0)
+        assert quiet_years > len(non_anchor_years) * 0.5
 
 
 # ── Rival bidding & auction resolution ──────────────────────────────────────

@@ -169,8 +169,18 @@ class TestProductionRiskEvent:
         # fires, even in the same team/year -- confirms this doesn't
         # collapse onto a single shared draw per team+year the way the
         # rating-variance rng does.
+        #
+        # Sample size bumped 100 -> 1000 (2026-08-04, found via
+        # PYTHONHASHSEED=0 reproducibility testing -- see conftest.py):
+        # at PRODUCTION_RISK_CHANCE=4%, only 100 samples gave "zero events
+        # fired at all" a genuine ~1.7% (0.96^100) chance of happening by
+        # pure bad luck, independent of any actual bug -- a real, if
+        # occasional, false-failure risk once the hash seed (and therefore
+        # exactly which 100 draws get sampled) is pinned for reproducibility
+        # rather than left to vary randomly run to run. 1000 samples drives
+        # that false-failure probability to effectively zero (0.96^1000).
         results = {sid: draw_production_risk_event("Team Golf", 1, sid)
-                   for sid in range(2000, 2100)}
+                   for sid in range(2000, 3000)}
         assert len(set(results.values())) > 1
 
     def test_chance_constant_is_small(self):

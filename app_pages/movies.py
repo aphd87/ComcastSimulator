@@ -21,6 +21,7 @@ from utils.movie_models import (
     draw_production_trouble, draw_ancillary_surprise,
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
+    EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -114,6 +115,8 @@ def _current_project(ss) -> MovieProject:
         release_strategy=d.get("release_strategy", "wide_theatrical"),
         concept_type=d.get("concept_type", CONCEPT_TYPES[0]),
         financing_structure=d.get("financing_structure", "self_finance"),
+        exhibitor_posture=d.get("exhibitor_posture", "standard"),
+        pay1_licensing=d.get("pay1_licensing", "keep"),
     )
 
 
@@ -494,6 +497,20 @@ def _decisions(ss):
         }
         st.caption(fin_notes[financing_structure])
 
+        posture_labels = {
+            "standard": "Standard Split — 52% studio share, screens as requested",
+            "aggressive": "Aggressive Split — 58% studio share, exhibitors cut ~8% of requested screens",
+            "exhibitor_friendly": "Exhibitor-Friendly Split — 46% studio share, exhibitors add ~8% more screens",
+        }
+        exhibitor_posture = st.selectbox(
+            "Exhibitor Negotiation Posture", EXHIBITOR_POSTURES,
+            index=EXHIBITOR_POSTURES.index(d.get("exhibitor_posture", "standard"))
+                  if d.get("exhibitor_posture") in EXHIBITOR_POSTURES else 0,
+            format_func=lambda k: posture_labels[k],
+            help="Push harder for a bigger box-office cut and exhibitors deprioritize your screens; "
+                 "give them better terms and they promote you harder. Not a free lunch either way.",
+        )
+
         capital = budget + pa
         realistic_max_screens = capital * 18   # rough real-world benchmark: a wide-release
                                                 # distribution deal scales screen count with
@@ -508,7 +525,8 @@ def _decisions(ss):
 
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
                  release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
-                 financing_structure=financing_structure)
+                 financing_structure=financing_structure, exhibitor_posture=exhibitor_posture,
+                 pay1_licensing=d.get("pay1_licensing", "keep"))
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -607,6 +625,32 @@ def _decisions(ss):
     chosen = ss.movie_draft.get("release_strategy", "wide_theatrical")
     st.markdown(f'<p class="text-sm text-ink2">Currently selected: <b class="text-ink">{RELEASE_LABELS[chosen]}</b></p>',
                 unsafe_allow_html=True)
+
+    # ── Pay-1 Window Licensing ────────────────────────────────────────────────
+    # Doesn't apply to Day-and-Date -- that strategy already commits the
+    # title to Peacock exclusivity as its core premise, so licensing the
+    # same window away would contradict the choice just made (enforced
+    # defensively in MovieProject.is_licensing_out() too, not just here).
+    if chosen != "day_and_date":
+        st.markdown('<div class="section-title mt-3">Pay-1 Window Licensing</div>', unsafe_allow_html=True)
+        pay1_labels = {
+            "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
+            "license_out": f"License to a Rival Platform — flat, guaranteed fee "
+                            f"(~{PAY1_LICENSE_DISCOUNT:.0%} of base-case subscriber value), paid sooner",
+        }
+        pay1_choice = st.selectbox(
+            "Pay-1 SVOD Window", PAY1_LICENSING_OPTIONS,
+            index=PAY1_LICENSING_OPTIONS.index(ss.movie_draft.get("pay1_licensing", "keep")),
+            format_func=lambda k: pay1_labels[k],
+            help="A real Pay-1 licensing deal, negotiated before release — cash now and sooner, but "
+                 "you give up the subscriber-value upside and the strategic value of owning the "
+                 "streaming relationship.",
+        )
+        ss.movie_draft["pay1_licensing"] = pay1_choice
+    else:
+        ss.movie_draft["pay1_licensing"] = "keep"
+        st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
+                   "commits this title to Peacock exclusivity.")
 
     st.divider()
 

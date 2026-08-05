@@ -84,7 +84,10 @@ def test_decisions_phase_has_expected_widgets():
     # this team/cycle) -- Simulate must still be present and last.
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
-    assert len(at.selectbox) == 3      # genre, concept type, financing structure
+    # genre, concept type, financing structure, exhibitor posture (Greenlight)
+    # + Pay-1 licensing (Release Strategy -- shown even at Cycle 1 since
+    # "wide_theatrical" != "day_and_date")
+    assert len(at.selectbox) == 5
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
@@ -290,7 +293,36 @@ def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
     outcome = at.session_state["movie_log"][0]
     assert outcome["project_kwargs"]["star_power"] == 50   # unboosted default
     assert outcome["talent_partner_bonus"] is None
-    assert outcome["talent_partner_bonus"] is None
+
+
+# ── Exhibitor Negotiation Posture + Pay-1 Window Licensing (2026-08-04) ──────
+
+def test_exhibitor_posture_and_pay1_licensing_selectboxes_default_correctly():
+    at = _movies_app()
+    posture_box = at.selectbox[3]   # genre, concept_type, financing_structure, exhibitor_posture
+    pay1_box = at.selectbox[4]      # Pay-1 licensing, rendered in Release Strategy
+    assert posture_box.value == "standard"
+    assert len(posture_box.options) == 3
+    assert pay1_box.value == "keep"
+    assert len(pay1_box.options) == 2
+
+
+def test_pay1_licensing_selectbox_is_hidden_for_day_and_date():
+    at = _movies_app_at_cycle_3()
+    at.button(key="pick_day_and_date").click().run()
+    assert not at.exception
+    caption_text = "\n".join(c.value for c in at.caption)
+    assert "Pay-1 licensing isn't available for Day-and-Date" in caption_text
+    assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"
+
+
+def test_default_outcome_reflects_standard_posture_and_keep_licensing():
+    at = _movies_app_no_poaching()
+    _simulate_button(at).click().run()
+    assert not at.exception
+    kwargs = at.session_state["movie_log"][0]["project_kwargs"]
+    assert kwargs["exhibitor_posture"] == "standard"
+    assert kwargs["pay1_licensing"] == "keep"
 
 
 def _results_app_with_outcome(outcome: dict) -> AppTest:

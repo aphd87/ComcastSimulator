@@ -381,6 +381,49 @@ TAX_CREDIT_PCT            = 0.22   # net-of-discount effective credit (headline 
                                      # credits are commonly sold at a discount -- see the note)
 
 
+# ── Exhibitor Split Negotiation ──────────────────────────────────────────────
+# 2026-08-04, per the teaching note's exhibitor-relations section ("theaters
+# prefer longer exclusive release windows, while studios aim to maximize the
+# momentum... distributors typically receive 45-55% of ticket sales").
+# "standard" reproduces the exact prior fixed EXHIBITOR_SPLIT/screens
+# behavior every project used before this field existed. The other two are
+# meant as a real, opposite-signed trade-off -- push harder on economics and
+# exhibitors push back on placement, or vice versa.
+#
+# The screens multiplier is deliberately a SMALLER swing (±8%) than the
+# split-rate swing (±11.5% relative) even though they're framed as
+# opposite-and-equal in the UI copy -- caught during manual QA (2026-08-04):
+# screens scale the box-office base (`dom`) that PVOD, subscriber value, and
+# library longtail all derive from, while the split rate only touches
+# theatrical net directly. An equal-magnitude screens swing therefore always
+# swamped the split swing structurally (touches strictly more of total
+# revenue), making "exhibitor_friendly" a near-dominant strategy regardless
+# of project economics -- not a real choice. Verified via a manual sweep
+# across a tentpole and an indie drama that ±8% keeps the spread modest
+# (roughly ±5-7% NPV either direction from standard) without either
+# alternative reading as an obvious win every time.
+EXHIBITOR_POSTURES = ["standard", "aggressive", "exhibitor_friendly"]
+EXHIBITOR_SPLIT_BY_POSTURE = {"standard": EXHIBITOR_SPLIT, "aggressive": 0.58, "exhibitor_friendly": 0.46}
+EXHIBITOR_SCREENS_MULT_BY_POSTURE = {"standard": 1.0, "aggressive": 0.92, "exhibitor_friendly": 1.08}
+
+
+# ── Pay-1 Window Licensing ───────────────────────────────────────────────────
+# 2026-08-04, per the teaching note's Pay-1/Pay-2/Pay-3 windowing section: a
+# studio can keep its post-theatrical SVOD window exclusive on its own
+# platform, or license it to a rival platform for a flat, pre-negotiated fee
+# instead -- real cash, known before release, in exchange for giving up the
+# subscriber-value upside (and the strategic value of owning that
+# relationship). "keep" reproduces prior behavior exactly. Doesn't apply to
+# day_and_date releases -- that strategy already commits the title to
+# Peacock exclusivity as its core premise; licensing the same window away
+# would contradict the choice that was just made, so windowed_cashflows()
+# below ignores pay1_licensing for day_and_date regardless of what's set.
+PAY1_LICENSING_OPTIONS = ["keep", "license_out"]
+PAY1_LICENSE_DISCOUNT  = 0.55   # flat fee as a fraction of BASE-case subscriber value -- a real
+                                  # licensing deal is negotiated before release, not indexed to
+                                  # how the movie actually performs
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -393,6 +436,8 @@ class MovieProject:
     release_strategy: str = "wide_theatrical"   # "wide_theatrical" | "platform" | "day_and_date"
     concept_type: str = "New IP"                # "New IP" | "Sequel" | "Family/Kids" | "Indie-Horror"
     financing_structure: str = "self_finance"   # "self_finance" | "presale" | "tax_incentive"
+    exhibitor_posture: str = "standard"         # "standard" | "aggressive" | "exhibitor_friendly"
+    pay1_licensing: str = "keep"                 # "keep" | "license_out"
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -433,8 +478,13 @@ class MovieProject:
         would). Platform releases open on far fewer screens by design
         (awards-qualifying rollout); day-and-date is unaffected here
         (theatrical suppression is applied to the multiplier instead, see
-        cannibalization_factor)."""
+        cannibalization_factor). exhibitor_posture scales the EFFECTIVE
+        screen count actually granted -- self.screens stays the student's
+        raw requested number (still used for the "unrealistic screen count"
+        warning check in the UI), while a harder negotiating posture nets
+        fewer screens than asked for and a friendlier one nets more."""
         screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
+        screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
         return BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost() * self.awareness_lift()
 
@@ -471,10 +521,14 @@ class MovieProject:
         return intl
 
     def theatrical_studio_net(self, scenario: str) -> float:
-        """Studio's net rental after the exhibitor split, domestic + international."""
+        """Studio's net rental after the exhibitor split, domestic +
+        international -- split rate depends on exhibitor_posture (see
+        EXHIBITOR_SPLIT_BY_POSTURE); "standard" reproduces the original
+        fixed EXHIBITOR_SPLIT exactly."""
         dom = self.domestic_box_office(scenario)
         intl = self.international_box_office(dom)
-        return (dom + intl) * EXHIBITOR_SPLIT
+        split = EXHIBITOR_SPLIT_BY_POSTURE.get(self.exhibitor_posture, EXHIBITOR_SPLIT)
+        return (dom + intl) * split
 
     def pvod_revenue(self, scenario: str) -> float:
         """Premium-rental window, sized off theatrical awareness — day-and-date
@@ -499,6 +553,23 @@ class MovieProject:
         elif self.release_strategy == "platform":
             sub_lift_m *= 1.1
         return sub_lift_m * SVOD_SUB_LTV_MO * 12 * SVOD_MARGIN
+
+    def is_licensing_out(self) -> bool:
+        """Whether the Pay-1 SVOD window is actually being licensed away
+        this project -- day_and_date overrides pay1_licensing to False
+        regardless of what's set, since that release strategy already
+        commits the title to Peacock exclusivity as its core premise."""
+        return self.pay1_licensing == "license_out" and self.release_strategy != "day_and_date"
+
+    def pay1_license_fee(self) -> float:
+        """Flat, pre-negotiated fee for licensing the Pay-1 SVOD window to
+        a rival platform instead of keeping it on Peacock -- computed off
+        the BASE case regardless of the actual resolved scenario (a real
+        licensing deal is negotiated before release, not indexed to how the
+        movie actually performs). 0.0 when not licensing out."""
+        if not self.is_licensing_out():
+            return 0.0
+        return self.subscriber_value("base") * PAY1_LICENSE_DISCOUNT
 
     def library_longtail(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """Small, deferred EST/library licensing tail — a fixed fraction of
@@ -567,15 +638,23 @@ class MovieProject:
         consequence of box-office or critical performance."""
         theatrical = self.theatrical_studio_net(scenario)
         pvod       = self.pvod_revenue(scenario) * pvod_mult
-        sub_value  = self.subscriber_value(scenario)
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
         theme_park = self.theme_park_value(scenario) * theme_park_mult
         window_mo  = self.window_days() / 30.0
+        if self.is_licensing_out():
+            # A flat licensing fee, paid alongside PVOD -- faster and known
+            # in advance, vs. owned subscriber value's later, performance-
+            # exposed window below.
+            sub_value       = self.pay1_license_fee()
+            sub_value_month = window_mo + 1.0
+        else:
+            sub_value       = self.subscriber_value(scenario)
+            sub_value_month = window_mo + 3.0   # Peacock exclusive window follows PVOD
         flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
             (window_mo + 1.0,    pvod),                       # PVOD opens right after theatrical window
-            (window_mo + 3.0,    sub_value),                  # Peacock exclusive window follows PVOD
+            (sub_value_month,    sub_value),
             (24.0,               longtail),                   # library/EST tail, ~2 years out
         ]
         if bump > 0:
