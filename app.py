@@ -57,14 +57,15 @@ else:
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 
-def _render_theory_grid():
-    """Shared theory-card grid — used on the welcome screen and both the TV
-    and Movies Theory tabs, so the reference content is identical everywhere."""
-    theory_items = list(THEORY_CONTENT.values())
-    cols = st.columns(3)
-    for i, col in enumerate(cols):
-        if i < len(theory_items):
-            t = theory_items[i]
+def _render_theory_cards(items):
+    """Renders a list of theory dicts in a 3-per-row grid, however many
+    there are — chunked rather than the old hardcoded 3-then-2 layout, so
+    it works for a 5-card single-simulation view and a 10-card combined
+    view alike."""
+    for row_start in range(0, len(items), 3):
+        row = items[row_start:row_start + 3]
+        cols = st.columns(3)
+        for col, t in zip(cols, row):
             col.markdown(f"""
             <div class="theory-card">
               <div class="theory-icon">{t['icon']}</div>
@@ -72,18 +73,37 @@ def _render_theory_grid():
               <div class="theory-body">{t['brief']}</div>
             </div>
             """, unsafe_allow_html=True)
-    cols2 = st.columns(2)
-    for i, col in enumerate(cols2):
-        idx = i + 3
-        if idx < len(theory_items):
-            t = theory_items[idx]
-            col.markdown(f"""
-            <div class="theory-card">
-              <div class="theory-icon">{t['icon']}</div>
-              <div class="theory-title">{t['title']}</div>
-              <div class="theory-body">{t['brief']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+
+
+def _theory_subtitle(label: str, color: str):
+    st.markdown(
+        f'<div style="font-size:14px;color:{color};text-transform:uppercase;'
+        f'letter-spacing:.1em;margin:14px 0 10px;font-family:\'DM Mono\',monospace;'
+        f'font-weight:600;">{label}</div>',
+        unsafe_allow_html=True)
+
+
+def _render_theory_grid(category: str = "all"):
+    """Shared theory-card grid — used on the welcome screen (category="all",
+    both simulations' frameworks grouped under labeled subtitles so a
+    visitor who hasn't chosen yet sees the full shared toolkit) and each
+    simulation's own Theory tab (category="tv"/"movies", that simulation's
+    5 cards only — added 2026-08-05 so the Movies Theory tab stops showing
+    TV-only content, including the previously actively-wrong framing of
+    Content Amortization, which doesn't apply to Movies' front-loaded,
+    no-amortization cost structure at all)."""
+    tv_items     = [t for t in THEORY_CONTENT.values() if t["category"] == "tv"]
+    movie_items  = [t for t in THEORY_CONTENT.values() if t["category"] == "movies"]
+
+    if category == "tv":
+        _render_theory_cards(tv_items)
+    elif category == "movies":
+        _render_theory_cards(movie_items)
+    else:
+        _theory_subtitle("📺 TV / Streaming", "#e8c547")
+        _render_theory_cards(tv_items)
+        _theory_subtitle("🎬 Movies", "#4fc3f7")
+        _render_theory_cards(movie_items)
 
 
 # ── Session state defaults ────────────────────────────────────────────────────
@@ -435,7 +455,7 @@ elif ss.active_section == "movies":
         render_movies()
     with tabs[1]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
-        _render_theory_grid()
+        _render_theory_grid(category="movies")
 
 else:
     # ── Registered — show active TV network dashboard ───────────────────────────
@@ -621,4 +641,4 @@ else:
 
     with tabs[3]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
-        _render_theory_grid()
+        _render_theory_grid(category="tv")

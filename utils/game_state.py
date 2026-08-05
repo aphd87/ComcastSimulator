@@ -570,6 +570,7 @@ THEORY_CONTENT = {
     "bcg": {
         "title": "BCG Portfolio Matrix",
         "icon": "📊",
+        "category": "tv",
         "brief": (
             "The BCG Growth-Share Matrix classifies business units (or shows) into four quadrants: "
             "**Stars** (high rating, high growth), **Cash Cows** (high rating, low growth), "
@@ -581,6 +582,7 @@ THEORY_CONTENT = {
     "hhi": {
         "title": "Herfindahl-Hirschman Index (Genre Diversification)",
         "icon": "🎯",
+        "category": "tv",
         "brief": (
             "The HHI measures content concentration. A portfolio of all reality shows scores ~1.0 (monopoly). "
             "A mix of reality, competition, scripted, and talk scores much lower. "
@@ -591,6 +593,7 @@ THEORY_CONTENT = {
     "cord_cutting": {
         "title": "Diffusion of Innovation & Cord-Cutting S-Curve",
         "icon": "📉",
+        "category": "tv",
         "brief": (
             "Rogers' Diffusion curve predicts that cord-cutting would accelerate from early adopters (2010–2014) "
             "through early majority (2015–2019) to mass market (2020+). The simulation models this as a 3%/year "
@@ -601,6 +604,7 @@ THEORY_CONTENT = {
     "amortization": {
         "title": "Content Amortization & Cash Flow Timing",
         "icon": "💸",
+        "category": "tv",
         "brief": (
             "Under ASC 926, TV content is amortized over its expected useful life — typically 12 months for "
             "linear series, 36 months for SVOD originals. You pay 1/12 of total season cost each month on air. "
@@ -611,11 +615,72 @@ THEORY_CONTENT = {
     "ltv": {
         "title": "LTV / CAC Framework (SVOD Economics)",
         "icon": "📱",
+        "category": "tv",
         "brief": (
             "SVOD profitability hinges on Lifetime Value (LTV) vs. Customer Acquisition Cost (CAC). "
             "LTV = ARPU × retention months × margin. A $8/month sub retained 18 months at 15% margin = $21.60 LTV. "
             "If content costs $750K/ep and drives 50K new subs, CAC from content = $15/sub. "
             "The green light model forces you to compare this against linear's immediate CPM revenue."
+        ),
+    },
+    "risk_adjusted_npv": {
+        "title": "Risk-Adjusted NPV & Capital at Risk",
+        "icon": "🎲",
+        "category": "movies",
+        "brief": (
+            "A movie isn't a portfolio with a margin — it's one concentrated bet, with production budget and "
+            "P&A both cash out before a single dollar of revenue is visible. Risk-adjusted NPV weights the bear "
+            "case at 50% rather than scoring on expected value alone, rewarding risk-aware greenlighting over "
+            "blind optimism. A $200M tentpole might show a base-case NPV of +$179M but a bear case of only "
+            "+$44M — the score reflects both, not just the rosy number."
+        ),
+    },
+    "windowed_revenue": {
+        "title": "Windowed Revenue Recognition & Cannibalization",
+        "icon": "🎬",
+        "category": "movies",
+        "brief": (
+            "Movie revenue doesn't arrive as one lump sum — it waterfalls through theatrical, then PVOD rental, "
+            "then the studio's own streaming window, then a long-tail library sale, each on its own timeline. "
+            "Day-and-date (theatrical and streaming released together) trades away box office for immediate "
+            "subscriber value — the real tension behind WarnerMedia's 2021 HBO Max experiment. Push the "
+            "streaming window too early and you cannibalize the theatrical run that funds it."
+        ),
+    },
+    "deal_waterfall": {
+        "title": "Deal-Participation Waterfall",
+        "icon": "💰",
+        "category": "movies",
+        "brief": (
+            "Revenue doesn't all stay with the studio. Talent gross participation is paid off top-line revenue "
+            "regardless of profitability, before the studio even recoups its own capital; a producer's net "
+            "participation only comes out of whatever's left after that. A studio can post a nominal "
+            "box-office win and still show a negative residual once every participant ahead of it in line gets "
+            "paid — the payout order is the whole lesson."
+        ),
+    },
+    "game_theory": {
+        "title": "Game Theory & Competitive Dynamics",
+        "icon": "♟️",
+        "category": "movies",
+        "brief": (
+            "Passing on a decision isn't a neutral no-op when rivals are watching. A talent partner nobody has "
+            "claimed can be permanently signed away by a competing studio; even a successfully placed hold can "
+            "still fail if a rival already locked the same window first. This is the real first-mover problem "
+            "behind actual studio output deals and first-look agreements — hesitation has a cost, and someone "
+            "else pays it forward by claiming the opportunity."
+        ),
+    },
+    "portfolio_diversification": {
+        "title": "Portfolio Diversification (Concept Type & Genre Mix)",
+        "icon": "🎭",
+        "category": "movies",
+        "brief": (
+            "The same concentration risk HHI measures for a TV network's genre mix applies across a studio's "
+            "slate. Three Sequels in a row leans entirely on franchise fatigue never catching up; a mix of New "
+            "IP, Sequel, Family/Kids, and Indie-Horror spreads that risk the same way a diversified show "
+            "lineup does. A slate built around one concept type is betting the whole level on a single trend "
+            "never breaking."
         ),
     },
 }
