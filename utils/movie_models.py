@@ -876,6 +876,18 @@ def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama",
     return float(rng.triangular(bounds["bear"], bounds["base"], bounds["bull"]))
 
 
+def multiplier_to_stars(multiplier: float, genre: str, concept_type: str = "New IP") -> int:
+    """Maps a resolved/previewed box-office multiplier to a 1-5 star
+    signal, scaled against THIS genre+concept_type's own bear/bull band
+    (see scenario_multipliers_for) — mirrors utils/models.py's TV-side
+    variance_to_stars, but genre-aware since Movies' variance band isn't a
+    single fixed global range the way TV's [0.93, 1.08] is. Powers the
+    paid Research / Social Listening feature in app_pages/movies.py."""
+    bounds = scenario_multipliers_for(genre, concept_type)
+    frac = (multiplier - bounds["bear"]) / (bounds["bull"] - bounds["bear"])
+    return min(5, max(1, int(frac * 5) + 1))
+
+
 def nearest_scenario_label(multiplier: float, genre: str = "Drama",
                             concept_type: str = "New IP") -> str:
     """Which named scenario the actual drawn outcome reads closest to, for

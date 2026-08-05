@@ -23,7 +23,7 @@ from utils.movie_models import (
     TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
-    draw_ai_tooling_setback,
+    draw_ai_tooling_setback, multiplier_to_stars,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -32,6 +32,9 @@ from utils.game_state import (
 from utils.charts import base_layout, waterfall_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 MOVIE_NETWORK_KEY = "movies"   # leaderboard/attempt-tracking key — same FERPA-safe infra as Day 1
+RESEARCH_FEE_M = 4.0   # $M -- Movies-side parallel to TV's RESEARCH_FEE (app_pages/renewal.py),
+                         # pricier since it's the whole cycle's one concentrated bet, not a
+                         # portfolio line item
 RELEASE_LABELS = {
     "wide_theatrical": "Wide Theatrical",
     "platform":         "Platform / Limited",
@@ -64,6 +67,8 @@ def _init(ss):
         ss.movie_rival_poach_checked_through = 0
     if "movie_talent_total_spend" not in ss:
         ss.movie_talent_total_spend = 0.0
+    if not isinstance(ss.get("movie_research_paid"), dict):
+        ss.movie_research_paid = {}   # {cycle: True} once paid -- see _decisions()'s Research section
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -463,6 +468,52 @@ def _decisions(ss):
                  "opening, much stronger long-tail library value. Indie-Horror: budget capped, "
                  "wider variance — huge outperformers on tiny budgets are the whole case for it.",
         )
+
+        # ── Research / Social Listening ──────────────────────────────────────
+        # Phase 4 item 9, 2026-08-05: Movies-side parallel to TV/Streaming's
+        # paid Research feature (app_pages/renewal.py::preview_show_variance)
+        # -- pay to preview the actual seeded signals this cycle's Simulate
+        # button will draw, before committing budget/P&A. Unlike TV's
+        # per-show sequential RNG consumption (order-dependent, needs replay
+        # plumbing), draw_actual_multiplier/draw_critical_reception are pure
+        # functions of (team, cycle, genre, concept_type) -- calling them
+        # here to preview is exactly as safe as calling them for real at
+        # Simulate, no extra machinery needed. Doesn't preview Production
+        # Trouble, the AI Tooling Setback, Ancillary Markets Surprise, or
+        # eWOM & Piracy -- those are separate, later risk axes, same as TV's
+        # Research never previewing draw_production_risk_event.
+        st.markdown(
+            f'<p class="text-xs text-ink2 mt-1 mb-1">🔎 <b class="text-ink">Research / Social Listening</b> '
+            f'— pay ${RESEARCH_FEE_M:.0f}M (added to P&A spend) to preview the actual box-office and '
+            f'critical-reception signals for this concept before committing your budget.</p>',
+            unsafe_allow_html=True)
+        if ss.movie_research_paid.get(ss.movie_cycle):
+            preview_mult = draw_actual_multiplier(ss.team_name, ss.movie_cycle, genre, concept_type)
+            preview_cs = draw_critical_reception(ss.team_name, ss.movie_cycle, genre,
+                                                  ai_production_tools=bool(d.get("ai_production_tools", False)))
+            stars = multiplier_to_stars(preview_mult, genre, concept_type)
+            star_str = "⭐" * stars + "☆" * (5 - stars)
+            bo_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
+            cs_c = SUCCESS if preview_cs >= 55 else (WARN if preview_cs >= 35 else DANGER)
+            st.markdown(f"""
+            <div class="rounded-lg border border-line bg-surface2 p-3 mb-2">
+              <div class="flex gap-6 flex-wrap">
+                <div><div class="text-[9px] text-muted font-mono">BOX-OFFICE SIGNAL</div>
+                  <div class="text-sm" style="color:{bo_c};">{star_str}</div></div>
+                <div><div class="text-[9px] text-muted font-mono">SOCIAL / CRITICAL BUZZ</div>
+                  <div class="text-sm" style="color:{cs_c};">{preview_cs:.0f}/100</div></div>
+              </div>
+              <div class="text-[10px] text-muted mt-1">Live for the currently selected Genre/Concept Type —
+              updates if you change either. Production Trouble, the AI Tooling Setback, Ancillary Markets
+              Surprise, and eWOM &amp; Piracy still apply on top of this at Simulate.</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            if st.button(f"🔎 Pay for Research (${RESEARCH_FEE_M:.0f}M)", key=f"movie_research_{ss.movie_cycle}"):
+                ss.movie_research_paid[ss.movie_cycle] = True
+                ss.movie_draft["pa_spend_m"] = float(d.get("pa_spend_m", 40.0)) + RESEARCH_FEE_M
+                st.rerun()
+
         c1, c2 = st.columns(2)
         budget_cap = INDIE_HORROR_BUDGET_CAP_M if concept_type == "Indie-Horror" else 300.0
         budget_default = min(float(d.get("budget_m", 60.0)), budget_cap)
@@ -1104,6 +1155,7 @@ def _complete(ss):
             ss.movie_phase = "decisions"
             ss.movie_log = []
             ss.movie_draft = {}
+            ss.movie_research_paid = {}
             ss.movie_submitted = False
             ss.movie_last_score = None
             st.rerun()

@@ -35,7 +35,7 @@ from utils.movie_models import (
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
     AI_TOOLS_SETBACK_CHANCE, AI_TOOLS_SETBACK_HAIRCUT_RANGE, AI_TOOLS_SETBACK_REASONS,
-    draw_ai_tooling_setback,
+    draw_ai_tooling_setback, multiplier_to_stars,
 )
 
 
@@ -870,3 +870,44 @@ class TestAiProductionTools:
                     both_fired += 1
         assert setback_fired >= 3
         assert both_fired < setback_fired   # not perfectly correlated
+
+
+# ── Research / Social Listening (Phase 4, 2026-08-05) ────────────────────────
+class TestMultiplierToStars:
+    """multiplier_to_stars powers the Movies-side Research feature -- mirrors
+    utils/models.py's TV-side variance_to_stars but must be genre-aware
+    since Movies' bear/bull band isn't a single fixed global range."""
+
+    def test_bear_case_reads_low_and_bull_case_reads_high(self):
+        bounds = scenario_multipliers_for("Drama")
+        assert multiplier_to_stars(bounds["bear"], "Drama") <= 2
+        assert multiplier_to_stars(bounds["bull"], "Drama") == 5
+
+    def test_base_case_reads_mid_range(self):
+        bounds = scenario_multipliers_for("Drama")
+        stars = multiplier_to_stars(bounds["base"], "Drama")
+        assert 2 <= stars <= 4
+
+    def test_clamped_to_1_through_5_even_outside_the_band(self):
+        bounds = scenario_multipliers_for("Drama")
+        assert multiplier_to_stars(bounds["bear"] - 5.0, "Drama") == 1
+        assert multiplier_to_stars(bounds["bull"] + 5.0, "Drama") == 5
+
+    def test_genre_aware_not_a_single_global_band(self):
+        # Horror's bear/bull band is much wider than Awards/Prestige's (see
+        # GENRE_VARIANCE_SPREAD) -- the same raw multiplier should map to a
+        # different star count depending on genre.
+        horror_bounds = scenario_multipliers_for("Horror")
+        mid_horror = (horror_bounds["bear"] + horror_bounds["bull"]) / 2
+        horror_stars = multiplier_to_stars(mid_horror, "Horror")
+        awards_stars = multiplier_to_stars(mid_horror, "Awards/Prestige")
+        assert horror_stars != awards_stars
+
+    def test_reproducible_and_matches_draw_actual_multiplier_replay(self):
+        # The whole point of the Research feature: previewing must be the
+        # exact same seeded draw draw_actual_multiplier() will resolve at
+        # Simulate time, called safely with zero side effects.
+        m1 = draw_actual_multiplier("Team Research", 2, "Drama", "New IP")
+        m2 = draw_actual_multiplier("Team Research", 2, "Drama", "New IP")
+        assert m1 == m2
+        assert multiplier_to_stars(m1, "Drama") == multiplier_to_stars(m2, "Drama")

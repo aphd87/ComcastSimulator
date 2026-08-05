@@ -155,6 +155,44 @@ def test_financing_structure_selectbox_offers_all_three_options():
     assert fin_box.value == "self_finance"
 
 
+# ── Research / Social Listening (Phase 4, 2026-08-05) ────────────────────────
+def test_research_unpaid_shows_pay_button_not_the_signal():
+    at = _movies_app()
+    assert at.session_state["movie_research_paid"] == {}
+    button_keys = [b.key for b in at.button if b.key]
+    assert "movie_research_1" in button_keys
+    text = "\n".join(md.value for md in at.markdown)
+    assert "BOX-OFFICE SIGNAL" not in text
+
+
+def test_paying_for_research_reveals_the_signal_and_costs_pa_spend():
+    from app_pages.movies import RESEARCH_FEE_M
+    at = _movies_app()
+    pa_before = at.number_input[1].value   # budget, P&A, screens in that order
+    at.button(key="movie_research_1").click().run()
+    assert not at.exception, f"Research click raised: {list(at.exception)}"
+    assert at.session_state["movie_research_paid"] == {1: True}
+    assert at.session_state["movie_draft"]["pa_spend_m"] == pytest.approx(pa_before + RESEARCH_FEE_M)
+    assert at.number_input[1].value == pytest.approx(pa_before + RESEARCH_FEE_M)
+    text = "\n".join(md.value for md in at.markdown)
+    assert "BOX-OFFICE SIGNAL" in text
+    assert "SOCIAL / CRITICAL BUZZ" in text
+
+
+def test_research_signal_matches_the_replayed_draws():
+    from utils.movie_models import draw_actual_multiplier, draw_critical_reception, multiplier_to_stars
+    at = _movies_app()
+    genre_box, concept_box = at.selectbox[0], at.selectbox[1]
+    at.button(key="movie_research_1").click().run()
+    assert not at.exception
+    expected_mult = draw_actual_multiplier("AppTest Team", 1, genre_box.value, concept_box.value)
+    expected_stars = multiplier_to_stars(expected_mult, genre_box.value, concept_box.value)
+    expected_cs = draw_critical_reception("AppTest Team", 1, genre_box.value, ai_production_tools=False)
+    text = "\n".join(md.value for md in at.markdown)
+    assert "⭐" * expected_stars in text
+    assert f"{expected_cs:.0f}/100" in text
+
+
 # ── Talent Partnerships (2026-08-04) ─────────────────────────────────────────
 # IMPORTANT: draw_rival_claim/draw_hold_forfeit/draw_rival_poach are all
 # seeded off Python's built-in hash() of the team name, which is
