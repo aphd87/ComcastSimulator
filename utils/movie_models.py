@@ -182,11 +182,23 @@ THEME_PARK_ELIGIBLE_GENRES = {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
 THEME_PARK_REVENUE_RATE    = 0.03   # fraction of domestic box office
 
 
-def draw_critical_reception(team_name: str, cycle: int, genre: str) -> float:
+def draw_critical_reception(team_name: str, cycle: int, genre: str,
+                             ai_production_tools: bool = False) -> float:
     """Continuous, seeded, reproducible-per-team-per-cycle draw — same
     mechanism as draw_actual_multiplier, but a different seed offset so the
-    two draws move independently rather than in lockstep."""
+    two draws move independently rather than in lockstep.
+
+    ai_production_tools (2026-08-05, default False = original behavior
+    unchanged) caps the ceiling of this draw via AI_TOOLS_CRITICAL_CEILING_
+    MULT — the quality-risk edge of that lever's cost/timeline tradeoff. The
+    mode is clamped to the new ceiling too (a triangular distribution needs
+    lo <= mode <= hi); every genre's stored mode already sits well below its
+    hi bound, so this only ever matters once ai_production_tools narrows hi
+    down far enough to cross it."""
     lo, mode, hi = CRITICAL_RECEPTION_BOUNDS.get(genre, (15, 40, 80))
+    if ai_production_tools:
+        hi = lo + (hi - lo) * AI_TOOLS_CRITICAL_CEILING_MULT
+        mode = min(mode, hi)
     seed = (abs(hash(team_name)) + cycle * 7919 + 31) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return float(rng.triangular(lo, mode, hi))
@@ -424,6 +436,55 @@ PAY1_LICENSE_DISCOUNT  = 0.55   # flat fee as a fraction of BASE-case subscriber
                                   # how the movie actually performs
 
 
+# ── AI Production Tools ──────────────────────────────────────────────────────
+# 2026-08-05, Phase 4 item 8: a cost/timeline lever in Greenlight, deliberately
+# NOT a free efficiency win -- three real edges, two favorable and one
+# unfavorable, same posture as every other lever in this file (Financing
+# Structure, Exhibitor Posture). Cheaper AND faster (previz/scheduling/VFX-
+# assist genuinely compress both budget and post-production time in the real
+# industry right now), but capped creative ceiling (a heavily AI-assisted
+# production tends toward the formulaic -- it rarely produces a transcendent
+# one, even if it reliably avoids a disaster) and its own independent setback
+# risk (tooling/guild/legal friction unique to this pipeline, not a
+# generic "something went wrong" -- see draw_ai_tooling_setback). Default
+# False reproduces every existing call site's exact original behavior.
+AI_TOOLS_BUDGET_SAVINGS_PCT    = 0.15   # cuts the budget (not P&A) component of capital at risk
+AI_TOOLS_TIMELINE_SHIFT_MO     = 1.5    # faster post-production pulls the whole cashflow timeline
+                                          # forward -- same revenue, arrives sooner, so NPV improves
+                                          # via less discounting, not bigger numbers
+AI_TOOLS_CRITICAL_CEILING_MULT = 0.80   # caps how high critical reception can land (see
+                                          # draw_critical_reception's ai_production_tools kwarg) --
+                                          # the quality-risk edge of the tradeoff
+AI_TOOLS_SETBACK_CHANCE        = 0.10   # only ever rolled for ai_production_tools=True projects --
+                                          # a bit more common than Production Trouble's 0.05 since
+                                          # this pipeline is newer and less battle-tested
+AI_TOOLS_SETBACK_HAIRCUT_RANGE = (0.75, 0.92)   # milder than Production Trouble's (0.60, 0.85) --
+                                                  # a narrower, more contained kind of setback
+AI_TOOLS_SETBACK_REASONS = [
+    "A visual-effects shot needed costly manual rework after an AI-generated pass failed quality review",
+    "A guild dispute over AI tool usage stalled post-production for weeks",
+    "Test audiences flagged an uncanny-valley digital double, forcing a late reshoot",
+    "An AI-assisted schedule optimization missed a real logistics constraint, costing back the time it saved",
+]
+
+
+def draw_ai_tooling_setback(team_name: str, cycle: int) -> Optional[tuple[str, float]]:
+    """Own independent seeded risk axis (own hash offset -- never perturbs
+    draw_actual_multiplier's, draw_critical_reception's, draw_production_
+    trouble's, or draw_ancillary_surprise's sequences), only ever meaningful
+    to roll for a project with ai_production_tools=True. Returns None most
+    of the time; when it fires, returns (reason, haircut_multiplier) applied
+    the same way draw_production_trouble's haircut is -- multiplicatively on
+    the resolved box-office multiplier."""
+    seed = (abs(hash(team_name)) + cycle * 4657 + 233) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > AI_TOOLS_SETBACK_CHANCE:
+        return None
+    reason = AI_TOOLS_SETBACK_REASONS[int(rng.integers(0, len(AI_TOOLS_SETBACK_REASONS)))]
+    lo, hi = AI_TOOLS_SETBACK_HAIRCUT_RANGE
+    return reason, float(rng.uniform(lo, hi))
+
+
 @dataclass
 class MovieProject:
     title: str
@@ -438,17 +499,27 @@ class MovieProject:
     financing_structure: str = "self_finance"   # "self_finance" | "presale" | "tax_incentive"
     exhibitor_posture: str = "standard"         # "standard" | "aggressive" | "exhibitor_friendly"
     pay1_licensing: str = "keep"                 # "keep" | "license_out"
+    ai_production_tools: bool = False            # see AI_TOOLS_* below
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
         reduced by financing_structure's chosen structure (see
         FINANCING_STRUCTURES above); self_finance is the unadjusted
-        budget_m + pa_spend_m baseline."""
+        budget_m + pa_spend_m baseline. ai_production_tools (2026-08-05,
+        see AI_TOOLS_BUDGET_SAVINGS_PCT below) applies its own discount on
+        top of whatever financing_structure already produced -- the two
+        levers are independent (a tax-incentive shoot can also lean on AI
+        production tools), stacking multiplicatively on the budget
+        component only, never on P&A."""
         if self.financing_structure == "presale":
-            return self.budget_m * (1 - PRESALE_ADVANCE_PCT) + self.pa_spend_m
-        if self.financing_structure == "tax_incentive":
-            return self.budget_m * (1 - TAX_CREDIT_PCT) + self.pa_spend_m
-        return self.budget_m + self.pa_spend_m
+            budget_component = self.budget_m * (1 - PRESALE_ADVANCE_PCT)
+        elif self.financing_structure == "tax_incentive":
+            budget_component = self.budget_m * (1 - TAX_CREDIT_PCT)
+        else:
+            budget_component = self.budget_m
+        if self.ai_production_tools:
+            budget_component *= (1 - AI_TOOLS_BUDGET_SAVINGS_PCT)
+        return budget_component + self.pa_spend_m
 
     def window_days(self) -> int:
         """Theatrical exclusivity window — shrinks each cycle, matching the
@@ -661,6 +732,13 @@ class MovieProject:
             flows.append((11.0, bump))   # awards season (~Jan-Feb), roughly 11 months after release
         if theme_park > 0:
             flows.append((30.0, theme_park))   # attractions/merchandise take real time to develop and license
+
+        if self.ai_production_tools:
+            # Faster post-production pulls the whole timeline forward --
+            # same dollar amounts, arriving sooner, which raises NPV/IRR
+            # through less discounting rather than bigger numbers. Floored
+            # so nothing lands at or before time zero.
+            flows = [(max(months - AI_TOOLS_TIMELINE_SHIFT_MO, 0.25), cash) for months, cash in flows]
         return flows
 
     def npv(self, scenario: str, critical_score: Optional[float] = None,

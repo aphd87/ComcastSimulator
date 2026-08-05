@@ -33,6 +33,9 @@ from utils.movie_models import (
     draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
+    AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
+    AI_TOOLS_SETBACK_CHANCE, AI_TOOLS_SETBACK_HAIRCUT_RANGE, AI_TOOLS_SETBACK_REASONS,
+    draw_ai_tooling_setback,
 )
 
 
@@ -767,3 +770,103 @@ class TestPay1WindowLicensing:
         # exceed or trail subscriber_value depending on genre/strategy),
         # just that the swap actually took effect.
         assert licensed_total != base_total
+
+
+# ── AI Production Tools (Phase 4, 2026-08-05) ────────────────────────────────
+class TestAiProductionTools:
+    """False must reproduce the exact unadjusted baseline every project used
+    before this field existed -- a cost/timeline lever with a real
+    quality-risk edge (capped critical-reception ceiling + its own
+    independent setback draw), not a free efficiency win."""
+
+    def test_default_false_is_the_unadjusted_baseline(self):
+        p = _tentpole()
+        assert p.ai_production_tools is False
+        assert p.capital_at_risk() == p.budget_m + p.pa_spend_m
+
+    def test_budget_discount_applies_to_budget_only_not_pa(self):
+        base = _tentpole()
+        tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
+        expected = base.budget_m * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+        assert tooled.capital_at_risk() == pytest.approx(expected)
+        assert tooled.capital_at_risk() < base.capital_at_risk()
+
+    def test_discount_stacks_with_financing_structure_on_budget_component_only(self):
+        base = MovieProject(**{**_tentpole().__dict__, "financing_structure": "tax_incentive"})
+        tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
+        from utils.movie_models import TAX_CREDIT_PCT
+        expected = base.budget_m * (1 - TAX_CREDIT_PCT) * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+        assert tooled.capital_at_risk() == pytest.approx(expected)
+
+    def test_timeline_shifts_every_cashflow_forward(self):
+        base = _tentpole()
+        tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
+        base_flows = base.windowed_cashflows("base", 60.0)
+        tooled_flows = tooled.windowed_cashflows("base", 60.0)
+        assert len(base_flows) == len(tooled_flows)
+        for (bm, bc), (tm, tc) in zip(base_flows, tooled_flows):
+            assert bc == tc   # amounts unchanged -- only timing moves
+            assert tm == pytest.approx(max(bm - AI_TOOLS_TIMELINE_SHIFT_MO, 0.25))
+
+    def test_earlier_cash_and_cheaper_capital_can_improve_npv_at_same_outcome(self):
+        # Holding the resolved multiplier and critical score fixed isolates
+        # the two favorable edges of the tradeoff from the unfavorable one
+        # (draw_critical_reception's ceiling only matters for the draw
+        # itself, not for a critical_score supplied directly here).
+        base = _tentpole()
+        tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
+        assert tooled.npv("base", 60.0) > base.npv("base", 60.0)
+
+    def test_critical_reception_ceiling_is_capped_and_reproducible(self):
+        lo, mode, hi = CRITICAL_RECEPTION_BOUNDS["Drama"]
+        expected_ceiling = lo + (hi - lo) * AI_TOOLS_CRITICAL_CEILING_MULT
+        draws = [draw_critical_reception(f"Team Tool {i}", c, "Drama", ai_production_tools=True)
+                 for i in range(150) for c in range(1, 4)]
+        assert max(draws) <= expected_ceiling + 1e-9
+        # And the ceiling must actually bind at least once vs. the
+        # untooled draw's own max, or this test wouldn't be testing anything.
+        untooled = [draw_critical_reception(f"Team Tool {i}", c, "Drama")
+                    for i in range(150) for c in range(1, 4)]
+        assert max(untooled) > expected_ceiling
+
+    def test_critical_reception_default_false_is_unaffected(self):
+        for cyc in range(1, 4):
+            assert (draw_critical_reception("Team Same", cyc, "Drama")
+                    == draw_critical_reception("Team Same", cyc, "Drama", ai_production_tools=False))
+
+    def test_setback_reproducible_for_same_team_cycle(self):
+        a = draw_ai_tooling_setback("Team Echo", 2)
+        b = draw_ai_tooling_setback("Team Echo", 2)
+        assert a == b
+
+    def test_setback_rare_but_reachable_over_many_draws(self):
+        outcomes = [draw_ai_tooling_setback(f"Team {i}", c) for i in range(200) for c in range(1, 4)]
+        fired = [o for o in outcomes if o is not None]
+        assert len(fired) > 0
+        assert len(fired) < len(outcomes) * 0.3
+        lo, hi = AI_TOOLS_SETBACK_HAIRCUT_RANGE
+        for reason, haircut in fired:
+            assert reason in AI_TOOLS_SETBACK_REASONS
+            assert lo <= haircut <= hi
+
+    def test_setback_haircut_only_ever_reduces(self):
+        lo, hi = AI_TOOLS_SETBACK_HAIRCUT_RANGE
+        assert hi < 1.0
+
+    def test_setback_chance_is_small(self):
+        assert 0.0 < AI_TOOLS_SETBACK_CHANCE < 0.2
+
+    def test_setback_independent_of_production_trouble_seed(self):
+        # If the two shared a seed offset, "setback fired" would always
+        # coincide with "production trouble fired" for the same team/cycle.
+        from utils.movie_models import draw_production_trouble
+        both_fired = 0
+        setback_fired = 0
+        for i in range(300):
+            team = f"Team AI Indep {i}"
+            if draw_ai_tooling_setback(team, 1) is not None:
+                setback_fired += 1
+                if draw_production_trouble(team, 1) is not None:
+                    both_fired += 1
+        assert setback_fired >= 3
+        assert both_fired < setback_fired   # not perfectly correlated

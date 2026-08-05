@@ -22,6 +22,8 @@ from utils.movie_models import (
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
+    AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
+    draw_ai_tooling_setback,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -117,6 +119,7 @@ def _current_project(ss) -> MovieProject:
         financing_structure=d.get("financing_structure", "self_finance"),
         exhibitor_posture=d.get("exhibitor_posture", "standard"),
         pay1_licensing=d.get("pay1_licensing", "keep"),
+        ai_production_tools=d.get("ai_production_tools", False),
     )
 
 
@@ -497,6 +500,20 @@ def _decisions(ss):
         }
         st.caption(fin_notes[financing_structure])
 
+        ai_production_tools = st.checkbox(
+            "🤖 Use AI Production Tools (previz / scheduling / VFX-assist)",
+            value=bool(d.get("ai_production_tools", False)),
+            help=f"Cuts the production-budget component of capital at risk ~{AI_TOOLS_BUDGET_SAVINGS_PCT:.0%} "
+                 f"and pulls the whole revenue timeline forward {AI_TOOLS_TIMELINE_SHIFT_MO:.1f} months (faster "
+                 f"post-production, less discounting) — but caps how high critical reception can land "
+                 f"(a heavily AI-assisted production rarely produces a transcendent one, even if it reliably "
+                 f"avoids a disaster) and carries its own independent setback risk. Not a free efficiency win.",
+        )
+        if ai_production_tools:
+            st.caption(f"⚖️ Tradeoff active: cheaper & faster, but critical reception is capped at "
+                       f"~{AI_TOOLS_CRITICAL_CEILING_MULT:.0%} of this genre's usual ceiling, and there's a "
+                       f"real chance of its own AI-tooling setback at release.")
+
         posture_labels = {
             "standard": "Standard Split — 52% studio share, screens as requested",
             "aggressive": "Aggressive Split — 58% studio share, exhibitors cut ~8% of requested screens",
@@ -526,7 +543,7 @@ def _decisions(ss):
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
                  release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
                  financing_structure=financing_structure, exhibitor_posture=exhibitor_posture,
-                 pay1_licensing=d.get("pay1_licensing", "keep"))
+                 pay1_licensing=d.get("pay1_licensing", "keep"), ai_production_tools=ai_production_tools)
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -662,8 +679,10 @@ def _decisions(ss):
         # Critical reception is drawn independently of box-office
         # performance — a movie can open huge and get panned, or open
         # modestly and find acclaim. Neither draw is known to the
-        # student until this exact moment.
-        critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre)
+        # student until this exact moment. ai_production_tools caps the
+        # ceiling of this draw (see utils/movie_models.py).
+        critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre,
+                                                  ai_production_tools=project.ai_production_tools)
         talent_bonus = _active_talent_bonus(ss, project.genre)
         if "critical_score_bonus" in talent_bonus:
             critical_score = min(100.0, critical_score + talent_bonus["critical_score_bonus"])
@@ -678,6 +697,19 @@ def _decisions(ss):
         if trouble:
             trouble_reason, haircut = trouble
             multiplier *= haircut
+
+        # AI Tooling Setback — own independent risk axis, only ever rolled
+        # for projects that opted into AI Production Tools (see
+        # utils/movie_models.py::draw_ai_tooling_setback). Stacks
+        # multiplicatively with Production Trouble's haircut if both fire
+        # in the same cycle — two unrelated real-world setbacks can both
+        # happen to the same movie.
+        ai_setback_reason = None
+        if project.ai_production_tools:
+            ai_setback = draw_ai_tooling_setback(ss.team_name, ss.movie_cycle)
+            if ai_setback:
+                ai_setback_reason, ai_haircut = ai_setback
+                multiplier *= ai_haircut
 
         # Ancillary Markets Surprise — PVOD rentals and theme-park/merchandise
         # licensing, genuinely movie-specific (TV has neither window at all),
@@ -702,6 +734,7 @@ def _decisions(ss):
             "oscar_win":        awards_eligible and critical_score >= AWARDS_WIN_THRESHOLD,
             "production_trouble": trouble_reason,
             "ancillary_surprise": ancillary_reason,
+            "ai_tooling_setback": ai_setback_reason,
             "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
             "irr":              project.irr(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
             "total_revenue":    project.total_revenue(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
@@ -736,8 +769,9 @@ def _results(ss):
     title = result["project_kwargs"]["title"]
     strat = result["project_kwargs"]["release_strategy"]
     concept_type = result["project_kwargs"].get("concept_type", "New IP")
-    trouble_reason   = result.get("production_trouble")
-    ancillary_reason = result.get("ancillary_surprise")
+    trouble_reason    = result.get("production_trouble")
+    ancillary_reason  = result.get("ancillary_surprise")
+    ai_setback_reason = result.get("ai_tooling_setback")
     scenario_framing = (
         "landed below plan — Production Trouble hit" if trouble_reason
         else f"landed near your {result['scenario_label'].title()} Case"
@@ -769,6 +803,16 @@ def _results(ss):
           <div class="text-sm" style="color:{DANGER};font-weight:600;">🎬 Production Trouble</div>
           <div class="text-xs text-ink2 mt-1">{trouble_reason} — this dragged down the resolved
           box-office outcome before you ever saw a number.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── AI Tooling Setback — a real edge of the AI Production Tools tradeoff ──
+    if ai_setback_reason:
+        st.markdown(f"""
+        <div class="rounded-lg p-4 mb-3" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
+          <div class="text-sm" style="color:{WARN};font-weight:600;">🤖 AI Tooling Setback</div>
+          <div class="text-xs text-ink2 mt-1">{ai_setback_reason} — the cost/timeline savings from AI
+          Production Tools aren't a free efficiency win.</div>
         </div>
         """, unsafe_allow_html=True)
 
