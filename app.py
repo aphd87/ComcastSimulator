@@ -92,8 +92,8 @@ def _render_theory_grid(category: str = "all"):
     TV-only content, including the previously actively-wrong framing of
     Content Amortization, which doesn't apply to Movies' front-loaded,
     no-amortization cost structure at all)."""
-    tv_items     = [t for t in THEORY_CONTENT.values() if t["category"] == "tv"]
-    movie_items  = [t for t in THEORY_CONTENT.values() if t["category"] == "movies"]
+    tv_items     = [t for t in THEORY_CONTENT.values() if t.get("category") == "tv"]
+    movie_items  = [t for t in THEORY_CONTENT.values() if t.get("category") == "movies"]
 
     if category == "tv":
         _render_theory_cards(tv_items)
