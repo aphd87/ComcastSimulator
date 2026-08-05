@@ -36,6 +36,8 @@ from utils.movie_models import (
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
     AI_TOOLS_SETBACK_CHANCE, AI_TOOLS_SETBACK_HAIRCUT_RANGE, AI_TOOLS_SETBACK_REASONS,
     draw_ai_tooling_setback, multiplier_to_stars,
+    draw_ewom_piracy_swing, EWOM_PIRACY_CHANCE, EWOM_PIRACY_RANGE,
+    EWOM_REASONS_UP, PIRACY_REASONS_DOWN,
 )
 
 
@@ -911,3 +913,96 @@ class TestMultiplierToStars:
         m2 = draw_actual_multiplier("Team Research", 2, "Drama", "New IP")
         assert m1 == m2
         assert multiplier_to_stars(m1, "Drama") == multiplier_to_stars(m2, "Drama")
+
+
+# ── eWOM & Piracy (Phase 4, 2026-08-05) ──────────────────────────────────────
+class TestEwomPiracySwing:
+    def test_reproducible_for_same_team_cycle(self):
+        a = draw_ewom_piracy_swing("Team Echo", 2)
+        b = draw_ewom_piracy_swing("Team Echo", 2)
+        assert a == b
+
+    def test_more_common_than_production_trouble_and_ancillary_surprise(self):
+        assert EWOM_PIRACY_CHANCE > PRODUCTION_TROUBLE_CHANCE
+        assert EWOM_PIRACY_CHANCE > ANCILLARY_SURPRISE_CHANCE
+
+    def test_rare_but_reachable_over_many_draws(self):
+        outcomes = [draw_ewom_piracy_swing(f"Team {i}", c) for i in range(200) for c in range(1, 4)]
+        fired = [o for o in outcomes if o is not None]
+        assert len(fired) > 0
+        assert len(fired) < len(outcomes)
+        lo, hi = EWOM_PIRACY_RANGE
+        for reason, mult in fired:
+            assert lo <= mult <= hi
+            expected_reasons = EWOM_REASONS_UP if mult >= 1.0 else PIRACY_REASONS_DOWN
+            assert reason in expected_reasons
+
+    def test_can_swing_both_directions(self):
+        fired = [draw_ewom_piracy_swing(f"Team Swing {i}", c) for i in range(300) for c in range(1, 4)]
+        mults = [m for r in fired if r is not None for m in [r[1]]]
+        assert any(m > 1.0 for m in mults)
+        assert any(m < 1.0 for m in mults)
+
+    def test_independent_of_ancillary_surprise_seed(self):
+        # If eWOM shared a seed offset with Ancillary Surprise, "eWOM fired"
+        # would always coincide with "ancillary fired" for the same team/cycle.
+        fired = 0
+        both_fired = 0
+        for i in range(300):
+            team = f"Team eWOM Indep {i}"
+            if draw_ewom_piracy_swing(team, 1) is not None:
+                fired += 1
+                if draw_ancillary_surprise(team, 1) is not None:
+                    both_fired += 1
+        assert fired >= 5
+        assert both_fired < fired
+
+
+class TestEwomMultipliersWireIntoRevenue:
+    """Confirms ewom_mult (added to windowed_cashflows/npv/irr/total_revenue/
+    participation_waterfall 2026-08-05) scales PVOD + owned subscriber value
+    together -- a separate axis from pvod_mult/theme_park_mult, and must
+    never touch pay1_license_fee() (a real licensing deal is priced before
+    release, not indexed to how digital word-of-mouth/piracy plays out)."""
+
+    def test_default_multiplier_is_a_no_op(self):
+        p = _tentpole()
+        assert p.npv("base", 60.0) == p.npv("base", 60.0, ewom_mult=1.0)
+        assert p.total_revenue("base", 60.0) == p.total_revenue("base", 60.0, ewom_mult=1.0)
+        assert p.irr("base", 60.0) == p.irr("base", 60.0, ewom_mult=1.0)
+
+    def test_scales_pvod_and_subscriber_value_together(self):
+        p = _tentpole()
+        base_pvod = p.pvod_revenue("base")
+        base_sub = p.subscriber_value("base")
+        base_total = p.total_revenue("base", 60.0)
+        swung_total = p.total_revenue("base", 60.0, ewom_mult=1.5)
+        expected = base_total + base_pvod * 0.5 + base_sub * 0.5
+        assert swung_total == pytest.approx(expected)
+
+    def test_does_not_touch_theatrical_or_longtail(self):
+        p = _tentpole()
+        unswung = p.windowed_cashflows("base", 60.0)
+        swung = p.windowed_cashflows("base", 60.0, ewom_mult=1.5)
+        assert len(unswung) == len(swung)
+        # flows[0] is theatrical (1.5mo), flows[3] is longtail (24.0mo) --
+        # same fixed ordering windowed_cashflows() always returns.
+        assert swung[0] == unswung[0]
+        assert swung[3] == unswung[3]
+        # flows[1] (PVOD) and flows[2] (subscriber value) must have moved.
+        assert swung[1] != unswung[1]
+        assert swung[2] != unswung[2]
+
+    def test_ignored_for_pay1_license_out(self):
+        base = MovieProject(**{**_tentpole().__dict__, "pay1_licensing": "license_out"})
+        assert base.is_licensing_out()
+        fee_delta = base.total_revenue("base", 60.0, ewom_mult=1.5) - base.total_revenue("base", 60.0)
+        # Only the PVOD line should move -- the flat license fee is untouched.
+        expected = base.pvod_revenue("base") * 0.5
+        assert fee_delta == pytest.approx(expected)
+
+    def test_participation_waterfall_reflects_the_swing(self):
+        p = _tentpole()
+        base_wf = participation_waterfall(p, "base", 60.0)
+        swung_wf = participation_waterfall(p, "base", 60.0, ewom_mult=1.5)
+        assert swung_wf["revenue"] > base_wf["revenue"]

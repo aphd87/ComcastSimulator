@@ -284,6 +284,53 @@ def draw_ancillary_surprise(team_name: str, cycle: int) -> Optional[tuple[str, f
     return reason, mult
 
 
+# ── eWOM & Piracy — independent post-release digital-revenue risk axis ─────
+# 2026-08-05, Phase 4 item 10: swings PVOD rental transactions and owned
+# Peacock subscriber value together (both are "digital" revenue, distinct
+# from theatrical box office and from Ancillary Surprise's theme-park/
+# merchandise licensing story) — deliberately NOT the same axis as
+# draw_ancillary_surprise above, own independent seed offset, so a movie
+# can catch a viral social wave AND still get hit by piracy leakage in
+# principle (uncorrelated real-world forces). More common than Production
+# Trouble/Ancillary Surprise (0.05/0.12) since social chatter and piracy
+# leakage are everyday market forces, not rare production-side shocks.
+# Deliberately excludes pay1_license_fee() — a real licensing deal is
+# negotiated and priced before release, not indexed to how digital word-of-
+# mouth or piracy actually plays out (same reasoning PAY1_LICENSE_DISCOUNT's
+# docstring already gives for keeping that fee scenario-independent).
+EWOM_PIRACY_CHANCE = 0.15
+EWOM_PIRACY_RANGE  = (0.70, 1.35)
+EWOM_REASONS_UP = [
+    "A viral social clip drove a surge of organic digital demand after release",
+    "Positive word-of-mouth on social platforms outpaced paid marketing reach",
+    "A creator community's reaction videos extended digital interest for weeks",
+]
+PIRACY_REASONS_DOWN = [
+    "Pirated copies leaked within days of release, cannibalizing digital transactions",
+    "Social sentiment turned negative quickly, cutting off word-of-mouth momentum before it built",
+    "A torrent/streaming-piracy surge measurably dented PVOD conversion",
+]
+
+
+def draw_ewom_piracy_swing(team_name: str, cycle: int) -> Optional[tuple[str, float]]:
+    """Own independent seeded risk axis (own hash offset — never perturbs
+    draw_actual_multiplier's, draw_critical_reception's, draw_production_
+    trouble's, draw_ancillary_surprise's, or draw_ai_tooling_setback's
+    sequences). Returns None most of the time; when it fires, returns
+    (reason, multiplier) where multiplier can land above or below 1.0 —
+    the whole point is this can genuinely swing either direction, unlike
+    Production Trouble's one-directional haircut."""
+    seed = (abs(hash(team_name)) + cycle * 7457 + 337) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > EWOM_PIRACY_CHANCE:
+        return None
+    lo, hi = EWOM_PIRACY_RANGE
+    mult = float(rng.uniform(lo, hi))
+    reasons = EWOM_REASONS_UP if mult >= 1.0 else PIRACY_REASONS_DOWN
+    reason = reasons[int(rng.integers(0, len(reasons)))]
+    return reason, mult
+
+
 # ── Talent Deals — Overall/First-Look Partnerships & Holding Deals ─────────
 # 2026-08-04, per user request to build out talent-negotiation content from
 # the Movie Business and Deal Mechanisms note, plus rival-studio competitive
@@ -689,7 +736,8 @@ class MovieProject:
         return self.domestic_box_office(scenario) * 0.08 * strength
 
     def windowed_cashflows(self, scenario: str, critical_score: Optional[float] = None,
-                            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> list[tuple[float, float]]:
+                            pvod_mult: float = 1.0, theme_park_mult: float = 1.0,
+                            ewom_mult: float = 1.0) -> list[tuple[float, float]]:
         """Returns [(months_from_release, cash_m), ...] — the actual timing
         of each window's revenue, needed for discounting. Theatrical revenue
         is recognized at the midpoint of the run (~6 weeks in), not at
@@ -706,9 +754,17 @@ class MovieProject:
         every existing caller): apply draw_ancillary_surprise()'s resolved
         swing to just these two windows — PVOD and theme-park/merchandise
         are their own independent real-world story, not a downstream
-        consequence of box-office or critical performance."""
+        consequence of box-office or critical performance.
+
+        ewom_mult (added 2026-08-05, default 1.0 = no-op): applies draw_
+        ewom_piracy_swing()'s resolved swing to PVOD and OWNED subscriber
+        value together (both are "digital" revenue) — a separate axis from
+        pvod_mult/theme_park_mult above, own independent seed. Deliberately
+        does NOT touch pay1_license_fee() when licensing out — that flat
+        fee is negotiated and priced before release, not indexed to how
+        digital word-of-mouth or piracy actually plays out."""
         theatrical = self.theatrical_studio_net(scenario)
-        pvod       = self.pvod_revenue(scenario) * pvod_mult
+        pvod       = self.pvod_revenue(scenario) * pvod_mult * ewom_mult
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
         theme_park = self.theme_park_value(scenario) * theme_park_mult
@@ -716,11 +772,11 @@ class MovieProject:
         if self.is_licensing_out():
             # A flat licensing fee, paid alongside PVOD -- faster and known
             # in advance, vs. owned subscriber value's later, performance-
-            # exposed window below.
+            # exposed window below. Not scaled by ewom_mult -- see docstring.
             sub_value       = self.pay1_license_fee()
             sub_value_month = window_mo + 1.0
         else:
-            sub_value       = self.subscriber_value(scenario)
+            sub_value       = self.subscriber_value(scenario) * ewom_mult
             sub_value_month = window_mo + 3.0   # Peacock exclusive window follows PVOD
         flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
@@ -743,13 +799,13 @@ class MovieProject:
 
     def npv(self, scenario: str, critical_score: Optional[float] = None,
             discount_rate: float = COST_OF_CAPITAL,
-            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> float:
-        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult)
+            pvod_mult: float = 1.0, theme_park_mult: float = 1.0, ewom_mult: float = 1.0) -> float:
+        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult, ewom_mult)
         pv = sum(cash / ((1 + discount_rate) ** (months / 12.0)) for months, cash in cashflows)
         return pv - self.capital_at_risk()
 
     def irr(self, scenario: str, critical_score: Optional[float] = None,
-            pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> Optional[float]:
+            pvod_mult: float = 1.0, theme_park_mult: float = 1.0, ewom_mult: float = 1.0) -> Optional[float]:
         """Approximate IRR via a simple bisection search — front-loaded cost
         and back-loaded, windowed revenue means closed-form IRR isn't clean,
         and this doesn't need finance-library precision for a teaching sim.
@@ -759,7 +815,7 @@ class MovieProject:
         hit, not a bug — display as ">500%"), otherwise the converged rate.
         Silently returning the search boundary as if it were a converged
         answer would look like a real number without being one."""
-        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult)
+        cashflows = self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult, ewom_mult)
         total_in = sum(c for _, c in cashflows)
         if total_in <= self.capital_at_risk():
             return None   # never recovers capital — IRR undefined/negative-infinite
@@ -780,9 +836,9 @@ class MovieProject:
         return mid
 
     def total_revenue(self, scenario: str, critical_score: Optional[float] = None,
-                       pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> float:
+                       pvod_mult: float = 1.0, theme_park_mult: float = 1.0, ewom_mult: float = 1.0) -> float:
         return sum(cash for _, cash in
-                    self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult))
+                    self.windowed_cashflows(scenario, critical_score, pvod_mult, theme_park_mult, ewom_mult))
 
 
 # ── Deal Waterfall — Distribution & Participation ───────────────────────────
@@ -801,11 +857,12 @@ PRODUCER_NET_PARTICIPATION = 0.12   # % of net profit after recoupment, if any
 
 
 def participation_waterfall(project: MovieProject, scenario, critical_score: Optional[float] = None,
-                             pvod_mult: float = 1.0, theme_park_mult: float = 1.0) -> dict:
+                             pvod_mult: float = 1.0, theme_park_mult: float = 1.0,
+                             ewom_mult: float = 1.0) -> dict:
     """Distribution/participation breakdown for a resolved (or previewed)
     outcome. `scenario` follows the same named-string-or-raw-multiplier
     convention as MovieProject.total_revenue()."""
-    revenue      = project.total_revenue(scenario, critical_score, pvod_mult, theme_park_mult)
+    revenue      = project.total_revenue(scenario, critical_score, pvod_mult, theme_park_mult, ewom_mult)
     talent_take  = max(TALENT_GROSS_GUARANTEE_M, revenue * TALENT_GROSS_PARTICIPATION)
     after_talent = revenue - talent_take
     recoupment   = project.capital_at_risk()

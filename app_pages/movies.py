@@ -23,7 +23,7 @@ from utils.movie_models import (
     TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
-    draw_ai_tooling_setback, multiplier_to_stars,
+    draw_ai_tooling_setback, multiplier_to_stars, draw_ewom_piracy_swing,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -772,9 +772,20 @@ def _decisions(ss):
             ancillary_reason, ancillary_mult = ancillary
             pvod_mult = theme_park_mult = ancillary_mult
 
+        # eWOM & Piracy — a separate, more-common independent swing on
+        # digital revenue (PVOD + owned Peacock subscriber value together),
+        # own seed, distinct from Ancillary Surprise's theme-park/rental
+        # licensing story. See utils/movie_models.py.
+        ewom = draw_ewom_piracy_swing(ss.team_name, ss.movie_cycle)
+        ewom_reason = None
+        ewom_mult = 1.0
+        if ewom:
+            ewom_reason, ewom_mult = ewom
+
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
         waterfall = participation_waterfall(project, multiplier, critical_score,
-                                             pvod_mult=pvod_mult, theme_park_mult=theme_park_mult)
+                                             pvod_mult=pvod_mult, theme_park_mult=theme_park_mult,
+                                             ewom_mult=ewom_mult)
         outcome = {
             "cycle":            ss.movie_cycle,
             "project_kwargs":   dict(project.__dict__),
@@ -786,13 +797,16 @@ def _decisions(ss):
             "production_trouble": trouble_reason,
             "ancillary_surprise": ancillary_reason,
             "ai_tooling_setback": ai_setback_reason,
-            "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
-            "irr":              project.irr(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
-            "total_revenue":    project.total_revenue(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult),
+            "ewom_piracy_swing": ewom_reason,
+            "ewom_mult":         ewom_mult,
+            "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
+            "irr":              project.irr(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
+            "total_revenue":    project.total_revenue(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
             "domestic_bo":      project.domestic_box_office(multiplier),
             "theatrical_net":   project.theatrical_studio_net(multiplier),
-            "pvod":             project.pvod_revenue(multiplier) * pvod_mult,
-            "sub_value":        project.subscriber_value(multiplier),
+            "pvod":             project.pvod_revenue(multiplier) * pvod_mult * ewom_mult,
+            "sub_value":        (project.pay1_license_fee() if project.is_licensing_out()
+                                  else project.subscriber_value(multiplier) * ewom_mult),
             "longtail":         project.library_longtail(multiplier, critical_score),
             "awards_bump":      project.awards_season_bump(multiplier, critical_score),
             "theme_park":       project.theme_park_value(multiplier) * theme_park_mult,
@@ -823,6 +837,8 @@ def _results(ss):
     trouble_reason    = result.get("production_trouble")
     ancillary_reason  = result.get("ancillary_surprise")
     ai_setback_reason = result.get("ai_tooling_setback")
+    ewom_reason       = result.get("ewom_piracy_swing")
+    ewom_up           = (result.get("ewom_mult") or 1.0) >= 1.0
     scenario_framing = (
         "landed below plan — Production Trouble hit" if trouble_reason
         else f"landed near your {result['scenario_label'].title()} Case"
@@ -875,6 +891,18 @@ def _results(ss):
           <div class="text-sm" style="color:{surprise_c};font-weight:600;">🎢 Ancillary Markets Surprise</div>
           <div class="text-xs text-ink2 mt-1">{ancillary_reason} — this moved PVOD rental and
           theme-park/merchandise revenue independently of box office and reviews.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── eWOM & Piracy — a separate, more-common digital-revenue swing ────────
+    if ewom_reason:
+        ewom_c = SUCCESS if ewom_up else DANGER
+        st.markdown(f"""
+        <div class="rounded-lg p-4 mb-3" style="background:rgba({'102,187,106' if ewom_up else '239,83,80'},.08);
+             border:1px solid rgba({'102,187,106' if ewom_up else '239,83,80'},.3);">
+          <div class="text-sm" style="color:{ewom_c};font-weight:600;">📱 eWOM &amp; Piracy</div>
+          <div class="text-xs text-ink2 mt-1">{ewom_reason} — this moved PVOD and Peacock subscriber value
+          together, independently of box office, reviews, and Ancillary Markets.</div>
         </div>
         """, unsafe_allow_html=True)
 

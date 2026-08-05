@@ -146,6 +146,45 @@ def test_simulate_outcome_includes_financing_and_waterfall_fields():
     assert outcome["studio_residual"] == pytest.approx(computed)
 
 
+def test_simulate_outcome_includes_ewom_piracy_fields(monkeypatch):
+    # 2026-08-05: every real outcome carries the eWOM & Piracy fields, and
+    # ewom_mult must actually be threaded into the stored npv/total_revenue
+    # (not just present-but-unused). Production Trouble/AI setback/Ancillary
+    # Surprise are pinned to None so only the eWOM swing is in play, per this
+    # file's established monkeypatch-the-draw_* convention (never hardcode
+    # which way an unpinned hash()-seeded draw resolves for a literal team
+    # name -- see the note at the top of this file).
+    import app_pages.movies as movies_module
+    from utils.movie_models import MovieProject
+    monkeypatch.setattr(movies_module, "draw_production_trouble", lambda team, cycle: None)
+    monkeypatch.setattr(movies_module, "draw_ancillary_surprise", lambda team, cycle: None)
+    monkeypatch.setattr(movies_module, "draw_ewom_piracy_swing",
+                         lambda team, cycle: ("A viral social clip drove a surge", 1.2))
+    at = _movies_app()
+    _simulate_button(at).click().run()
+    assert not at.exception
+    outcome = at.session_state["movie_log"][0]
+    assert outcome["ewom_piracy_swing"] == "A viral social clip drove a surge"
+    assert outcome["ewom_mult"] == 1.2
+    project = MovieProject(**outcome["project_kwargs"])
+    expected_npv = project.npv(outcome["multiplier"], outcome["critical_score"], ewom_mult=1.2)
+    assert outcome["npv"] == pytest.approx(expected_npv)
+
+
+def test_ewom_piracy_card_renders_in_results_when_it_fires(monkeypatch):
+    import app_pages.movies as movies_module
+    monkeypatch.setattr(movies_module, "draw_production_trouble", lambda team, cycle: None)
+    monkeypatch.setattr(movies_module, "draw_ancillary_surprise", lambda team, cycle: None)
+    monkeypatch.setattr(movies_module, "draw_ewom_piracy_swing",
+                         lambda team, cycle: ("Pirated copies leaked within days of release", 0.8))
+    at = _movies_app()
+    _simulate_button(at).click().run()
+    assert not at.exception
+    text = "\n".join(md.value for md in at.markdown)
+    assert "eWOM &amp; Piracy" in text
+    assert "Pirated copies leaked within days of release" in text
+
+
 def test_financing_structure_selectbox_offers_all_three_options():
     at = _movies_app()
     fin_box = at.selectbox[2]   # genre, concept_type, financing_structure in that order
