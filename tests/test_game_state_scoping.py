@@ -48,6 +48,34 @@ class TestIdentityIsolation:
         assert gs.can_advance("Team Alpha", "oxygen", "Kellogg", "Sec B") is False
 
 
+class TestFreeNavigation:
+    """FREE_NAVIGATION (2026-08-07): an instructor secret that lets a team
+    open Bravo/Peacock without having earned it via the normal
+    pass-or-retry gate — see DESIGN_NOTES.md's "Homework/in-class split"
+    entry. Defaults off; these tests toggle it via monkeypatch the same
+    way isolated_leaderboard toggles LEADERBOARD_FILE above."""
+
+    def test_bravo_locked_by_default_with_no_oxygen_attempts(self):
+        status = gs.get_team_network_status("Team Alpha", "Kellogg", "Sec A")
+        assert status["bravo"]["locked"] is True
+
+    def test_bravo_unlocked_when_free_navigation_enabled(self, monkeypatch):
+        monkeypatch.setattr(gs, "FREE_NAVIGATION", True)
+        status = gs.get_team_network_status("Team Alpha", "Kellogg", "Sec A")
+        assert status["bravo"]["locked"] is False
+        assert status["peacock"]["locked"] is False
+
+    def test_free_navigation_does_not_change_attempt_or_score_tracking(self, monkeypatch):
+        _record("Team Alpha", "Kellogg", "Sec A", 90, True)
+        monkeypatch.setattr(gs, "FREE_NAVIGATION", True)
+        status = gs.get_team_network_status("Team Alpha", "Kellogg", "Sec A")
+        # Unlocking navigation must not fabricate attempts/scores for levels
+        # never actually played.
+        assert status["bravo"]["attempts"] == 0
+        assert status["bravo"]["official_score"] is None
+        assert status["oxygen"]["official_score"] == 90
+
+
 class TestNetworkLeaderboardScoping:
     def test_unfiltered_leaderboard_includes_every_school(self):
         _record("Team Alpha", "Kellogg", "Sec A", 90, True)

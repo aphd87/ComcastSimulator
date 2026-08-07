@@ -23,3 +23,11 @@ YEARS_PER_LEVEL = 4
 ```
 
 Any whole number from 2–8 is accepted (out-of-range values are clamped automatically, so a typo can't produce a degenerate or multi-decade level). Every network's calendar era shifts together to keep clean handoffs with no overlap — e.g. at 4 years: Oxygen 2012–2015, Bravo 2016–2019, Peacock 2020–2023. Restart the app (or wait for the next redeploy) after changing this — it's read once when the app starts, not live per page load.
+
+**`FREE_NAVIGATION`** (added 2026-08-07) — lets every team open Bravo or Peacock directly from the Active Network selector, without first passing (or retrying) the prior level. Defaults to **off** — the normal sequential gate (pass, or fail-and-retry-once, to advance) — so this only changes behavior for deployments that opt in. To enable it, add to that deployment's secrets:
+
+```toml
+FREE_NAVIGATION = true
+```
+
+Useful for a "homework, then class" structure: assign Oxygen as homework so students arrive familiar with the mechanics, then use one class period to work through both Bravo and Peacock — with `FREE_NAVIGATION` on, a student can start class on Bravo (or skip straight to Peacock) instead of being blocked behind whatever they did or didn't finish on Oxygen at home. All three networks' show slates are seeded for every team at registration regardless of play order, so jumping ahead is mechanically safe. Attempt history, official scores, and leaderboard rankings are unaffected — this only changes which levels are clickable, not how they're scored. Same read-once-at-startup caveat as `YEARS_PER_LEVEL`: restart (or wait for the next redeploy) after changing it.

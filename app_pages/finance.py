@@ -174,18 +174,40 @@ def render():
     st.markdown('<div class="section-title">Distribution Revenue Calculator</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="font-size:15px;color:#e0e2ea;margin-bottom:12px;">
-    Distribution (affiliate) revenue = subscribers × monthly fee × 12 months. 
-    Bravo commands a premium affiliate fee; this compounds with a 5% annual escalation clause 
+    Distribution (affiliate) revenue = subscribers × monthly fee × 12 months.
+    Bravo commands a premium affiliate fee; this compounds with a 5% annual escalation clause
     (capped at Year 5) even as cable subscribers erode at 3%/year.
+    <br><br>
+    In plain terms: distributors (Comcast, DirecTV, etc.) pay Bravo a negotiated fee for every
+    subscriber who gets the channel — the 5% escalation clause locks in an automatic fee increase
+    each year for the deal's first 5 years, then holds flat. So even though the subscriber count
+    is shrinking 3% a year, the per-subscriber fee is climbing fast enough to offset that loss —
+    for a while. Once the escalation caps out at Year 5, subscriber erosion has nothing left
+    pushing back against it, and distribution revenue starts declining on its own.
     </div>
     """, unsafe_allow_html=True)
 
     user_subs, user_rate, user_esc = BASE_SUBS_M, SUB_RATE_PER_MONTH, 5.0
     with st.expander("🎛️ Adjust Distribution Model", expanded=False):
+        st.markdown("""
+        <div style="font-size:14px;color:#b0b5c4;margin-bottom:10px;">
+        This is a <b>what-if sandbox</b>, not your actual game state — these three inputs
+        override the model's baseline assumptions so you can see how distribution revenue
+        would respond under a different deal. Changing them here only affects the table and
+        chart below; it has no effect on your real budget, P&L, or score.
+        </div>
+        """, unsafe_allow_html=True)
         c1,c2,c3 = st.columns(3)
-        user_subs = c1.number_input("Base Subscribers (M)", 10.0, 100.0, float(BASE_SUBS_M), step=1.0)
-        user_rate = c2.number_input("Rate $/sub/month", 0.05, 2.0, float(SUB_RATE_PER_MONTH), step=0.05)
-        user_esc  = c3.number_input("Escalation % (annual)", 0.0, 10.0, 5.0, step=0.5)
+        user_subs = c1.number_input("Base Subscribers (M)", 10.0, 100.0, float(BASE_SUBS_M), step=1.0,
+                                     help="How many million cable subscribers get Bravo at Year 1, before the "
+                                          "3%/year erosion rate kicks in for later years.")
+        user_rate = c2.number_input("Rate $/sub/month", 0.05, 2.0, float(SUB_RATE_PER_MONTH), step=0.05,
+                                     help="The negotiated affiliate fee — what a distributor (Comcast, DirecTV, "
+                                          "etc.) pays Bravo per subscriber, per month, before escalation.")
+        user_esc  = c3.number_input("Escalation % (annual)", 0.0, 10.0, 5.0, step=0.5,
+                                     help="How much the per-subscriber fee automatically increases each year, "
+                                          "for the deal's first 5 years — this is what's fighting against "
+                                          "subscriber erosion in the chart below.")
 
     dist_rows = []
     for y in range(1, 11):
@@ -195,6 +217,13 @@ def render():
         dist_rows.append({"Year": y, "Calendar": 2011+y, "Subs (M)": round(s,2),
                            "Esc Factor": round(e,3), "Distrib Rev ($M)": round(d,2)})
     dist_df = pd.DataFrame(dist_rows)
+
+    st.caption(
+        "Esc Factor is the fee multiplier from escalation (1.000 = no increase yet, capped at 1.250 "
+        "once Year 5's 5-a-year compounding maxes out). Distrib Rev = Subs × monthly fee × 12 × Esc "
+        "Factor — the same formula as the callout above, run out 10 years so you can see where rising "
+        "fees stop outrunning subscriber erosion."
+    )
 
     c1, c2 = st.columns([1,1])
     with c1:
@@ -227,7 +256,10 @@ def render():
     is really worth in the P&amp;L right now. <b>Cost/Point</b> = the show's amortized cost ÷ its Rating, the
     same yardstick for spend.<br>
     Higher Rev/Point = stronger ad pricing power for that show. Shows where Cost/Point exceeds Rev/Point are
-    destroying value on a per-point basis — flag these for cancellation in the Renewal tab.
+    destroying value on a per-point basis — flag these for cancellation in the Renewal tab.<br>
+    <b>Bottom line:</b> Rev/Point &gt; Cost/Point = the show earns more per point of audience than it costs
+    — a value-creator worth keeping. Cost/Point &gt; Rev/Point = the reverse — a cancellation candidate,
+    even if its raw rating number looks respectable.
     </div>
     """, unsafe_allow_html=True)
     rpp_rows = []

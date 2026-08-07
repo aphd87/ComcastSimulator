@@ -56,6 +56,32 @@ def _read_years_per_level() -> int:
     return min(max(val, 2), 8)
 
 
+def _read_free_navigation() -> bool:
+    """Whether Bravo/Peacock are selectable without first passing (or
+    retrying) the prior network — instructor-tailorable per deployment
+    (2026-08-07, per user request), same per-school Secrets mechanism as
+    YEARS_PER_LEVEL above.
+
+    Motivating class flow: Oxygen assigned as homework so students arrive
+    familiar with the mechanics, then a single class period covers both
+    Bravo and Peacock — that only works if a student can jump straight to
+    either one instead of being gated behind an in-class Oxygen replay (or
+    behind whatever they did or didn't finish at home). All three
+    networks' show slates are already seeded at registration regardless of
+    play order (`app.py`'s `oxygen_shows`/`bravo_shows`/`peacock_shows`
+    init), so skipping ahead is mechanically safe, not just a UI unlock.
+
+    Defaults to False (today's sequential-gating behavior, unchanged for
+    every deployment until an instructor opts in) — same try/except-on-
+    missing-secrets.toml reasoning as `_read_years_per_level`."""
+    try:
+        val = st.secrets.get("FREE_NAVIGATION", False)
+    except Exception:
+        val = False
+    return bool(val)
+
+
+FREE_NAVIGATION  = _read_free_navigation()   # True: Bravo/Peacock always selectable, no prior-level gate
 YEARS_PER_LEVEL  = _read_years_per_level()   # Each network runs a real N-calendar-year era — see LEVEL_START_YEAR
 LEVEL_START_YEAR = {           # First in-game year of each network's era — computed off YEARS_PER_LEVEL
                                 # so every boundary stays a clean handoff (no calendar overlap) for
@@ -460,13 +486,19 @@ def get_school_rollup(network: str) -> list[dict]:
     return rollup
 
 def get_team_network_status(team_name: str, school: str = "", class_section: str = "") -> dict:
-    """Returns which networks are unlocked and their status for a team."""
+    """Returns which networks are unlocked and their status for a team.
+
+    FREE_NAVIGATION (instructor secret, see _read_free_navigation) leaves
+    every field here — attempts/official_score/passed/can_advance — exactly
+    as normal, and only forces `locked` to False. That keeps pass/fail
+    history and leaderboard scoring untouched; it just lets a team open
+    Bravo/Peacock without having earned it via the usual gate."""
     status = {}
     prev_can_advance = True
     for i, net in enumerate(NETWORK_ORDER):
         attempts = get_team_attempts(team_name, net, school, class_section)
         official = get_official_score(team_name, net, school, class_section)
-        locked   = not prev_can_advance and i > 0
+        locked   = (not prev_can_advance and i > 0) and not FREE_NAVIGATION
         passed   = any(a["passed"] for a in attempts)
         used_all = len(attempts) >= MAX_ATTEMPTS
         status[net] = {
