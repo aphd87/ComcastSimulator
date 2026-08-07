@@ -175,7 +175,8 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
         return {"best_year": None, "most_improved": None,
                 "consistency_score": None, "diversity_trend": None,
                 "shows_greenlit": shows_greenlit,
-                "emmy_nominations": None, "emmy_wins": None}
+                "emmy_nominations": None, "emmy_wins": None,
+                "total_revenue": None}
 
     sorted_log = sorted(yearly_log, key=lambda r: r["year"])
 
@@ -222,6 +223,15 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
     emmy_nominations = sum(r.get("emmy_nominations") or 0 for r in sorted_log)
     emmy_wins         = sum(r.get("emmy_wins") or 0 for r in sorted_log)
 
+    # Total Revenue (2026-08-07, per user request) -- straight sum of each
+    # played year's real revenue, same field _compute_year already writes
+    # to every yearly_log entry. A raw dollar metric alongside the
+    # composite Score, distinct from it (a team can run a lean, efficient
+    # small slate and score well without ever posting the biggest revenue
+    # number, or vice versa) -- .get()-guarded since legacy entries
+    # predating this feature may lack "revenue" on some rows.
+    total_revenue = round(sum(r.get("revenue") or 0 for r in sorted_log), 1)
+
     return {
         "best_year":         best_year,
         "most_improved":     most_improved,
@@ -230,6 +240,7 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
         "shows_greenlit":    shows_greenlit,
         "emmy_nominations":  emmy_nominations,
         "emmy_wins":         emmy_wins,
+        "total_revenue":     total_revenue,
     }
 
 
@@ -420,6 +431,83 @@ def get_network_leaderboard(network: str, school: Optional[str] = None,
     for i, r in enumerate(ranked):
         r["rank"] = i + 1
     return ranked
+
+def get_class_awards(network: str, school: Optional[str] = None,
+                      class_section: Optional[str] = None) -> list[dict]:
+    """Superlative awards across every team's official entry for one
+    network (2026-08-07, per user request) -- 'who leads this specific
+    metric,' a complement to the single composite Score ranking
+    get_network_leaderboard already ranks by. Same scoping semantics as
+    that function.
+
+    Each award only appears if at least one team has a real value for
+    that metric -- e.g. a class with zero Emmy recognition yet simply
+    doesn't get an Emmy award line, rather than naming an arbitrary
+    "winner" with a 0/None value. Reads each entry's stored `notables`
+    (compute_level_notables, frozen at Submit time), same field
+    _format_notables_badges already renders per-entry in
+    app_pages/leaderboard.py -- this is the class-wide "who's #1 in each
+    of those" view."""
+    board = get_network_leaderboard(network, school, class_section)
+    if not board:
+        return []
+
+    awards = []
+    awards.append({
+        "title": "🏆 Top Score", "team": board[0]["team_name"],
+        "value": f"{board[0]['score']:.0f} pts",
+    })
+
+    def _leader(metric_path, fmt, minimize=False, require_positive=False):
+        candidates = []
+        for e in board:
+            val = (e.get("notables") or {}).get(metric_path)
+            if val is None or (require_positive and val <= 0):
+                continue
+            candidates.append((e, val))
+        if not candidates:
+            return None
+        best_entry, best_val = (min if minimize else max)(candidates, key=lambda p: p[1])
+        return {"team": best_entry["team_name"], "value": fmt(best_val)}
+
+    revenue = _leader("total_revenue", lambda v: f"${v:,.0f}M", require_positive=True)
+    if revenue:
+        awards.append({"title": "💰 Highest Revenue", **revenue})
+
+    consistency = _leader("consistency_score", lambda v: f"{v:.0f}/100")
+    if consistency:
+        awards.append({"title": "🎯 Most Consistent", **consistency})
+
+    # diversity_trend is negative when a team diversified (HHI fell) over
+    # the level -- minimize to find the biggest diversification, and only
+    # award it if genuinely negative (a positive trend means concentration,
+    # not diversification, so there's no "most diversified" team that year).
+    diversified = _leader("diversity_trend", lambda v: f"{abs(v):.3f} HHI drop", minimize=True)
+    if diversified and (next(e for e in board if e["team_name"] == diversified["team"])
+                         ["notables"]["diversity_trend"] < 0):
+        awards.append({"title": "🌈 Most Diversified Portfolio", **diversified})
+
+    improved = _leader("most_improved", lambda v: f"{v:+.1f} pts", require_positive=True)
+    if improved:
+        awards.append({"title": "📈 Most Improved", **improved})
+
+    greenlit = _leader("shows_greenlit", lambda v: f"{v:.0f} shows", require_positive=True)
+    if greenlit:
+        awards.append({"title": "🎬 Most Shows Greenlit", **greenlit})
+
+    emmy_candidates = [
+        e for e in board
+        if ((e.get("notables") or {}).get("emmy_wins") or (e.get("notables") or {}).get("emmy_nominations"))
+    ]
+    if emmy_candidates:
+        best = max(emmy_candidates, key=lambda e: (
+            e["notables"].get("emmy_wins") or 0, e["notables"].get("emmy_nominations") or 0))
+        ew = best["notables"].get("emmy_wins") or 0
+        en = best["notables"].get("emmy_nominations") or 0
+        value = f"{ew} win{'s' if ew != 1 else ''}" if ew else f"{en} nom{'s' if en != 1 else ''}"
+        awards.append({"title": "🏅 Most Emmy Recognition", "team": best["team_name"], "value": value})
+
+    return awards
 
 def get_overall_leaderboard(school: Optional[str] = None,
                              class_section: Optional[str] = None) -> list[dict]:

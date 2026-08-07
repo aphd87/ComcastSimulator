@@ -1406,14 +1406,17 @@ def _complete(ss, shows, net_info, team, net):
     emmy_val = f"{ew} win{'s' if ew != 1 else ''}" if ew else (f"{en} nom{'s' if en != 1 else ''}" if en else "—")
     emmy_c   = ACCENT if ew else (SUCCESS if en else TEXT2)
     emmy_sub = f"{en} total nomination{'s' if en != 1 else ''}" if ew and en > ew else "across the level"
+    tr       = notables.get("total_revenue")
+    tr_val   = f"${tr:,.0f}M" if tr is not None else "—"
 
-    n_cols = st.columns(5)
+    n_cols = st.columns(6)
     cards = [
         ("BEST YEAR",       by_val, SUCCESS, by_sub),
         ("MOST IMPROVED",   mi_val, mi_c,    "margin, first → last year"),
         ("CONSISTENCY",     cs_val, cs_c,    cs_label),
         ("SHOWS GREENLIT",  str(sg), ACCENT, "new titles added this level"),
         ("EMMY RECOGNITION", emmy_val, emmy_c, emmy_sub),
+        ("TOTAL REVENUE",   tr_val, ACCENT2, "summed across every year played"),
     ]
     for col, (title, val, color, sub) in zip(n_cols, cards):
         with col:

@@ -312,16 +312,26 @@ def genre_demo(genre: str) -> dict:
 # offset -- never perturbs preview_show_variance()'s sequence or
 # draw_production_risk_event's), same "a show can be a ratings hit and get
 # snubbed critically, or a modest performer critics love" reasoning as the
-# Movies side. Only Drama/Scripted/Comedy are eligible -- the genres with a
+# Movies side. Drama/Scripted/Comedy are eligible -- the genres with a
 # real-world Emmy prestige-category analogue (Drama Series, Limited/
-# Anthology "Scripted," Comedy Series); Reality/Competition/Talk/True Crime
-# aren't chasing the same signal in this sim, a real eligibility gate
-# (mirrors AWARDS_ELIGIBLE_GENRES), not a soft discount.
-EMMY_ELIGIBLE_GENRES = {"Drama", "Scripted", "Comedy"}
+# Anthology "Scripted," Comedy Series). True Crime added 2026-08-07 per
+# user request ("at the very least, there should be the possibility") --
+# real-world Emmys have an Outstanding Documentary/Nonfiction category
+# true-crime docuseries genuinely compete in and occasionally win, so
+# Oxygen's entire slate (100% Reality/Competition/True Crime -- see
+# utils/data.py's OXYGEN_SLATE) wasn't just less likely to get Emmy
+# recognition, it was structurally zero, an eligibility gate rather than a
+# genuine possibility. Reality/Competition/Talk still aren't chasing the
+# same signal in this sim (mirrors AWARDS_ELIGIBLE_GENRES), a real
+# eligibility gate, not a soft discount.
+EMMY_ELIGIBLE_GENRES = {"Drama", "Scripted", "Comedy", "True Crime"}
 EMMY_RECEPTION_BOUNDS = {
-    "Drama":    (25, 55, 90),
-    "Scripted": (20, 50, 88),
-    "Comedy":   (20, 48, 85),
+    "Drama":      (25, 55, 90),
+    "Scripted":   (20, 50, 88),
+    "Comedy":     (20, 48, 85),
+    "True Crime": (20, 45, 89),   # lower mode than Drama -- a real but narrower category
+                                    # (fewer high-profile nonfiction entries), hi just above
+                                    # EMMY_WIN_THRESHOLD (87) so a win is rare but genuinely possible
 }
 EMMY_NOMINATION_THRESHOLD = 70
 EMMY_WIN_THRESHOLD        = 87   # a win is a strict superset of a nomination, same posture as Oscar tracking

@@ -142,6 +142,7 @@ def test_complete_phase_renders_level_notables_with_no_exceptions():
     assert "Level Notables" in text
     assert "BEST YEAR" in text
     assert "SHOWS GREENLIT" in text
+    assert "TOTAL REVENUE" in text
 
 
 def _decisions_sim_app() -> AppTest:

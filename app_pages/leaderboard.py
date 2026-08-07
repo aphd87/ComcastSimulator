@@ -15,7 +15,7 @@ from datetime import datetime
 from utils.game_state import (
     get_network_leaderboard, get_school_rollup, get_overall_leaderboard,
     NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard,
-    get_attempt_count, MAX_ATTEMPTS,
+    get_attempt_count, MAX_ATTEMPTS, get_class_awards,
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
@@ -88,6 +88,9 @@ def _format_notables_badges(notables: dict) -> str:
     en = notables.get("emmy_nominations")
     if en:
         badges.append(f"🎬 {en} Emmy nom{'s' if en != 1 else ''}")
+    tr = notables.get("total_revenue")
+    if tr:
+        badges.append(f"💰 ${tr:,.0f}M revenue")
     if not badges:
         return ""
     return ('<div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;">' +
@@ -345,6 +348,29 @@ def _render_board_tab(team: str, net: str, info: dict,
                        annotation_font_size=10)
         fig.update_layout(**base_layout(f"{info['display_name']} Score Distribution", height=280))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+
+    # ── Class Awards — superlatives, one per metric ─────────────────────────
+    # Complements the single composite Score ranking above: "who's #1
+    # overall" vs. "who leads this specific thing." Each award only shows
+    # up if at least one team has a real value for it (see
+    # get_class_awards's docstring) -- a class with no Emmy recognition
+    # yet just won't show that award, rather than crowning a hollow winner.
+    awards = get_class_awards(net, scope_school, scope_class)
+    if awards:
+        st.markdown('<div class="section-title" style="margin-top:12px;">🏆 Class Awards</div>',
+                    unsafe_allow_html=True)
+        award_cols = st.columns(min(len(awards), 4))
+        for i, award in enumerate(awards):
+            with award_cols[i % len(award_cols)]:
+                st.markdown(f"""
+                <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
+                     padding:12px;margin-bottom:10px;height:100%;">
+                  <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;
+                       margin-bottom:4px;">{award['title']}</div>
+                  <div style="font-size:16px;font-weight:600;color:#e8c547;">{award['team']}</div>
+                  <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">{award['value']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 
 def _render_school_comparison(all_nets: list, all_infos: dict):

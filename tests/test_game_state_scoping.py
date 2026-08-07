@@ -17,10 +17,10 @@ def isolated_leaderboard(monkeypatch, tmp_path):
     yield
 
 
-def _record(team, school, cls, score, passed, attempt=1, network="oxygen"):
+def _record(team, school, cls, score, passed, attempt=1, network="oxygen", notables=None):
     return gs.record_attempt(team_name=team, network=network, attempt_num=attempt,
                               score=score, passed=passed, details={"total": score},
-                              school=school, class_section=cls)
+                              school=school, class_section=cls, notables=notables)
 
 
 class TestIdentityIsolation:
@@ -212,6 +212,62 @@ class TestOverallLeaderboard:
         assert gs.get_overall_leaderboard() == []
 
 
+class TestClassAwards:
+    """get_class_awards, added 2026-08-07 per user request ('class awards
+    ... like awards for each metric') -- superlative per-metric winners
+    across a network's official leaderboard, complementing the single
+    composite Score ranking."""
+
+    def test_empty_board_returns_empty_list(self):
+        assert gs.get_class_awards("oxygen") == []
+
+    def test_top_score_award_always_present_when_board_nonempty(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 90, True)
+        _record("Team Bravo", "Kellogg", "Sec A", 70, True)
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        top = next(a for a in awards if a["title"] == "🏆 Top Score")
+        assert top["team"] == "Team Alpha"
+        assert top["value"] == "90 pts"
+
+    def test_highest_revenue_award_picks_the_real_max(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True,
+                notables={"total_revenue": 500.0})
+        _record("Team Bravo", "Kellogg", "Sec A", 90, True,
+                notables={"total_revenue": 800.0})
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        rev = next(a for a in awards if a["title"] == "💰 Highest Revenue")
+        assert rev["team"] == "Team Bravo"
+        assert rev["value"] == "$800M"
+
+    def test_metric_award_omitted_when_no_team_has_a_real_value(self):
+        # Neither team has any Emmy recognition -- the award line should
+        # simply not appear, not crown an arbitrary 0-value "winner".
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True,
+                notables={"emmy_wins": 0, "emmy_nominations": 0})
+        _record("Team Bravo", "Kellogg", "Sec A", 90, True,
+                notables={"emmy_wins": None, "emmy_nominations": None})
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        assert not any(a["title"] == "🏅 Most Emmy Recognition" for a in awards)
+
+    def test_most_diversified_only_awarded_for_a_genuine_negative_trend(self):
+        # A positive diversity_trend means the slate concentrated, not
+        # diversified -- must not be crowned "Most Diversified".
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True,
+                notables={"diversity_trend": 0.3})
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        assert not any(a["title"] == "🌈 Most Diversified Portfolio" for a in awards)
+
+    def test_emmy_award_prefers_wins_over_more_nominations(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True,
+                notables={"emmy_wins": 0, "emmy_nominations": 5})
+        _record("Team Bravo", "Kellogg", "Sec A", 90, True,
+                notables={"emmy_wins": 1, "emmy_nominations": 1})
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        emmy = next(a for a in awards if a["title"] == "🏅 Most Emmy Recognition")
+        assert emmy["team"] == "Team Bravo"
+        assert emmy["value"] == "1 win"
+
+
 def _year_row(year, margin, ocf, genre_costs):
     """Builds a minimal yearly_log row matching pages/simulation.py::
     _compute_year's real shape -- only the fields compute_level_notables
@@ -234,6 +290,7 @@ class TestComputeLevelNotables:
             "consistency_score": None, "diversity_trend": None,
             "shows_greenlit": 2,
             "emmy_nominations": None, "emmy_wins": None,
+            "total_revenue": None,
         }
 
     def test_single_year_log_is_perfectly_consistent_with_no_improvement_delta(self):
@@ -329,6 +386,19 @@ class TestComputeLevelNotables:
         notables = gs.compute_level_notables(log)
         assert notables["emmy_nominations"] == 0
         assert notables["emmy_wins"] == 0
+
+    def test_total_revenue_sums_across_years(self):
+        log = [
+            {**_year_row(1, margin=10.0, ocf=2.0, genre_costs={"Reality": 100}), "revenue": 120.5},
+            {**_year_row(2, margin=15.0, ocf=3.0, genre_costs={"Reality": 100}), "revenue": 140.2},
+        ]
+        notables = gs.compute_level_notables(log)
+        assert notables["total_revenue"] == 260.7
+
+    def test_total_revenue_defaults_to_zero_for_legacy_entries_without_the_field(self):
+        log = [_year_row(1, margin=10.0, ocf=2.0, genre_costs={"Reality": 100})]
+        notables = gs.compute_level_notables(log)
+        assert notables["total_revenue"] == 0
 
     def test_notables_round_trip_through_record_attempt(self):
         notables = {"best_year": {"label": "Year 2", "margin": 15.0, "ocf": 3.0},

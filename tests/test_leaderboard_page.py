@@ -109,3 +109,39 @@ def test_leaderboard_renders_attempts_used_and_notables_with_no_exceptions(monke
     assert "used" in text   # "N/MAX used" attempts-used string
     assert "Year 2" in text
     assert "1 greenlit" in text
+
+
+def test_leaderboard_renders_class_awards_with_no_exceptions(monkeypatch, tmp_path):
+    monkeypatch.setattr(gs, "LEADERBOARD_FILE", tmp_path / "leaderboard.json")
+    gs.record_attempt(
+        team_name="Team Alpha", network="oxygen", attempt_num=1,
+        score=60, passed=True, details={"total": 60},
+        school="Kellogg", class_section="Sec A",
+        notables={"total_revenue": 500.0, "emmy_wins": 0, "emmy_nominations": 2},
+    )
+    gs.record_attempt(
+        team_name="Team Bravo", network="oxygen", attempt_num=1,
+        score=90, passed=True, details={"total": 90},
+        school="Kellogg", class_section="Sec A",
+        notables={"total_revenue": 800.0, "emmy_wins": 1, "emmy_nominations": 1},
+    )
+
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "Team Alpha"
+        st.session_state.school = "Kellogg"
+        st.session_state.class_section = "Sec A"
+        import app_pages.leaderboard as leaderboard
+        leaderboard.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Leaderboard render raised: {list(at.exception)}"
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Class Awards" in text
+    assert "Top Score" in text
+    assert "Highest Revenue" in text
+    assert "$800M" in text
+    assert "Most Emmy Recognition" in text

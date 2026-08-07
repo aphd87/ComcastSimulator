@@ -288,13 +288,18 @@ class TestEmmyTracking:
     TV had no prestige/awards signal at all before this."""
 
     def test_ineligible_genres_always_return_none(self):
-        for genre in ("Reality", "Competition", "Talk", "True Crime"):
+        for genre in ("Reality", "Competition", "Talk"):
             assert genre not in EMMY_ELIGIBLE_GENRES
             assert draw_emmy_reception("Team X", 1, 101, genre) is None
 
     def test_eligible_genres_match_the_bounds_table(self):
         assert EMMY_ELIGIBLE_GENRES == set(EMMY_RECEPTION_BOUNDS.keys())
-        assert EMMY_ELIGIBLE_GENRES == {"Drama", "Scripted", "Comedy"}
+        # True Crime added 2026-08-07 -- Oxygen's entire slate is Reality/
+        # Competition/True Crime (utils/data.py's OXYGEN_SLATE), so without
+        # it Oxygen had zero possibility of Emmy recognition, not just a
+        # lower chance -- real-world Emmys have an Outstanding Documentary/
+        # Nonfiction category true-crime docuseries genuinely compete in.
+        assert EMMY_ELIGIBLE_GENRES == {"Drama", "Scripted", "Comedy", "True Crime"}
 
     def test_reproducible_for_same_team_year_show(self):
         a = draw_emmy_reception("Team Echo", 2, 501, "Drama")
