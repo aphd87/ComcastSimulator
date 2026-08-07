@@ -128,7 +128,11 @@ def render():
             f'${RESEARCH_FEE:.0f}M per show, deducted from this year\'s budget immediately. Reveals a real '
             f'1-5 star signal for how that show\'s rating will actually move this year — not a decorative '
             f'guess. Low stars mean brace for a rough year; high stars mean lean into it. Sometimes also '
-            f'flags 1-2 regions the show may play well in, with a basic demo profile.</div>',
+            f'flags 1-2 regions the show may play well in, with a basic demo profile (household income '
+            f'figures are in <b>USD</b>). That demo profile isn\'t just flavor text — advertisers pay '
+            f'more to reach certain locations/demographics than others (higher HH income usually means '
+            f'stronger ad pricing power), so a "strong fit" region is a real signal about where this '
+            f'show\'s ad revenue could over- or under-perform its flat national rate.</div>',
             unsafe_allow_html=True)
 
         with st.expander(f"🔬 Pay for Research (${RESEARCH_FEE:.0f}M/show)", expanded=False):
@@ -150,7 +154,8 @@ def render():
                                 regional_html += (
                                     f'<div style="font-size:13px;color:{fit_c};font-family:DM Mono,monospace;'
                                     f'margin-top:3px;">🌍 {r["region"]} ({r["fit"]} fit)<br>'
-                                    f'Median age {r["median_age"]} · HH income ${r["household_income_k"]}K</div>'
+                                    f'Median age {r["median_age"]} · {r["gender"]} · '
+                                    f'HH income ${r["household_income_k"]}K USD</div>'
                                 )
                             st.markdown(
                                 f'<div style="font-size:15px;color:#e0e2ea;">{s.name[:18]}</div>'
@@ -279,6 +284,7 @@ def render():
                       <span class="badge badge-gray">{r['Genre']}</span>
                       <span class="badge badge-gray">{r['Network']}</span>
                     </div>
+                    {f'<div style="font-size:13px;color:#c8cad4;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
                     <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;">
                       Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
                     </div>
@@ -420,6 +426,12 @@ def render():
     <br><br>
     🖱️ <b style="color:#e8eaf0;">To assign a show:</b> double-click a cell in the grid below to open its
     dropdown, then pick a show. Single-clicking won't open it.
+    <br><br>
+    🎯 <b style="color:#e8eaf0;">Strategy:</b> the bonus/penalty is a <i>percentage</i> of a show's own
+    rating, so the same slot is worth more real ad revenue on a big show than a small one — protect your
+    highest-rated shows with your best slots rather than spreading the love evenly. Tue/Wed/9PM is
+    strongest because that's when linear TV viewership has historically peaked (people are home, not out);
+    Fri/Sat is the death slot for the opposite reason (people are out, so at-home audiences shrink).
     </div>
     """, unsafe_allow_html=True)
 

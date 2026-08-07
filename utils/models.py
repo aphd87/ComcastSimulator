@@ -95,6 +95,7 @@ class Show:
     status: str = "Active"
     slot_day: Optional[str]  = None   # Primetime day assignment (PRIMETIME_DAYS), None = unassigned
     slot_hour: Optional[str] = None   # Primetime hour assignment (PRIMETIME_HOURS), None = unassigned
+    description: str = ""             # One-sentence premise, shown on the Renewal decision cards
 
     def schedule_multiplier(self) -> float:
         """1.0 (neutral) until a student actually assigns a primetime slot —
@@ -269,12 +270,12 @@ def variance_to_stars(v: float) -> int:
 # draw — same reasoning as Day 2's critical-reception draw being
 # independent of box office (see utils/movie_models.py).
 REGIONS = {
-    "Northeast US":  {"median_age": 41, "household_income_k": 78, "affinity": ["True Crime", "Drama", "Talk"]},
-    "Southeast US":  {"median_age": 38, "household_income_k": 58, "affinity": ["Reality", "Competition", "True Crime"]},
-    "West Coast US": {"median_age": 37, "household_income_k": 84, "affinity": ["Scripted", "Competition", "Comedy"]},
-    "UK/Ireland":    {"median_age": 40, "household_income_k": 62, "affinity": ["True Crime", "Talk", "Drama"]},
-    "Latin America": {"median_age": 33, "household_income_k": 34, "affinity": ["Reality", "Competition", "Comedy"]},
-    "APAC":          {"median_age": 35, "household_income_k": 46, "affinity": ["Scripted", "Reality", "Drama"]},
+    "Northeast US":  {"median_age": 41, "household_income_k": 78, "gender": "Skews Female", "affinity": ["True Crime", "Drama", "Talk"]},
+    "Southeast US":  {"median_age": 38, "household_income_k": 58, "gender": "Skews Female", "affinity": ["Reality", "Competition", "True Crime"]},
+    "West Coast US": {"median_age": 37, "household_income_k": 84, "gender": "Balanced",     "affinity": ["Scripted", "Competition", "Comedy"]},
+    "UK/Ireland":    {"median_age": 40, "household_income_k": 62, "gender": "Skews Female", "affinity": ["True Crime", "Talk", "Drama"]},
+    "Latin America": {"median_age": 33, "household_income_k": 34, "gender": "Balanced",     "affinity": ["Reality", "Competition", "Comedy"]},
+    "APAC":          {"median_age": 35, "household_income_k": 46, "gender": "Balanced",     "affinity": ["Scripted", "Reality", "Drama"]},
 }
 REGIONAL_SIGNAL_CHANCE  = 0.5   # only sometimes reveals a regional signal, not every research buy
 REGIONS_PER_SIGNAL_MAX  = 2     # 1-2 regions max, deliberately kept small
@@ -421,6 +422,7 @@ def preview_regional_signal(team_name: str, year: int, show: "Show") -> Optional
             "region": names[i],
             "median_age": REGIONS[names[i]]["median_age"],
             "household_income_k": REGIONS[names[i]]["household_income_k"],
+            "gender": REGIONS[names[i]]["gender"],
             "fit": "strong" if show.genre in REGIONS[names[i]]["affinity"] else "moderate",
         }
         for i in chosen

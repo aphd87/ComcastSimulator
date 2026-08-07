@@ -48,6 +48,11 @@ class ShowPitchIdea(BaseModel):
                                             "this concept's genre/hook.")
 
 
+class ShowPitchBatch(BaseModel):
+    pitches: list[ShowPitchIdea] = Field(description="A batch of distinct, original show concepts "
+                                           "-- no two should share the same premise or hook.")
+
+
 def api_key_configured() -> bool:
     """True if this deployment has its own Anthropic API key configured."""
     try:
@@ -126,5 +131,41 @@ def generate_show_pitch(network_context: str) -> ShowPitchIdea | None:
             output_format=ShowPitchIdea,
         )
         return response.parsed_output
+    except Exception:
+        return None
+
+
+def generate_show_pitches(network_context: str, n: int = 3) -> list[ShowPitchIdea] | None:
+    """Batch version of generate_show_pitch() -- one API call returns n
+    distinct concepts instead of one, so a student can browse several
+    ideas side by side and pick whichever fits their slate, rather than
+    clicking "another pitch" repeatedly and losing the earlier ones.
+    Returns None on any failure, same posture as generate_show_pitch()."""
+    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    if not api_key:
+        return None
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        response = client.messages.parse(
+            model="claude-haiku-4-5",
+            max_tokens=2048,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Propose {n} distinct, original TV show concepts for {network_context}, for a "
+                    "business-school portfolio-simulation exercise. Each concept must be genuinely "
+                    "original and clearly different from the others — do not reuse or lightly reskin "
+                    "any existing real or well-known show, and no two should share the same "
+                    "premise or hook. Suggest realistic production parameters (episode count, cost per "
+                    "episode, projected rating, streaming appeal) a student could sanity-check and "
+                    "adjust before greenlighting it."
+                ),
+            }],
+            output_format=ShowPitchBatch,
+        )
+        return response.parsed_output.pitches
     except Exception:
         return None

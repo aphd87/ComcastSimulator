@@ -31,6 +31,13 @@ def render():
     # ── Section 1: Premiere Day Risk ─────────────────────────────────────────
     st.markdown('<div class="section-title">Premiere Day Cash Trough — The March Problem</div>', unsafe_allow_html=True)
 
+    st.caption(
+        "This is a practice sandbox, not part of your score — it isolates just this one mechanic "
+        "(launch day vs. monthly amortization billing, freely adjustable below) so you can see the "
+        "cash-timing effect on its own, before applying the intuition for real in Renewal, where "
+        "premiere month is bundled together with your actual renew/cancel/schedule decisions."
+    )
+
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
          border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">

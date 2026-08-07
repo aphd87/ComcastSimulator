@@ -42,13 +42,19 @@ def render():
 
     slots_used = len(ss.greenlit_ids_this_year)
     slots_left = MAX_NEW_SHOWS_PER_YEAR - slots_used
+    net_display_intro = NETWORK_INFO[ss.active_network]["display_name"]
 
-    st.markdown("""
+    st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
          border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">The Core Decision:</b> Do you put this show on Bravo (linear) or SVOD+?  
-    In 2012, linear wins on immediate cash — faster ad revenue, no subscriber acquisition cost.  
-    By Year 7+, SVOD subscription LTV starts to outpace a declining ad market. Build the P&L for both.
+    💡 <b style="color:#e8eaf0;">The Core Decision:</b> this comparison is a <b>hypothetical</b> —
+    what would this same show concept be worth as a <b>linear</b> show vs. an <b>SVOD+</b> show?
+    In 2012, linear wins on immediate cash — faster ad revenue, no subscriber acquisition cost.
+    By Year 7+, SVOD subscription LTV starts to outpace a declining ad market.
+    <br><br>
+    Clicking "Greenlight This Show" below always adds it to <b>{net_display_intro}'s</b> real
+    roster (whichever network you're currently playing) — it never actually moves to SVOD.
+    The Linear vs. SVOD comparison is purely for building intuition about the trade-off.
     </div>
     """, unsafe_allow_html=True)
 
@@ -56,48 +62,86 @@ def render():
     # Complements AI Pitch Feedback below: that grades a pitch the student
     # already wrote, this proposes a starting concept for a student who's
     # stuck on ideation. Either path leads to the same concept builder below.
-    from utils.ai_grading import api_key_configured, grade_show_concept, generate_show_pitch
+    # Batch version (2026-08-07, per user request): one click proposes
+    # PITCH_BATCH_SIZE distinct concepts at once instead of one at a time,
+    # so a student can browse a small slate of ideas and pick whichever
+    # fits, rather than clicking "another pitch" repeatedly and losing the
+    # earlier ones. Can generate up to slots_left of them since that's the
+    # most a student could plausibly use this year.
+    from utils.ai_grading import api_key_configured, grade_show_concept, generate_show_pitches
+
+    PITCH_BATCH_SIZE = 3
 
     if api_key_configured():
         gp1, gp2 = st.columns([3, 1])
         with gp1:
             if slots_left > 0:
                 st.markdown(
-                    f'<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get an AI-proposed '
-                    f'concept to start from — you can still edit every field below before greenlighting. '
-                    f'You have <b style="color:#e8eaf0;">{slots_left} of {MAX_NEW_SHOWS_PER_YEAR}</b> '
-                    f'greenlight slots left this year, so keep asking for another pitch until one '
-                    f'clicks.</div>',
+                    f'<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get a batch of '
+                    f'AI-proposed concepts to browse — pick one to load into the form below, still '
+                    f'fully editable before greenlighting. You have '
+                    f'<b style="color:#e8eaf0;">{slots_left} of {MAX_NEW_SHOWS_PER_YEAR}</b> '
+                    f'greenlight slots left this year.</div>',
                     unsafe_allow_html=True)
             else:
                 st.markdown(
                     '<div style="font-size:14px;color:#b0b5c4;">You\'ve filled all your greenlight '
-                    'slots for this year — no need for another pitch until next year.</div>',
+                    'slots for this year — no need for more pitches until next year.</div>',
                     unsafe_allow_html=True)
         with gp2:
-            pitch_label = "🎲 Hear Another Pitch" if ss.get("gl_ai_pitch_text") else "🤖 Get an AI Pitch Idea"
+            pitch_label = "🎲 Get 3 More Ideas" if ss.get("gl_ai_pitches") else "🤖 Get 3 AI Pitch Ideas"
             if slots_left > 0 and st.button(pitch_label, key="gl_generate_pitch", use_container_width=True):
-                with st.spinner("Generating a pitch..."):
-                    idea = generate_show_pitch(NETWORK_INFO[ss.active_network]["display_name"])
-                if idea is None:
+                with st.spinner("Generating pitches..."):
+                    ideas = generate_show_pitches(
+                        NETWORK_INFO[ss.active_network]["display_name"], n=PITCH_BATCH_SIZE)
+                if not ideas:
                     st.error("AI pitch generation is temporarily unavailable. Try again later.")
                 else:
-                    st.session_state["gl_show_name"] = idea.show_name
-                    st.session_state["gl_genre"]     = idea.genre if idea.genre in _GENRES else _GENRES[0]
-                    st.session_state["gl_eps"]        = idea.suggested_episodes
-                    st.session_state["gl_ep_cost"]    = idea.suggested_ep_cost_k
-                    st.session_state["gl_rating"]     = idea.suggested_rating
-                    st.session_state["gl_appeal"]     = idea.suggested_svod_appeal
-                    ss.gl_ai_pitch_text = idea.pitch
+                    ss.gl_ai_pitches = ideas
                     st.rerun()
+
+        if slots_left > 0 and ss.get("gl_ai_pitches"):
+            pitch_cols = st.columns(len(ss.gl_ai_pitches))
+            for i, (col, idea) in enumerate(zip(pitch_cols, ss.gl_ai_pitches)):
+                with col:
+                    with st.container(border=True):
+                        st.markdown(
+                            f'<div style="font-size:15px;font-weight:600;color:#e8eaf0;">{idea.show_name}</div>'
+                            f'<span class="badge badge-gray">{idea.genre}</span>'
+                            f'<div style="font-size:13px;color:#c8cad4;margin:6px 0;">{idea.pitch}</div>'
+                            f'<div style="font-size:13px;color:#8b8fa3;font-family:DM Mono,monospace;">'
+                            f'{idea.suggested_episodes} eps · ${idea.suggested_ep_cost_k}K/ep · '
+                            f'rating {idea.suggested_rating:.1f} · SVOD appeal {idea.suggested_svod_appeal}'
+                            f'</div>',
+                            unsafe_allow_html=True)
+                        if st.button("✅ Use This Pitch", key=f"gl_use_pitch_{i}_{idea.show_name}",
+                                     use_container_width=True):
+                            st.session_state["gl_show_name"] = idea.show_name
+                            st.session_state["gl_genre"]     = idea.genre if idea.genre in _GENRES else _GENRES[0]
+                            st.session_state["gl_eps"]        = idea.suggested_episodes
+                            st.session_state["gl_ep_cost"]    = idea.suggested_ep_cost_k
+                            st.session_state["gl_rating"]     = idea.suggested_rating
+                            st.session_state["gl_appeal"]     = idea.suggested_svod_appeal
+                            ss.gl_ai_pitch_text = idea.pitch
+                            st.rerun()
+
         if slots_left > 0 and ss.get("gl_ai_pitch_text"):
             st.markdown(
                 f'<div style="background:#12141a;border:1px solid #252836;border-radius:6px;'
                 f'padding:10px 14px;margin-bottom:10px;font-size:15px;color:#e0e2ea;">'
-                f'💡 <b>AI pitch:</b> {ss.gl_ai_pitch_text}</div>', unsafe_allow_html=True)
+                f'💡 <b>Loaded pitch:</b> {ss.gl_ai_pitch_text}</div>', unsafe_allow_html=True)
 
     # ── Show Concept Builder ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Show Concept Inputs</div>', unsafe_allow_html=True)
+    st.caption(
+        "\"18-49\" is Nielsen's standard ad-buying demo — the age range advertisers pay the most to "
+        "reach, so Projected Rating is really \"how much of that specific audience tunes in,\" not "
+        "raw viewership. These inputs are yours to set independently, but in the real world (and in "
+        "this game's economics) a higher rating rarely comes cheap: top-tier talent, bigger sets, and "
+        "more marketing all cost more, which is why Cost per Episode tends to climb alongside "
+        "Projected Rating for a believable concept — a cheap show promising a mega-hit rating is the "
+        "kind of pitch a real network would be skeptical of."
+    )
 
     with st.container():
         c1,c2,c3 = st.columns(3)
@@ -109,7 +153,10 @@ def render():
             ep_cost   = st.number_input("Cost per Episode ($K)", 100, 5000, 750, step=50,
                                          help="Bravo reality ~$650-900K. Scripted ~$1-2M.", key="gl_ep_cost")
             rating    = st.slider("Projected Rating (18-49)", 0.3, 4.0, 1.2, step=0.1,
-                                   help="Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+", key="gl_rating")
+                                   help="Share of the 18-49 ad-buying demo you expect to reach. "
+                                        "Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+. Chasing a "
+                                        "higher number here usually means paying for it — keep Cost per "
+                                        "Episode realistic for the rating you're claiming.", key="gl_rating")
             mkt_spend = st.slider("Marketing Budget ($M)", 0.0, 10.0, 2.0, step=0.5,
                                    help="Each $1M adds ~1.5% rating lift on linear; also lifts SVOD sub acquisition.", key="gl_mkt_spend")
         with c3:
@@ -297,7 +344,7 @@ def render():
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(pl_card("📺 Linear — Bravo", ACCENT, lin_rows, lin_winner), unsafe_allow_html=True)
+        st.markdown(pl_card(f"📺 Linear — {net_display}", ACCENT, lin_rows, lin_winner), unsafe_allow_html=True)
     with c2:
         st.markdown(pl_card("📱 SVOD+", ACCENT2, svod_rows, svod_winner), unsafe_allow_html=True)
 

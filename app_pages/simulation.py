@@ -298,6 +298,58 @@ def render():
 
 # ── Decisions phase ────────────────────────────────────────────────────────────
 
+def _year_recap_narrative(prev: dict) -> str:
+    """Auto-generated 1-2 sentence strengths/opportunities read on last
+    year's actuals (2026-08-07, per user request) -- the metrics row above
+    shows WHAT happened, this says what it means for this year's calls.
+    Strength = the single top-revenue active show (+ Emmy recognition if
+    any); Opportunity = the single worst active show where cost exceeded
+    revenue, plus any involuntary production-risk setbacks. Deliberately
+    picks one show each, not a full breakdown -- the point is a fast read,
+    not a re-derivation of the Renewal table below."""
+    # .get()-guarded throughout -- a yearly_log entry recorded before this
+    # narrative existed (or before some other field was added) may carry a
+    # "shows" list whose rows are missing "revenue"/"cost"/"name" entirely,
+    # same legacy-entry posture as the Emmy badge above; must render
+    # cleanly, not KeyError (see test_last_year_recap_omits_emmy_badge_for_
+    # legacy_entries_without_the_field).
+    active = [s for s in prev.get("shows", []) if s.get("status") == "active"]
+
+    strengths = []
+    if active:
+        top = max(active, key=lambda s: s.get("revenue", 0))
+        strengths.append(
+            f"<b>{top.get('name', 'A show')}</b> was your strongest earner "
+            f"(${top.get('revenue', 0):.1f}M revenue)"
+        )
+    if prev.get("emmy_wins"):
+        n = prev["emmy_wins"]
+        strengths.append(f"{n} Emmy win{'s' if n != 1 else ''}")
+    elif prev.get("emmy_nominations"):
+        n = prev["emmy_nominations"]
+        strengths.append(f"{n} Emmy nomination{'s' if n != 1 else ''}")
+    strength_line = " and ".join(strengths) if strengths else "no standout performer this year"
+
+    opportunities = []
+    losers = [s for s in active if s.get("cost", 0) > s.get("revenue", 0)]
+    if losers:
+        worst = max(losers, key=lambda s: s.get("cost", 0) - s.get("revenue", 0))
+        opportunities.append(
+            f"<b>{worst.get('name', 'A show')}</b> cost more (${worst.get('cost', 0):.1f}M) than it earned "
+            f"(${worst.get('revenue', 0):.1f}M) — a renewal candidate to reconsider"
+        )
+    risk_events = [s for s in prev.get("shows", []) if s.get("status") == "risk_event"]
+    if risk_events:
+        n = len(risk_events)
+        opportunities.append(f"{n} show{'s' if n != 1 else ''} hit an unplanned production setback")
+    if not opportunities:
+        opportunities.append("no major drags on the portfolio this year")
+    opportunity_line = "; ".join(opportunities)
+
+    return (f'💪 <b style="color:{SUCCESS};">Strength:</b> {strength_line}. '
+            f'🎯 <b style="color:{WARN};">Opportunity:</b> {opportunity_line}.')
+
+
 def _last_year_recap(prev: dict, threshold: float):
     """Pinned strip at the top of Decisions showing last year's actuals —
     otherwise invisible the moment a student advances past Results. Added
@@ -330,6 +382,9 @@ def _last_year_recap(prev: dict, threshold: float):
           <span style="font-size:14px;color:#e0e2ea;">Margin <b style="font-family:DM Mono,monospace;color:{margin_c};">{prev['margin']:.1f}%</b></span>
           {emmy_span}
         </div>
+      </div>
+      <div style="font-size:14px;color:#e0e2ea;margin-top:8px;padding-top:8px;border-top:1px solid #252836;">
+        {_year_recap_narrative(prev)}
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -386,6 +441,10 @@ def _starting_position(net_info, shows, net):
         its current show slate's built-in ratings and costs, run at a default $5M
         marketing spend with no cancellations. It's a baseline for comparison, not an
         official played year (that starts once you simulate Year 1 below).
+        <b style="color:#e8eaf0;">Pass threshold</b> is the minimum OCF margin
+        (OCF ÷ Revenue) {net_info['display_name']} needs to hit by the end of the level
+        to pass — {net_info['pass_threshold']:.0f}% here — so this baseline's own margin
+        tells you how far off the starting slate already is before you make a single decision.
       </div>
       <div style="display:flex;gap:22px;flex-wrap:wrap;">
         <span style="font-size:14px;color:#e0e2ea;">Revenue <b style="font-family:DM Mono,monospace;color:#e8eaf0;">${baseline['rev']:.1f}M</b></span>

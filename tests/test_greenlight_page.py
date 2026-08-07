@@ -16,17 +16,20 @@ from utils.ai_grading import ShowPitchIdea
 from utils.game_state import MAX_NEW_SHOWS_PER_YEAR
 
 
-def _fake_pitch(network_context: str) -> ShowPitchIdea:
-    return ShowPitchIdea(
-        show_name="Test Pitch Show", genre="Reality", pitch="A test pitch.",
-        suggested_episodes=10, suggested_ep_cost_k=500,
-        suggested_rating=1.2, suggested_svod_appeal=70,
-    )
+def _fake_pitches(network_context: str, n: int = 3) -> list[ShowPitchIdea]:
+    return [
+        ShowPitchIdea(
+            show_name=f"Test Pitch Show {i}", genre="Reality", pitch="A test pitch.",
+            suggested_episodes=10, suggested_ep_cost_k=500,
+            suggested_rating=1.2, suggested_svod_appeal=70,
+        )
+        for i in range(n)
+    ]
 
 
 def _greenlight_app(monkeypatch, greenlit_count: int) -> AppTest:
     monkeypatch.setattr(ai_grading, "api_key_configured", lambda: True)
-    monkeypatch.setattr(ai_grading, "generate_show_pitch", _fake_pitch)
+    monkeypatch.setattr(ai_grading, "generate_show_pitches", _fake_pitches)
 
     def script(greenlit_count):
         # AppTest.from_function re-execs this via inspect.getsourcelines as a
@@ -55,7 +58,7 @@ def _greenlight_app(monkeypatch, greenlit_count: int) -> AppTest:
 def test_pitch_button_shown_with_slots_remaining(monkeypatch):
     at = _greenlight_app(monkeypatch, greenlit_count=0)
     labels = [b.label for b in at.button]
-    assert any("Get an AI Pitch Idea" in l for l in labels)
+    assert any("Get 3 AI Pitch Ideas" in l for l in labels)
     text = "\n".join(md.value for md in at.markdown)
     assert f"{MAX_NEW_SHOWS_PER_YEAR} of {MAX_NEW_SHOWS_PER_YEAR}" in text   # all 3 slots still open
     assert "slots left this year" in text
@@ -67,3 +70,26 @@ def test_pitch_button_hidden_once_slots_are_full(monkeypatch):
     assert not any("Pitch" in l for l in labels)
     text = "\n".join(md.value for md in at.markdown)
     assert "filled all your greenlight slots" in text
+
+
+def test_generating_pitches_shows_a_card_per_idea(monkeypatch):
+    at = _greenlight_app(monkeypatch, greenlit_count=0)
+    at.button(key="gl_generate_pitch").click()
+    at.run()
+    assert not at.exception, f"Generating pitches raised: {list(at.exception)}"
+    text = "\n".join(md.value for md in at.markdown)
+    assert text.count("Test Pitch Show") == 3
+    assert any("Use This Pitch" in b.label for b in at.button)
+
+
+def test_using_a_pitch_autofills_the_concept_builder(monkeypatch):
+    at = _greenlight_app(monkeypatch, greenlit_count=0)
+    at.button(key="gl_generate_pitch").click()
+    at.run()
+    at.button(key="gl_use_pitch_1_Test Pitch Show 1").click()
+    at.run()
+    assert not at.exception, f"Using a pitch raised: {list(at.exception)}"
+    assert at.session_state["gl_show_name"] == "Test Pitch Show 1"
+    assert at.session_state["gl_ep_cost"] == 500
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Loaded pitch" in text
