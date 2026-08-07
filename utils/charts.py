@@ -19,9 +19,9 @@ SUCCESS  = "#66bb6a"
 WARN     = "#ffa726"
 TEXT     = "#e8eaf0"
 TEXT2    = "#e0e2ea"
-BRAVO_C  = "#c0392b"
-OXY_C    = "#8e44ad"
-SVOD_C   = "#1a6bb5"
+BRAVO_C  = "#1a6bb5"
+OXY_C    = "#f2c200"
+SVOD_C   = "#8e44ad"
 
 GENRE_COLORS = {
     "Reality":     ACCENT,

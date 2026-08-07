@@ -120,7 +120,7 @@ def render():
             list(network_costs.keys()),
             [round(v,2) for v in network_costs.values()],
             "Content Cost by Network", height=220)
-        fig_cost.update_traces(marker_colors=["#c0392b","#8e44ad","#1a6bb5"][:len(network_costs)])
+        fig_cost.update_traces(marker_colors=["#1a6bb5","#f2c200","#8e44ad"][:len(network_costs)])
         st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar":False})
 
     st.divider()

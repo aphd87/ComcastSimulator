@@ -85,7 +85,7 @@ def render():
 
         horizon = list(range(year, year + 6))
         fig_decay = go.Figure()
-        palette = [ACCENT, ACCENT2, SUCCESS, WARN, DANGER, "#8e44ad", "#1a6bb5", "#c0392b"]
+        palette = [ACCENT, ACCENT2, SUCCESS, WARN, DANGER, "#f2c200", "#8e44ad", "#1a6bb5"]
         for i, (genre, gshows) in enumerate(sorted(genre_groups.items())):
             avg_rating   = sum(s.rating for s in gshows) / len(gshows)
             avg_ip       = sum(s.ip_score for s in gshows) / len(gshows)

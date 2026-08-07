@@ -554,7 +554,7 @@ else:
     _end_year = {n: LEVEL_START_YEAR[n] + YEARS_PER_LEVEL - 1 for n in NETWORK_ORDER}
     LEVEL_BRIEFS = {
         "oxygen": {
-            "color": "#8e44ad",
+            "color": "#f2c200",
             "objective": f"Level 1 — {LEVEL_START_YEAR['oxygen']}–{_end_year['oxygen']}. Save a sinking channel.",
             "mission": (
                 f"It's {LEVEL_START_YEAR['oxygen']}. Oxygen is bleeding — 20 true crime & reality shows, "
@@ -573,7 +573,7 @@ else:
             ],
         },
         "bravo": {
-            "color": "#c0392b",
+            "color": "#1a6bb5",
             "objective": f"Level 2 — {LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}. You've earned Bravo.",
             "mission": (
                 f"It's {LEVEL_START_YEAR['bravo']}. You now run both Oxygen and Bravo: 40 shows, "
@@ -591,7 +591,7 @@ else:
             ],
         },
         "peacock": {
-            "color": "#1a6bb5",
+            "color": "#8e44ad",
             "objective": f"Level 3 — {LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}. Launch Peacock.",
             "mission": (
                 f"It's {LEVEL_START_YEAR['peacock']}. Add SVOD to your portfolio. Peacock content uses "

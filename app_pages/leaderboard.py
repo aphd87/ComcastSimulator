@@ -425,8 +425,8 @@ def render():
                 st.markdown(f"""
                 <div style="background:#1a1d26;border:2px solid {border_c};border-radius:10px;
                      padding:16px;text-align:center;">
-                  <div style="font-size:22px;margin-bottom:4px;">{info['emoji']}</div>
-                  <div style="font-family:DM Mono,monospace;font-size:15px;font-weight:600;
+                  <div style="font-size:40px;margin-bottom:6px;">{info['emoji']}</div>
+                  <div style="font-family:DM Mono,monospace;font-size:20px;font-weight:700;
                        color:{info['color2']};">{info['display_name']}</div>
                   <div style="font-family:DM Serif Display,serif;font-size:28px;
                        color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>

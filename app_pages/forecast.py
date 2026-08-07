@@ -13,9 +13,9 @@ from utils.charts import (
 )
 
 PHASE_COLORS = {
-    "Phase 1 — Oxygen":           "#8e44ad",
-    "Phase 2 — Oxygen + Bravo":   "#c0392b",
-    "Phase 3 — Full Portfolio":   "#1a6bb5",
+    "Phase 1 — Oxygen":           "#f2c200",
+    "Phase 2 — Oxygen + Bravo":   "#1a6bb5",
+    "Phase 3 — Full Portfolio":   "#8e44ad",
 }
 
 
@@ -225,10 +225,10 @@ def render():
     cur_year = ss.get("year", 1)
 
     events = [
-        (1,              "🔮", "Oxygen slate launched — 20 shows, $95M budget, 45M cable subs"),
+        (1,              "🔍", "Oxygen slate launched — 20 shows, $95M budget, 45M cable subs"),
         (2,              "🔄", "Year 2 renewals — cancel bottom-quartile ROI shows, redeploy budget"),
         (3,              "✅", f"OCF threshold met — board reviews expansion case for Bravo (Yr {bravo_year})"),
-        (bravo_year,     "📺", f"Bravo acquired — reality slate, avg $750K/ep, 12-mo amortization"),
+        (bravo_year,     "🍸", f"Bravo acquired — reality slate, avg $750K/ep, 12-mo amortization"),
         (bravo_year+1,   "📊", "Cross-network portfolio management begins — dual P&L (Oxygen + Bravo)"),
         (svod_year-1,    "📱", f"Peacock business case built — green light model shows streaming wins (Yr {svod_year})"),
         (svod_year,      "🦚", f"Peacock launched — first original greenlit for streaming-first release"),

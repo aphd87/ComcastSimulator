@@ -500,9 +500,9 @@ NETWORK_INFO = {
             "premium CPMs well above cable averages. The challenge in 2012: diversify the "
             "content mix beyond reality while cord-cutting begins eroding the subscriber base."
         ),
-        "color":  "#c0392b",
-        "color2": "#e74c3c",
-        "emoji":  "📺",
+        "color":  "#1a6bb5",
+        "color2": "#2980b9",
+        "emoji":  "🍸",
         "budget_base": 220,
         "ep_cost_range": (400, 1200),
         "pass_threshold": 15.0,
@@ -527,9 +527,9 @@ NETWORK_INFO = {
             "forces portfolio-level thinking: do you cross-promote? Share marketing budgets? "
             "Or run each P&L in isolation?"
         ),
-        "color":  "#8e44ad",
-        "color2": "#9b59b6",
-        "emoji":  "🔮",
+        "color":  "#f2c200",
+        "color2": "#ffdd55",
+        "emoji":  "🔍",
         "budget_base": 95,
         "ep_cost_range": (250, 400),
         "pass_threshold": 12.0,
@@ -555,8 +555,8 @@ NETWORK_INFO = {
             "adds, churn reduction, and 36-month LTV. Every dollar spent on Peacock competes "
             "directly with dollars that would stabilize Bravo and Oxygen's declining linear base."
         ),
-        "color":  "#1a6bb5",
-        "color2": "#2980b9",
+        "color":  "#8e44ad",
+        "color2": "#9b59b6",
         "emoji":  "🦚",
         "budget_base": 150,
         "ep_cost_range": (800, 3000),
