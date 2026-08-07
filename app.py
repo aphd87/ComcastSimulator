@@ -577,7 +577,12 @@ elif ss.active_section == "leaderboard":
         if st.button("← Back to Sign In", key="leaderboard_back_to_signin"):
             ss.active_section = None
             st.rerun()
-    st.markdown('<h2 style="margin-bottom:4px;">🏆 Leaderboard</h2>', unsafe_allow_html=True)
+        # This <h2> only renders for the not-registered path -- a registered
+        # user already has "🏆 Leaderboard" as the active/highlighted tab in
+        # the nav row above (see the `if ss.registered:` block), so a second
+        # "Leaderboard" heading directly under it was pure redundancy
+        # (2026-08-07, per user-caught duplication).
+        st.markdown('<h2 style="margin-bottom:4px;">🏆 Leaderboard</h2>', unsafe_allow_html=True)
     from app_pages.leaderboard import render as render_leaderboard
     render_leaderboard()
 
