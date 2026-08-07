@@ -19,6 +19,7 @@ FERPA Note: No student PII is collected. Only team names (student-chosen pseudon
 Leaderboard stores: team_name, network, attempt#, score, timestamp, pass/fail.
 """
 import streamlit as st
+import pandas as pd
 
 st.set_page_config(
     page_title="The Slate — Media Portfolio Simulation",
@@ -30,14 +31,17 @@ st.set_page_config(
 import sys, copy
 sys.path.insert(0, ".")
 
+from dataclasses import asdict
+
 from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
     get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS,
-    YEARS_PER_LEVEL, LEVEL_START_YEAR,
+    YEARS_PER_LEVEL, LEVEL_START_YEAR, save_live_state, load_live_state,
 )
-from utils.models import annual_budget, cable_subs, distribution_revenue
+from utils.models import annual_budget, cable_subs, distribution_revenue, Show
+from utils.sports_models import SportsContract
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 
 # st.iframe (added in a newer Streamlit release than st.components.v1.html)
@@ -114,6 +118,7 @@ def init_state():
         "class_section":   "",
         "class_abbrev":    "",
         "registered":      False,
+        "team_role":       "driver",   # "driver" (makes decisions) or "viewer" (Follow Along, read-only) — see utils/game_state.py's Live Team State section
         "active_section":  None,   # "leaderboard" / "tv" / "movies" — chosen on the post-registration landing screen
         "active_network":  "oxygen",
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
@@ -137,6 +142,110 @@ def init_state():
 init_state()
 ss = st.session_state
 
+# ── Driver/Viewer live-state sync (2026-08-07) ──────────────────────────────
+# A team spread across multiple laptops: one member registers as Driver and
+# plays for real; everyone else registers Follow Along (same School/Class/
+# Team Name) and reads the Driver's live TV/Streaming state read-only. See
+# utils/game_state.py's save_live_state/load_live_state for the storage
+# side — this module owns turning ss's actual Show/SportsContract objects
+# and sets into/out of the JSON-safe dict those functions persist. Scoped
+# to TV/Streaming only for now; Movies isn't wired into this yet.
+LIVE_STATE_SCALAR_KEYS = (
+    "active_network", "year", "sim_phase", "level_budget", "mkt_budget",
+    "total_shows_greenlit",
+)
+
+def _build_live_snapshot(ss) -> dict:
+    """Serializes the Driver's in-progress TV/Streaming decision state into
+    a JSON-safe dict. Key list mirrors exactly what app_pages/simulation.py
+    reads/writes each render (its _init() and the Restart-Level reset
+    blocks in app.py/simulation.py define the canonical set)."""
+    snap = {k: ss.get(k) for k in LIVE_STATE_SCALAR_KEYS}
+    snap["cancelled_shows"]         = sorted(ss.get("cancelled_shows", set()))
+    snap["renewal_decisions"]       = ss.get("renewal_decisions", {})
+    snap["research_revealed"]       = ss.get("research_revealed", {})
+    snap["emergency_shock_years"]   = sorted(ss.get("emergency_shock_years", set()))
+    snap["greenlit_ids_this_year"]  = sorted(ss.get("greenlit_ids_this_year", set()))
+    snap["greenlit_ids_this_level"] = sorted(ss.get("greenlit_ids_this_level", set()))
+    snap["sports_bid_log"]          = {str(y): v for y, v in ss.get("sports_bid_log", {}).items()}
+    snap["sports_contracts"]        = [asdict(c) for c in ss.get("sports_contracts", [])]
+    snap["yearly_log"]              = ss.get("yearly_log", [])
+    snap["oxygen_shows"]            = [asdict(s) for s in ss.oxygen_shows]
+    snap["bravo_shows"]             = [asdict(s) for s in ss.bravo_shows]
+    snap["peacock_shows"]           = [asdict(s) for s in ss.get("peacock_shows", [])]
+    return snap
+
+
+def _apply_live_snapshot(ss, snap: dict) -> None:
+    """Inverse of _build_live_snapshot — hydrates a Follow Along viewer's
+    session_state from the Driver's last-saved snapshot."""
+    for k in LIVE_STATE_SCALAR_KEYS:
+        if k in snap:
+            ss[k] = snap[k]
+    ss.cancelled_shows         = set(snap.get("cancelled_shows", []))
+    ss.renewal_decisions       = snap.get("renewal_decisions", {})
+    ss.research_revealed       = snap.get("research_revealed", {})
+    ss.emergency_shock_years   = set(snap.get("emergency_shock_years", []))
+    ss.greenlit_ids_this_year  = set(snap.get("greenlit_ids_this_year", []))
+    ss.greenlit_ids_this_level = set(snap.get("greenlit_ids_this_level", []))
+    # JSON always stringifies dict keys -- sports_bid_log is keyed by year (int).
+    ss.sports_bid_log   = {int(y): v for y, v in snap.get("sports_bid_log", {}).items()}
+    ss.sports_contracts = [SportsContract(**c) for c in snap.get("sports_contracts", [])]
+    ss.yearly_log       = snap.get("yearly_log", [])
+    ss.oxygen_shows      = [Show(**s) for s in snap.get("oxygen_shows", [])]
+    ss.bravo_shows        = [Show(**s) for s in snap.get("bravo_shows", [])]
+    ss.peacock_shows       = [Show(**s) for s in snap.get("peacock_shows", [])]
+
+
+def _render_follow_along_summary(ss, net_info, net):
+    """Read-only replacement for render_simulation()'s interactive
+    Financing/Renewal/Greenlighting/Scheduling widgets, shown to Follow
+    Along teammates instead. Deliberately doesn't reuse those widget-heavy
+    pages (disabling ~27 live decision widgets there would risk the
+    Driver's actual, tested gameplay logic) -- this just displays the
+    Driver's current state as plain tables/metrics."""
+    st.markdown(
+        '<div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;'
+        'border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">'
+        '👀 <b style="color:#e8eaf0;">Follow Along mode:</b> you\'re viewing your Driver\'s live '
+        'decisions, read-only. Nothing you do here is saved — only the Driver\'s choices count.'
+        '</div>', unsafe_allow_html=True
+    )
+    if st.button("🔄 Refresh — pull the Driver's latest state", use_container_width=True):
+        st.rerun()
+
+    mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+    mcol1.metric("Year", f"{ss.year} of {YEARS_PER_LEVEL}")
+    mcol2.metric("Phase", {"decisions": "▶ Decisions", "results": "📊 Results",
+                            "complete": "✅ Complete"}.get(ss.sim_phase, ss.sim_phase))
+    mcol3.metric("Level Budget", f"${ss.level_budget:.1f}M" if ss.level_budget else "—")
+    mcol4.metric("Marketing Spend", f"${ss.mkt_budget:.1f}M")
+
+    shows = ss.oxygen_shows[:]
+    if net in ("bravo", "peacock"):
+        shows += ss.bravo_shows
+    if net == "peacock":
+        shows += ss.get("peacock_shows", [])
+
+    if not shows:
+        st.caption("No shows in this network's slate yet.")
+        return
+
+    st.markdown('<div class="section-title">Current Slate</div>', unsafe_allow_html=True)
+    rows = []
+    for s in shows:
+        if s.id in ss.cancelled_shows:
+            status = "❌ Cancelled"
+        elif s.id in ss.get("greenlit_ids_this_level", set()):
+            status = "🎬 Greenlit"
+        else:
+            status = ss.renewal_decisions.get(s.id, "—")
+        rows.append({
+            "Show": s.name, "Genre": s.genre, "Network": s.network,
+            "Rating": s.rating, "Ep Cost ($K)": s.ep_cost_k, "Status": status,
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=min(400, 40 + 35 * len(rows)))
+
 # ── TOP HEADER — replaces the old left sidebar (2026-07-30, per explicit user
 # request: "We don't need a left hand panel, but people should be able to
 # sign in and see leaderboards for TV and movies respectively"). Registration
@@ -157,12 +266,20 @@ st.markdown(
 if ss.registered:
     tcol1, tcol2 = st.columns([5, 1])
     with tcol1:
+        role_badge = (
+            '<span style="font-size:13px;color:#0b0c10;background:#66bb6a;border-radius:4px;'
+            'padding:2px 8px;margin-left:10px;font-family:DM Mono,monospace;">🎮 DRIVER</span>'
+            if ss.team_role == "driver" else
+            '<span style="font-size:13px;color:#0b0c10;background:#ffa726;border-radius:4px;'
+            'padding:2px 8px;margin-left:10px;font-family:DM Mono,monospace;">👀 FOLLOW ALONG · read-only</span>'
+        )
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
             f'<span style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
             f'&nbsp;&nbsp;<span style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</span>'
             f'&nbsp;&nbsp;<span style="font-size:14px;color:#e0e2ea;">{ss.school} · {ss.class_section}</span>'
+            f'{role_badge}'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -308,6 +425,15 @@ if not ss.registered and ss.active_section != "leaderboard":
                 help="A short course code, if your class has one. Optional — just an extra way "
                      "for your instructor to find your team later."
             )
+        role_label = st.radio(
+            "Your role for this team", ["🎮 Driver — I'll make the decisions", "👀 Follow Along — view only"],
+            key="role_input_field", horizontal=True,
+            help="Playing on multiple laptops as one team? One person registers as Driver and makes "
+                 "every decision; everyone else registers Follow Along under the exact same University/"
+                 "School/Team Name to watch the Driver's choices live, read-only, on their own screen. "
+                 "If it's just you, pick Driver."
+        )
+        st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
         if st.button("Register Team →", use_container_width=True, type="primary"):
             if not team_input.strip():
                 st.error("Please enter a team name.")
@@ -324,6 +450,7 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.school        = f"{college_input.strip()}, {university_input.strip()}"
                 ss.class_section = f"{semester_input.strip()} — {class_title_input.strip()}"
                 ss.class_abbrev  = class_abbrev_input.strip()
+                ss.team_role     = "driver" if role_label.startswith("🎮") else "viewer"
                 ss.registered    = True
                 st.rerun()
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
@@ -482,6 +609,14 @@ elif ss.active_section == "movies":
 
 else:
     # ── Registered — show active TV network dashboard ───────────────────────────
+    # Follow Along teammates read the Driver's live state before anything else
+    # renders, so net/net_info/the level brief/etc. below all reflect the
+    # Driver's actual choices, not this viewer's own stale local defaults.
+    if ss.team_role == "viewer":
+        _snap = load_live_state(ss.team_name, ss.school, ss.class_section)
+        if _snap:
+            _apply_live_snapshot(ss, _snap)
+
     net      = ss.active_network
     net_info = NETWORK_INFO[net]
     attempts = get_attempt_count(ss.team_name, net, ss.school, ss.class_section)
@@ -654,7 +789,10 @@ else:
     from app_pages.forecast   import render as render_forecast
 
     with tabs[0]:
-        render_simulation()
+        if ss.team_role == "viewer":
+            _render_follow_along_summary(ss, net_info, net)
+        else:
+            render_simulation()
 
     with tabs[1]:
         render_finance()
@@ -665,3 +803,9 @@ else:
     with tabs[3]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         _render_theory_grid(category="tv")
+
+    # Driver's state is saved once at the very end of this run, after every
+    # decision widget above has had a chance to mutate ss for this rerun --
+    # Follow Along teammates' next Refresh click picks up exactly this.
+    if ss.team_role == "driver":
+        save_live_state(ss.team_name, ss.school, ss.class_section, _build_live_snapshot(ss))

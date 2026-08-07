@@ -31,3 +31,14 @@ FREE_NAVIGATION = true
 ```
 
 Useful for a "homework, then class" structure: assign Oxygen as homework so students arrive familiar with the mechanics, then use one class period to work through both Bravo and Peacock — with `FREE_NAVIGATION` on, a student can start class on Bravo (or skip straight to Peacock) instead of being blocked behind whatever they did or didn't finish on Oxygen at home. All three networks' show slates are seeded for every team at registration regardless of play order, so jumping ahead is mechanically safe. Attempt history, official scores, and leaderboard rankings are unaffected — this only changes which levels are clickable, not how they're scored. Same read-once-at-startup caveat as `YEARS_PER_LEVEL`: restart (or wait for the next redeploy) after changing it.
+
+## Playing as a team across multiple laptops (Driver / Follow Along)
+
+Added 2026-08-07. A team no longer has to huddle around one laptop: at registration, each teammate picks a role —
+
+- **🎮 Driver** — makes every real decision. Exactly one person per team should be the Driver.
+- **👀 Follow Along** — watches the Driver's choices live, read-only, on their own screen.
+
+Everyone on the team registers with the *identical* University/School/Team Name (that's the whole link — no accounts, still FERPA-safe). A Follow Along teammate's screen shows the Driver's current year, budget, and show slate, plus a "🔄 Refresh" button to manually pull the Driver's latest state — there's no automatic live-polling, so a Follow Along screen only updates when that button (or any other interaction on their own page) is clicked.
+
+Scoped to TV/Streaming only for now — Movies doesn't have Driver/Follow Along yet. If no teammate has registered as Driver, Follow Along shows an empty/default state rather than erroring; nothing bad happens if a Follow Along teammate registers before their Driver has started.

@@ -512,6 +512,55 @@ def get_team_network_status(team_name: str, school: str = "", class_section: str
         prev_can_advance = status[net]["can_advance"]
     return status
 
+# ── Live Team State (Driver/Viewer sync, 2026-08-07) ────────────────────────────
+# Lets a team spread across multiple laptops share one in-progress decision
+# state: one member registers as "Driver" and plays for real, everyone else
+# registers as "Follow Along" (same School/Class/Team Name — that triple is
+# the whole link, no accounts) and reads the Driver's live state read-only.
+# Deliberately dumb storage: this module only knows JSON-safe dicts, never
+# Show/SportsContract dataclasses or Python sets directly — the same
+# separation record_attempt() already has from Show objects (callers pass
+# plain `details`/`slate_summary` dicts). app.py owns serializing its own
+# session_state into/out of the snapshot dict these functions persist.
+TEAM_STATE_FILE = Path("team_state.json")
+
+
+def _team_key(team_name: str, school: str, class_section: str) -> str:
+    return f"{school}||{class_section}||{team_name}"
+
+
+def _load_team_states() -> dict:
+    if not TEAM_STATE_FILE.exists():
+        return {}
+    try:
+        with open(TEAM_STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_live_state(team_name: str, school: str, class_section: str, snapshot: dict) -> None:
+    """Persist a Driver's in-progress decision state so Follow Along
+    teammates on other devices/laptops can catch up to it. `snapshot` must
+    already be JSON-safe (sets -> lists, dataclasses -> dicts) — this
+    function is pure storage, it doesn't know the shape of a simulation."""
+    states = _load_team_states()
+    states[_team_key(team_name, school, class_section)] = {
+        "updated_at": time.time(),
+        "state":      snapshot,
+    }
+    with open(TEAM_STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(states, f)
+
+
+def load_live_state(team_name: str, school: str, class_section: str) -> Optional[dict]:
+    """Returns the Driver's last-saved snapshot dict, or None if this team
+    has no Driver state saved yet (e.g. a Follow Along teammate registered
+    before the Driver made their first move)."""
+    entry = _load_team_states().get(_team_key(team_name, school, class_section))
+    return entry["state"] if entry else None
+
+
 # ── Network identity ──────────────────────────────────────────────────────────
 NETWORK_INFO = {
     "bravo": {
