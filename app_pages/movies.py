@@ -795,8 +795,10 @@ def _decisions(ss):
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">2 · Greenlight the Concept</div>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Both budget and P&A spend are cash out today, before any '
-        'revenue visibility — unlike Day 1\'s amortized TV cost.</p>', unsafe_allow_html=True)
+        '<p class="text-xs text-ink2 mb-2">Every dollar of Production Budget and P&A you commit below is '
+        'paid in full, upfront — before you know whether the movie makes a cent back. That\'s different '
+        'from TV/Streaming (Day 1), where a show\'s production cost is spread out and expensed gradually '
+        'over several years (amortized) instead of hitting all at once.</p>', unsafe_allow_html=True)
 
     left, right = st.columns([3, 2])
     d = ss.movie_draft
