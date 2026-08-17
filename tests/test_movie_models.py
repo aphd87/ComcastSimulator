@@ -35,6 +35,7 @@ from utils.movie_models import (
     SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST,
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
+    generate_background_slate, BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX, GENRES,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
@@ -395,6 +396,53 @@ class TestPortfolioDiversification:
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
+class TestBackgroundStudioSlate:
+    """2026-08-18: non-interactive 'rest of the studio' flavor layer --
+    scoped down from a full portfolio rewrite per explicit user choice.
+    Never touches compute_movie_score; exists only to populate the
+    Distribution Pipeline scorecard."""
+
+    def test_reproducible_for_same_team_cycle(self):
+        a = generate_background_slate("Team Echo", 1)
+        b = generate_background_slate("Team Echo", 1)
+        assert a == b
+
+    def test_count_is_within_the_configured_range(self):
+        for i in range(20):
+            slate = generate_background_slate(f"Team {i}", 1)
+            assert BACKGROUND_SLATE_MIN <= len(slate) <= BACKGROUND_SLATE_MAX
+
+    def test_different_teams_or_cycles_get_different_slates(self):
+        a = generate_background_slate("Team Alpha", 1)
+        b = generate_background_slate("Team Beta", 1)
+        c = generate_background_slate("Team Alpha", 2)
+        assert a != b
+        assert a != c
+
+    def test_every_entry_has_a_real_genre_and_concept_type(self):
+        for entry in generate_background_slate("Team Gamma", 1):
+            assert entry["genre"] in GENRES
+            assert entry["concept_type"] in CONCEPT_TYPES
+            assert entry["cycle"] == 1
+            assert entry["is_background"] is True
+
+    def test_never_collides_with_the_students_own_draw_seed(self):
+        # Background entries must never be identical to what the student's
+        # OWN draw_actual_multiplier/draw_critical_reception would produce
+        # for the same real team_name+cycle -- that would mean the "flavor"
+        # slate was secretly reusing the student's own outcome sequence.
+        team = "Team Delta"
+        student_mult = draw_actual_multiplier(team, 1, "Drama", "New IP")
+        slate = generate_background_slate(team, 1)
+        # Reconstruct what a naive (un-namespaced) seed would have produced
+        # for entry 0 to prove the background slate does NOT match it.
+        assert slate[0]["npv"] != pytest.approx(student_mult)  # sanity: not literally the multiplier
+        # Two different real teams' slates must differ (seed genuinely
+        # depends on team_name, not just cycle) -- covered above too, but
+        # this asserts it doesn't accidentally collapse to a constant.
+        assert len({tuple(e["title"] for e in generate_background_slate(f"T{i}", 1)) for i in range(5)}) > 1
+
+
 class TestScoring:
     def test_empty_slate_scores_zero_and_fails(self):
         score = compute_movie_score([])

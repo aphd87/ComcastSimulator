@@ -20,6 +20,7 @@ from utils.movie_models import (
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
     SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST, STAR_POWER_COST_PER_POINT_M,
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
+    generate_background_slate,
     draw_production_trouble, draw_ancillary_surprise,
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
@@ -104,16 +105,19 @@ def _cycle_years_label(cycle: int) -> str:
     return f"Year {start}" if start == end else f"Years {start}-{end}"
 
 
-def _current_distribution_window(project: "MovieProject", months_elapsed: float) -> str:
+def _current_distribution_window(window_days: int, months_elapsed: float, is_licensed_out: bool = False) -> str:
     """Which real distribution window a resolved movie is sitting in RIGHT
     NOW, given how many months have elapsed since its own release -- reuses
     the exact window boundaries MovieProject.windowed_cashflows() already
-    computes for that project (window_days()-derived theatrical exclusivity,
-    then PVOD, then Pay-1 streaming/library), so this never drifts out of
-    sync with the real financial engine. 2026-08-18, per explicit user
-    request for a slate-wide scorecard showing where each movie actually is
-    in its distribution run."""
-    window_mo = project.window_days() / 30.0
+    computes (window_days()-derived theatrical exclusivity, then PVOD, then
+    Pay-1 streaming/library), so this never drifts out of sync with the
+    real financial engine. Takes window_days/is_licensed_out directly
+    (rather than a full MovieProject) so it works identically for the
+    student's own reconstructed project AND the lightweight background-
+    slate dicts from generate_background_slate(), neither of which need to
+    share a type. 2026-08-18, per explicit user request for a slate-wide
+    scorecard showing where each movie actually is in its distribution run."""
+    window_mo = window_days / 30.0
     if months_elapsed < 1.5:
         return "🎬 Theatrical (Opening)"
     if months_elapsed < window_mo + 1.0:
@@ -121,7 +125,7 @@ def _current_distribution_window(project: "MovieProject", months_elapsed: float)
     if months_elapsed < window_mo + 3.0:
         return "📀 PVOD / Premium Rental"
     if months_elapsed < 24.0:
-        return "📡 Licensed Out (Pay-1)" if project.is_licensing_out() else "📡 Pay-1 Streaming (Peacock)"
+        return "📡 Licensed Out (Pay-1)" if is_licensed_out else "📡 Pay-1 Streaming (Peacock)"
     return "🗄️ Library / Deep Catalog"
 
 
@@ -262,27 +266,42 @@ def _resolve_talent_cycle_transitions(ss):
 
 def _section_distribution_pipeline(ss):
     """Slate-wide scorecard, rendered before Studio Partnerships -- one row
-    per movie greenlit so far this level, showing where it actually sits in
-    its distribution run right now (not a hypothetical), whether it earned
-    theme-park/merch revenue, and a Sequel Potential signal. 2026-08-18, per
-    explicit user request ("is there a scorecard... so we can see where each
-    movie is from year to year in the distribution run... is there a way to
-    tabulate this?"). Reuses each project's own real windowed_cashflows()
-    boundaries (see _current_distribution_window) rather than inventing a
-    parallel timeline, so it can never drift out of sync with the actual
-    financial engine. Only renders once at least one movie has real results
-    -- nothing to tabulate before the first Simulate."""
-    if not ss.movie_log:
-        return
+    per movie in the studio's pipeline this level, showing where it
+    actually sits in its distribution run right now (not a hypothetical),
+    whether it earned theme-park/merch revenue, and a Sequel Potential
+    signal. 2026-08-18, per explicit user request ("is there a scorecard...
+    so we can see where each movie is from year to year in the distribution
+    run... is there a way to tabulate this?").
 
+    Two row sources, clearly distinguished by a Slate column:
+    - "Yours": the student's own real greenlit-and-simulated movies
+      (ss.movie_log) -- reuses each project's own real windowed_cashflows()
+      boundaries via _current_distribution_window, never a parallel
+      timeline, so it can't drift out of sync with the financial engine.
+    - "Studio": a non-interactive background slate (generate_background_
+      slate) for every year through the current cycle -- per the same
+      conversation's follow-up request ("in year 1, there should be 5-10
+      movies already slated to go out that year... students get to review
+      another 5-10 the following year... begin to see some of them
+      bloom"), scoped down from a full portfolio-rewrite to this
+      lightweight flavor layer (explicit user choice over the larger
+      option) -- these never affect compute_movie_score, purely context so
+      the studio's slate looks and feels busy around the one real bet the
+      student is actually making each cycle.
+
+    Renders from Cycle 1 onward regardless of whether the student has
+    simulated anything yet -- the background slate alone is enough to show
+    "movies already slated to go out this year"."""
     st.markdown('<div class="section-title">Distribution Pipeline — Slate Scorecard</div>', unsafe_allow_html=True)
-    st.caption("Where every movie you've released so far actually sits in its distribution run right "
-               "now, based on real elapsed time since each one's own release — not a hypothetical.")
+    st.caption("Where every movie in the studio's pipeline actually sits in its distribution run right "
+               "now, based on real elapsed time since each one's own release. \"Yours\" is your own "
+               "greenlit slate; \"Studio\" is the rest of the studio's non-interactive background slate "
+               "for context — it never affects your score.")
 
-    rows = []
+    rows = []   # list of (cycle, row_dict) so the final sort is numeric, not lexical on the year label
     seen_genres_with_sequel = {r["project_kwargs"]["genre"] for r in ss.movie_log
                                 if r["project_kwargs"]["concept_type"] == "Sequel"}
-    for entry in sorted(ss.movie_log, key=lambda r: r["cycle"]):
+    for entry in ss.movie_log:
         project = MovieProject(**entry["project_kwargs"])
         months_elapsed = (ss.movie_cycle - entry["cycle"]) * YEARS_PER_CYCLE * 12.0
         sequel_potential = (
@@ -290,17 +309,35 @@ def _section_distribution_pipeline(ss):
                          and project.genre not in seen_genres_with_sequel)
             else "—"
         )
-        rows.append({
+        rows.append((entry["cycle"], {
+            "Slate":             "Yours",
             "Year":              _cycle_years_label(entry["cycle"]),
             "Title":             project.title,
             "Genre / Concept":   f"{project.genre} ({project.concept_type})",
-            "Current Window":    _current_distribution_window(project, months_elapsed),
+            "Current Window":    _current_distribution_window(project.window_days(), months_elapsed,
+                                                                project.is_licensing_out()),
             "NPV":               _fmt_money(entry["npv"]),
             "Theme Park / Merch": f"${entry['theme_park']:.1f}M" if entry.get("theme_park", 0) > 0 else "—",
             "Sequel Potential":  sequel_potential,
-        })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
-                 height=min(300, 40 + 35 * len(rows)))
+        }))
+
+    for cyc in range(1, ss.movie_cycle + 1):
+        for bg in generate_background_slate(ss.team_name, cyc):
+            months_elapsed = (ss.movie_cycle - bg["cycle"]) * YEARS_PER_CYCLE * 12.0
+            rows.append((cyc, {
+                "Slate":             "Studio",
+                "Year":              _cycle_years_label(bg["cycle"]),
+                "Title":             bg["title"],
+                "Genre / Concept":   f"{bg['genre']} ({bg['concept_type']})",
+                "Current Window":    _current_distribution_window(bg["window_days"], months_elapsed),
+                "NPV":               _fmt_money(bg["npv"]),
+                "Theme Park / Merch": f"${bg['theme_park']:.1f}M" if bg.get("theme_park", 0) > 0 else "—",
+                "Sequel Potential":  "—",
+            }))
+
+    rows.sort(key=lambda cr: (cr[0], cr[1]["Slate"]))
+    st.dataframe(pd.DataFrame([r for _, r in rows]), use_container_width=True, hide_index=True,
+                 height=min(400, 40 + 35 * len(rows)))
     st.divider()
 
 

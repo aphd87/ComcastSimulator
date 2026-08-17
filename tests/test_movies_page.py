@@ -721,10 +721,17 @@ def test_last_cycle_recap_absent_at_cycle_1_with_no_prior_outcome():
 
 
 # ── Distribution Pipeline scorecard (2026-08-18) ─────────────────────────────
-def test_distribution_pipeline_scorecard_absent_with_no_prior_movies():
+def test_distribution_pipeline_scorecard_shows_background_slate_even_before_any_real_movie():
+    # 2026-08-18: renders from Cycle 1 regardless of whether the student has
+    # simulated anything yet -- the non-interactive background slate alone
+    # ("movies already slated to go out this year") is enough to populate it.
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
-    assert "Distribution Pipeline" not in text
+    assert "Distribution Pipeline" in text
+    assert len(at.dataframe) >= 1
+    df = at.dataframe[0].value
+    assert len(df) >= 5   # BACKGROUND_SLATE_MIN
+    assert set(df["Slate"]) == {"Studio"}   # no real movie yet -- only background rows
 
 
 def test_distribution_pipeline_scorecard_shows_prior_movie():

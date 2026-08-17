@@ -1392,3 +1392,70 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
         "avg_ra_npv_m":             round(avg_ra_npv, 2),
         "passed":                   avg_ra_npv > 0,   # pass/fail gate: positive risk-adjusted NPV, not a fixed margin %
     }
+
+
+# ── Background Studio Slate — non-interactive "rest of the studio" flavor ──
+# 2026-08-18, per user request for a studio that feels alive year to year:
+# "in year 1, there should be 5-10 movies already slated to go out that
+# year... students get to review another 5-10 the following year... begin
+# to see some of them bloom." Scoped down from a full portfolio rewrite
+# (many simultaneous student-managed projects, a genuinely different turn
+# engine) to a lightweight, PURELY non-interactive background layer,
+# confirmed with the user: these movies are never decided by the student,
+# never touch compute_movie_score, and exist only to populate the
+# Distribution Pipeline scorecard so the studio's slate looks and feels
+# busy around the one real bet the student is actually making each cycle.
+# Fully deterministic (seeded off team_name+cycle, same posture as every
+# other draw_* function in this file) -- no persistence needed, regenerable
+# identically on every render.
+BACKGROUND_SLATE_MIN = 5
+BACKGROUND_SLATE_MAX = 10
+# A small curated word bank for flavor titles -- deliberately generic/
+# fictional-sounding (no real-movie-title collisions), same posture as
+# TALENT_PARTNERS/RIVAL_STUDIOS being fictional.
+BACKGROUND_TITLE_WORDS_A = ["Midnight", "Silver", "Crimson", "Iron", "Velvet", "Golden", "Broken",
+                             "Northern", "Hollow", "Neon", "Static", "Echo", "Shadow", "Quiet"]
+BACKGROUND_TITLE_WORDS_B = ["Horizon", "Protocol", "Harbor", "District", "Signal", "Legacy", "Current",
+                             "Tide", "Frontier", "Anthem", "Pursuit", "Bloom", "Reckoning", "Static"]
+
+
+def generate_background_slate(team_name: str, cycle: int) -> list[dict]:
+    """Deterministic per-(team, cycle) list of 5-10 non-interactive 'rest of
+    the studio's slate' movie summaries -- pure flavor/context, never
+    scored. Reuses the real financial engine (MovieProject,
+    draw_actual_multiplier, draw_critical_reception) so the numbers stay
+    properly calibrated, but under its own seed namespace (a synthetic
+    "__bg__<team>__<i>" team name) so it never perturbs the student's own
+    draws for the same real cycle. Returns light dicts (title, genre,
+    concept_type, npv, theme_park, cycle) -- not full outcome records,
+    since nothing downstream needs IRR/waterfall/etc. for background flavor."""
+    seed = (abs(hash(team_name)) + cycle * 9769 + 401) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX + 1))
+
+    slate = []
+    for i in range(n):
+        genre = GENRES[int(rng.integers(0, len(GENRES)))]
+        concept_type = CONCEPT_TYPES[int(rng.integers(0, len(CONCEPT_TYPES)))]
+        budget = float(rng.uniform(20, 200))
+        pa = budget * float(rng.uniform(0.4, 0.9))
+        star = int(rng.integers(20, 90))
+        screens = int(rng.uniform(1200, 4200))
+        title = (f"{BACKGROUND_TITLE_WORDS_A[int(rng.integers(0, len(BACKGROUND_TITLE_WORDS_A)))]} "
+                 f"{BACKGROUND_TITLE_WORDS_B[int(rng.integers(0, len(BACKGROUND_TITLE_WORDS_B)))]}")
+        project = MovieProject(title=title, genre=genre, budget_m=budget, pa_spend_m=pa,
+                                star_power=star, screens=screens, cycle=cycle, concept_type=concept_type)
+        bg_team = f"__bg__{team_name}__{i}"
+        multiplier = draw_actual_multiplier(bg_team, cycle, genre, concept_type)
+        critical_score = draw_critical_reception(bg_team, cycle, genre)
+        slate.append({
+            "cycle":         cycle,
+            "title":         title,
+            "genre":         genre,
+            "concept_type":  concept_type,
+            "npv":           project.npv(multiplier, critical_score),
+            "theme_park":    project.theme_park_value(multiplier, critical_score),
+            "window_days":   project.window_days(),
+            "is_background": True,
+        })
+    return slate
