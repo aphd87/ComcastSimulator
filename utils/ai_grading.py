@@ -33,6 +33,73 @@ class ShowConceptGrade(BaseModel):
                      "makes this concept worth (or not worth) paying to de-risk.")
 
 
+class MovieConceptGrade(BaseModel):
+    """Movies-side parallel to ShowConceptGrade (2026-08-17) -- deliberately
+    a separate model/prompt, not a reused TV one: TV's feasibility_score
+    grades against "a reality/competition/scripted TV budget" and market_fit
+    grades "network/genre/audience," neither of which fits a theatrical
+    concept (genre + Concept Type + Source Material, budget/P&A cash out
+    upfront with no amortization, distribution-window strategy instead of
+    a network slot)."""
+    originality_score:  int = Field(description="0-25. Is this a genuinely new concept, not a copy of an existing film or a thin reskin?")
+    market_fit_score:   int = Field(description="0-25. Does the pitch make a credible case for its stated genre/concept-type/source-material audience?")
+    feasibility_score:  int = Field(description="0-25. Is the described scope realistic for a theatrical release's production budget and P&A?")
+    presentation_score: int = Field(description="0-25. Is the pitch clear and specific, not vague or generic?")
+    feedback:  str       = Field(description="2-3 sentence overall assessment, written directly to the student.")
+    strengths: list[str] = Field(description="1-3 short bullet points on what's working in the pitch.")
+    risks:     list[str] = Field(description="1-3 short bullet points on what could sink this concept at the box office.")
+    research_recommended: bool = Field(
+        description="True if the concept is risky or uncertain enough (weak feasibility, "
+                     "unclear market fit, or genuinely novel/unproven territory) that paying "
+                     "for the in-game Research / Social Listening feature on this concept "
+                     "would be worth it. False if the concept is solid and predictable enough "
+                     "that Research would likely just confirm what's already obvious.")
+    research_rationale: str = Field(
+        description="1 sentence explaining the research_recommended call.")
+
+
+def grade_movie_concept(title: str, genre: str, concept_type: str, source_material: str,
+                         pitch: str) -> MovieConceptGrade | None:
+    """Grade a free-form movie pitch with Claude Haiku 4.5 -- Movies-side
+    parallel to grade_show_concept above, own model/prompt (see
+    MovieConceptGrade's docstring for why). Returns None on any failure
+    (missing key, API error) so the caller can show a friendly message
+    instead of crashing the page."""
+    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    if not api_key:
+        return None
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        response = client.messages.parse(
+            model="claude-haiku-4-5",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "You are grading a business-school student's original theatrical movie "
+                    "concept pitch for a portfolio-simulation exercise.\n\n"
+                    f"Working title: {title}\nGenre: {genre}\nConcept Type: {concept_type}\n"
+                    f"Source Material: {source_material}\nPitch:\n{pitch}\n\n"
+                    "Score it on originality, market fit, feasibility, and presentation "
+                    "(0-25 each), and give brief, constructive feedback aimed at the student. "
+                    "If Source Material is an adaptation (Book/Video Game/TV Show), factor in "
+                    "whether the pitch actually leverages the source property's built-in "
+                    "audience credibly, rather than ignoring it. Also judge whether this "
+                    "concept is risky/uncertain enough that it would be worth the student "
+                    "paying for the in-game Research feature before committing budget, versus "
+                    "solid enough that Research would likely just confirm the obvious."
+                ),
+            }],
+            output_format=MovieConceptGrade,
+        )
+        return response.parsed_output
+    except Exception:
+        return None
+
+
 class ShowPitchIdea(BaseModel):
     show_name: str = Field(description="A punchy, original working title — must not match or "
                              "closely resemble any existing real or well-known TV show.")

@@ -37,7 +37,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.game_state as gs
-from utils.movie_models import TALENT_PARTNERS, RIVAL_STUDIOS
+from utils.movie_models import TALENT_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M
 
 
 @pytest.fixture(autouse=True)
@@ -84,10 +84,10 @@ def test_decisions_phase_has_expected_widgets():
     # this team/cycle) -- Simulate must still be present and last.
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
-    # genre, concept type, financing structure, exhibitor posture (Greenlight)
-    # + debut season, Pay-1 licensing (Release Strategy -- shown even at
-    # Cycle 1 since "wide_theatrical" != "day_and_date")
-    assert len(at.selectbox) == 6
+    # genre, concept type, source material, financing structure, exhibitor
+    # posture (Greenlight) + debut season, Pay-1 licensing (Release Strategy
+    # -- shown even at Cycle 1 since "wide_theatrical" != "day_and_date")
+    assert len(at.selectbox) == 7
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
@@ -135,7 +135,10 @@ def test_simulate_outcome_includes_financing_and_waterfall_fields():
     assert not at.exception
     outcome = at.session_state["movie_log"][0]
     assert outcome["project_kwargs"]["financing_structure"] == "self_finance"
-    assert outcome["capital_at_risk"] == outcome["project_kwargs"]["budget_m"] + outcome["project_kwargs"]["pa_spend_m"]
+    assert outcome["capital_at_risk"] == pytest.approx(
+        outcome["project_kwargs"]["budget_m"] + outcome["project_kwargs"]["pa_spend_m"]
+        + outcome["project_kwargs"]["star_power"] * STAR_POWER_COST_PER_POINT_M
+    )
     for key in ("oscar_win", "talent_take", "producer_take", "studio_residual"):
         assert key in outcome
     assert outcome["talent_take"] >= 0
@@ -187,7 +190,7 @@ def test_ewom_piracy_card_renders_in_results_when_it_fires(monkeypatch):
 
 def test_financing_structure_selectbox_offers_all_three_options():
     at = _movies_app()
-    fin_box = at.selectbox[2]   # genre, concept_type, financing_structure in that order
+    fin_box = at.selectbox[3]   # genre, concept_type, source_material, financing_structure in that order
     # .options is the format_func-rendered display text (raw keys aren't
     # exposed there), so check count + the underlying selected value instead.
     assert len(fin_box.options) == 3
@@ -363,6 +366,33 @@ def test_star_power_bonus_flows_into_the_resolved_outcome_when_genre_matches():
     assert outcome["talent_partner_bonus"] == TALENT_PARTNERS["meridian"]["name"]
 
 
+def test_origin_medium_source_material_synergy_amplifies_bonus():
+    # brightlane's origin_medium is "Video Games" (ORIGIN_MEDIUM_SOURCE_SYNERGY
+    # maps it to "Video Game Adaptation") and specialty is "Animated" -- when
+    # the draft's genre AND source_material both match, the bonus should be
+    # amplified by TALENT_SOURCE_SYNERGY_MULT, not just the raw partner bonus.
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_overall_deal = "brightlane"
+        st.session_state.movie_rival_exclusive = {}
+        st.session_state.movie_rival_poach_checked_through = 1
+        st.session_state.movie_draft = {"genre": "Animated", "source_material": "Video Game Adaptation"}
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
+    _simulate_button(at).click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    outcome = at.session_state["movie_log"][0]
+    expected_bonus = TALENT_PARTNERS["brightlane"]["star_power_bonus"] * TALENT_SOURCE_SYNERGY_MULT
+    assert outcome["project_kwargs"]["star_power"] == pytest.approx(50 + expected_bonus)
+
+
 def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
     at = _movies_app_no_poaching()
     _simulate_button(at).click().run()
@@ -376,9 +406,9 @@ def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
 
 def test_exhibitor_posture_and_pay1_licensing_selectboxes_default_correctly():
     at = _movies_app()
-    posture_box = at.selectbox[3]   # genre, concept_type, financing_structure, exhibitor_posture
-    debut_season_box = at.selectbox[4]   # debut season, rendered first in Release Strategy
-    pay1_box = at.selectbox[5]      # Pay-1 licensing, rendered after debut season
+    posture_box = at.selectbox[4]   # genre, concept_type, source_material, financing_structure, exhibitor_posture
+    debut_season_box = at.selectbox[5]   # debut season, rendered first in Release Strategy
+    pay1_box = at.selectbox[6]      # Pay-1 licensing, rendered after debut season
     assert posture_box.value == "standard"
     assert len(posture_box.options) == 3
     assert debut_season_box.value == "Off-Peak"
@@ -394,7 +424,7 @@ def test_selecting_debut_season_updates_draft_and_simulated_outcome():
     # Simulate outcome -- a single interaction, the FIRST click from a
     # fresh session (this file's documented AppTest safe zone).
     at = _movies_app()
-    debut_season_box = at.selectbox[4]
+    debut_season_box = at.selectbox[5]
     debut_season_box.set_value("Holiday").run()
     assert not at.exception, f"Debut season click raised: {list(at.exception)}"
     assert at.session_state["movie_draft"]["debut_season"] == "Holiday"

@@ -13,24 +13,27 @@ import pytest
 
 from utils.movie_models import (
     MovieProject, risk_adjusted_npv, capital_efficiency, strategic_fit_score,
-    compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
+    compute_movie_score, portfolio_diversification_score, draw_actual_multiplier, nearest_scenario_label,
     genre_scenario_multipliers, scenario_multipliers_for, SCENARIO_MULTIPLIERS,
-    GENRE_VARIANCE_SPREAD, WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS,
+    GENRE_VARIANCE_SPREAD, WINDOW_SHRINK_PER_CYCLE_DAYS, BASE_WINDOW_DAYS, STAR_POWER_COST_PER_POINT_M,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD,
     AWARDS_WIN_THRESHOLD,
     CRITICAL_RECEPTION_BOUNDS, CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M,
     SEQUEL_OPENING_BONUS_BY_CYCLE, KIDS_OPENING_MULT, KIDS_LONGTAIL_MULT,
     WINDOWING_UNLOCK_CYCLE, CYCLES_TOTAL,
     THEME_PARK_ELIGIBLE_GENRES, THEME_PARK_REVENUE_RATE,
+    THEME_PARK_BOX_OFFICE_GATE_MULT, THEME_PARK_CRITICAL_GATE, THEME_PARK_CONCEPT_MULT,
     draw_production_trouble, PRODUCTION_TROUBLE_CHANCE, PRODUCTION_TROUBLE_HAIRCUT_RANGE,
     PRODUCTION_TROUBLE_REASONS,
     draw_ancillary_surprise, ANCILLARY_SURPRISE_CHANCE, ANCILLARY_SURPRISE_RANGE,
     ANCILLARY_SURPRISE_REASONS_UP, ANCILLARY_SURPRISE_REASONS_DOWN,
-    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
+    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
     participation_waterfall, TALENT_GROSS_GUARANTEE_M, TALENT_GROSS_PARTICIPATION,
     PRODUCER_NET_PARTICIPATION,
     TALENT_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
     draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
+    SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST,
+    ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
@@ -250,6 +253,114 @@ class TestAwardSeason:
         assert acclaimed["avg_ra_npv_m"] >= blind["avg_ra_npv_m"]
 
 
+# ── Star Power cost (2026-08-17) ────────────────────────────────────────────
+class TestStarPowerCost:
+    """Previously a completely free slider delivering up to +30% opening
+    lift at zero cost -- per explicit user question, real casting now costs
+    real money, unconditionally (no financing_structure/ai_production_tools
+    discount touches it)."""
+
+    def test_higher_star_power_means_higher_capital_at_risk(self):
+        low = MovieProject(title="Low", genre="Action/Tentpole", budget_m=150, pa_spend_m=90,
+                            star_power=10, screens=4000, cycle=1)
+        high = MovieProject(**{**low.__dict__, "star_power": 90, "title": "High"})
+        assert high.capital_at_risk() > low.capital_at_risk()
+        assert high.capital_at_risk() - low.capital_at_risk() == pytest.approx(
+            (90 - 10) * STAR_POWER_COST_PER_POINT_M
+        )
+
+    def test_zero_star_power_adds_no_cost(self):
+        p = MovieProject(title="Unknown Cast", genre="Drama", budget_m=30, pa_spend_m=15,
+                          star_power=0, screens=1200, cycle=1)
+        assert p.capital_at_risk() == pytest.approx(p.budget_m + p.pa_spend_m)
+
+
+# ── Source Material — acquisition cost + built-in audience (2026-08-17) ────
+class TestSourceMaterial:
+    def test_original_screenplay_is_the_zero_effect_baseline(self):
+        p = _tentpole()
+        assert p.source_material == "Original Screenplay"
+        assert SOURCE_ACQUISITION_COST_M["Original Screenplay"] == 0.0
+        assert SOURCE_OPENING_BOOST["Original Screenplay"] == 1.0
+
+    def test_adaptation_raises_capital_at_risk_by_the_acquisition_cost(self):
+        base = _tentpole()
+        adapted = MovieProject(**{**base.__dict__, "source_material": "Video Game Adaptation"})
+        assert adapted.capital_at_risk() == pytest.approx(
+            base.capital_at_risk() + SOURCE_ACQUISITION_COST_M["Video Game Adaptation"]
+        )
+
+    def test_adaptation_boosts_opening_weekend(self):
+        base = _tentpole()
+        adapted = MovieProject(**{**base.__dict__, "source_material": "Book Adaptation"})
+        assert adapted.opening_weekend() == pytest.approx(
+            base.opening_weekend() * SOURCE_OPENING_BOOST["Book Adaptation"]
+        )
+
+    def test_all_four_source_materials_have_cost_and_boost_entries(self):
+        for s in SOURCE_MATERIALS:
+            assert s in SOURCE_ACQUISITION_COST_M
+            assert s in SOURCE_OPENING_BOOST
+
+
+# ── Portfolio Diversification — HHI on Genre & Concept Type (2026-08-17) ────
+class TestPortfolioDiversification:
+    """Was previously a THEORY_CONTENT card only, describing a mechanic that
+    didn't actually exist -- a slate of 3 identical Sequels scored the same
+    as a diversified one. This closes that gap: compute_movie_score now has
+    a real, weighted portfolio_diversification component."""
+
+    def test_single_project_slate_is_neutral_not_penalized(self):
+        # A single greenlight is maximally "concentrated" by construction --
+        # penalizing Cycle 1 for not yet being diversified isn't a real signal.
+        assert portfolio_diversification_score([_tentpole(cycle=1)]) == 100.0
+
+    def test_identical_genre_and_concept_slate_scores_low(self):
+        projects = [MovieProject(title=f"Sequel {i}", genre="Action/Tentpole", budget_m=150,
+                                  pa_spend_m=90, star_power=80, screens=4000, cycle=i,
+                                  concept_type="Sequel") for i in (1, 2, 3)]
+        assert portfolio_diversification_score(projects) == pytest.approx(0.0, abs=0.01)
+
+    def test_diversified_genre_and_concept_slate_scores_high(self):
+        # Comparable capital across all three (unlike the mixed-budget test
+        # below) so the capital-weighted HHI isn't dominated by one outlier
+        # project -- isolates "3 distinct genres/concepts" as the signal.
+        projects = [
+            MovieProject(title="A", genre="Action/Tentpole", budget_m=80, pa_spend_m=45,
+                         star_power=80, screens=4000, cycle=1, concept_type="Sequel"),
+            MovieProject(title="B", genre="Awards/Prestige", budget_m=80, pa_spend_m=45,
+                         star_power=60, screens=1200, cycle=2, concept_type="New IP"),
+            MovieProject(title="C", genre="Animated", budget_m=80, pa_spend_m=45,
+                         star_power=55, screens=3200, cycle=3, concept_type="Family/Kids"),
+        ]
+        # 3 distinct genres + 3 distinct concept types, each at equal weight,
+        # is the mathematical ceiling for a 3-project slate: HHI=1/3 on each
+        # axis -> (1 - 1/3)*50*2 = 66.67, not 100 (100 would need many more
+        # distinct categories than 3 projects can ever cover).
+        assert portfolio_diversification_score(projects) == pytest.approx(66.67, abs=0.5)
+
+    def test_diversified_slate_outscores_concentrated_slate_in_compute_movie_score(self):
+        concentrated = [MovieProject(title=f"Seq {i}", genre="Action/Tentpole", budget_m=150,
+                                      pa_spend_m=90, star_power=80, screens=4000, cycle=i,
+                                      concept_type="Sequel") for i in (1, 2, 3)]
+        diversified = [
+            MovieProject(title="A", genre="Action/Tentpole", budget_m=150, pa_spend_m=90,
+                         star_power=80, screens=4000, cycle=1, concept_type="Sequel"),
+            MovieProject(title="B", genre="Awards/Prestige", budget_m=30, pa_spend_m=15,
+                         star_power=60, screens=1200, cycle=2, concept_type="New IP"),
+            MovieProject(title="C", genre="Animated", budget_m=90, pa_spend_m=50,
+                         star_power=55, screens=3200, cycle=3, concept_type="Family/Kids"),
+        ]
+        s_concentrated = compute_movie_score(concentrated)
+        s_diversified = compute_movie_score(diversified)
+        assert s_diversified["portfolio_diversification"] > s_concentrated["portfolio_diversification"]
+
+    def test_weights_sum_to_one(self):
+        # 0.45 + 0.20 + 0.20 + 0.15 -- rebalanced 2026-08-17 when
+        # portfolio_diversification became a real scored component.
+        assert 0.45 + 0.20 + 0.20 + 0.15 == pytest.approx(1.0)
+
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 class TestScoring:
     def test_empty_slate_scores_zero_and_fails(self):
@@ -265,7 +376,7 @@ class TestScoring:
     def test_score_components_are_clamped_to_0_100(self):
         for p in (_tentpole(), _indie()):
             score = compute_movie_score([p])
-            for key in ("risk_adjusted_npv", "capital_efficiency", "strategic_fit"):
+            for key in ("risk_adjusted_npv", "capital_efficiency", "strategic_fit", "portfolio_diversification"):
                 assert 0 <= score[key] <= 100
 
     def test_wide_theatrical_scores_at_least_50_strategic_fit_against_itself(self):
@@ -370,11 +481,12 @@ class TestThemeParkRevenue:
     discount -- an awards drama or a comedy doesn't get a ride."""
 
     def test_eligible_genre_gets_nonzero_theme_park_value(self):
+        # Default concept_type is "New IP" -- reduced rate (THEME_PARK_CONCEPT_MULT), not the bare genre rate.
         p = MovieProject(title="Tentpole", genre="Action/Tentpole", budget_m=150,
                           pa_spend_m=90, star_power=80, screens=4000, cycle=1)
         assert p.theme_park_value("base") > 0
         assert p.theme_park_value("base") == pytest.approx(
-            p.domestic_box_office("base") * THEME_PARK_REVENUE_RATE
+            p.domestic_box_office("base") * THEME_PARK_REVENUE_RATE * THEME_PARK_CONCEPT_MULT["New IP"]
         )
 
     def test_ineligible_genre_gets_exactly_zero(self):
@@ -384,6 +496,51 @@ class TestThemeParkRevenue:
 
     def test_all_eligible_genres_are_the_intended_three(self):
         assert THEME_PARK_ELIGIBLE_GENRES == {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
+
+    def test_sequel_gets_full_rate_new_ip_gets_reduced_rate(self):
+        # Same genre/scenario, only concept_type differs -- Sequel (proven
+        # franchise) should out-earn New IP (has to prove itself) on
+        # theme-park/merch specifically, per the 2026-08-17 qualification rework.
+        sequel = MovieProject(title="Sequel", genre="Action/Tentpole", budget_m=150,
+                               pa_spend_m=90, star_power=80, screens=4000, cycle=1, concept_type="Sequel")
+        new_ip = MovieProject(**{**sequel.__dict__, "concept_type": "New IP", "title": "New"})
+        assert sequel.theme_park_value("base") > new_ip.theme_park_value("base")
+        assert sequel.theme_park_value("base") == pytest.approx(
+            sequel.domestic_box_office("base") * THEME_PARK_REVENUE_RATE * THEME_PARK_CONCEPT_MULT["Sequel"]
+        )
+
+    def test_family_kids_qualifies_independent_of_genre(self):
+        # Comedy isn't in THEME_PARK_ELIGIBLE_GENRES, but Family/Kids is its
+        # own independent qualifying path -- merch is that concept type's
+        # whole draw, regardless of genre.
+        p = MovieProject(title="Kids Comedy", genre="Comedy", budget_m=60,
+                          pa_spend_m=30, star_power=50, screens=2500, cycle=1, concept_type="Family/Kids")
+        assert p.theme_park_value("base") > 0
+        assert p.theme_park_value("base") == pytest.approx(
+            p.domestic_box_office("base") * THEME_PARK_REVENUE_RATE * THEME_PARK_CONCEPT_MULT["Family/Kids"]
+        )
+
+    def test_box_office_gate_zeroes_out_a_genuine_underperformer(self):
+        # An eligible genre/concept that lands well below its own base case
+        # (a bear-case flop) doesn't get a themed attraction -- checked even
+        # during planning previews, since the scenario multiplier itself is
+        # already visible information at that stage (unlike critical reception).
+        p = MovieProject(title="Tentpole", genre="Action/Tentpole", budget_m=150,
+                          pa_spend_m=90, star_power=80, screens=4000, cycle=1, concept_type="Sequel")
+        assert p.theme_park_value("bear") == 0.0
+        assert p.theme_park_value("base") > 0
+
+    def test_critical_reception_gate_only_applies_once_resolved(self):
+        p = MovieProject(title="Tentpole", genre="Action/Tentpole", budget_m=150,
+                          pa_spend_m=90, star_power=80, screens=4000, cycle=1, concept_type="Sequel")
+        # Planning-stage preview (critical_score=None) can't leak reception --
+        # only the box-office gate applies, so this still qualifies.
+        assert p.theme_park_value("base", critical_score=None) > 0
+        # Resolved outcome with reception below THEME_PARK_CRITICAL_GATE --
+        # a critically panned movie doesn't get merch investment.
+        assert p.theme_park_value("base", critical_score=THEME_PARK_CRITICAL_GATE - 1) == 0.0
+        # Resolved outcome with reception clearing the bar -- qualifies.
+        assert p.theme_park_value("base", critical_score=THEME_PARK_CRITICAL_GATE + 1) > 0
 
     def test_theme_park_value_flows_into_total_revenue_and_npv(self):
         # A genre-eligible project's total revenue/NPV must be strictly
@@ -498,21 +655,42 @@ class TestFinancingStructure:
     existed (additive, not a replacement of the calibrated engine)."""
 
     def test_self_finance_is_the_unadjusted_baseline(self):
+        # Star Power cost (2026-08-17) is unconditional -- included even in
+        # the "unadjusted" self_finance baseline, since casting cost isn't a
+        # financing-structure choice.
         p = _tentpole()
         assert p.financing_structure == "self_finance"
-        assert p.capital_at_risk() == p.budget_m + p.pa_spend_m
+        assert p.capital_at_risk() == pytest.approx(
+            p.budget_m + p.pa_spend_m + p.star_power * STAR_POWER_COST_PER_POINT_M
+        )
 
     def test_presale_reduces_capital_at_risk(self):
+        # Net of the sales agent's fee (2026-08-17) -- only the fee-adjusted
+        # effective advance actually reduces capital at risk, not the gross
+        # advance amount. Star Power cost (2026-08-17) is added on top,
+        # unaffected by financing_structure.
         base = _tentpole()
         presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
-        expected = base.budget_m * (1 - PRESALE_ADVANCE_PCT) + base.pa_spend_m
+        effective_advance = base.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
+        expected = (base.budget_m - effective_advance) + base.pa_spend_m + base.star_power * STAR_POWER_COST_PER_POINT_M
         assert presale.capital_at_risk() == pytest.approx(expected)
+        assert presale.capital_at_risk() < base.capital_at_risk()
+
+    def test_presale_sales_agent_fee_means_advance_is_not_fully_realized(self):
+        # A real global distribution deal is brokered by a sales agent who
+        # takes a real fee (10-30% per the teaching note) -- capital at risk
+        # should sit strictly BETWEEN "kept the full gross advance" and
+        # "got no advance at all", not at either extreme.
+        base = _tentpole()
+        presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
+        full_advance_capital = base.budget_m * (1 - PRESALE_ADVANCE_PCT) + base.pa_spend_m
+        assert presale.capital_at_risk() > full_advance_capital
         assert presale.capital_at_risk() < base.capital_at_risk()
 
     def test_tax_incentive_reduces_capital_at_risk(self):
         base = _tentpole()
         tax = MovieProject(**{**base.__dict__, "financing_structure": "tax_incentive"})
-        expected = base.budget_m * (1 - TAX_CREDIT_PCT) + base.pa_spend_m
+        expected = base.budget_m * (1 - TAX_CREDIT_PCT) + base.pa_spend_m + base.star_power * STAR_POWER_COST_PER_POINT_M
         assert tax.capital_at_risk() == pytest.approx(expected)
         assert tax.capital_at_risk() < base.capital_at_risk()
 
@@ -786,12 +964,15 @@ class TestAiProductionTools:
     def test_default_false_is_the_unadjusted_baseline(self):
         p = _tentpole()
         assert p.ai_production_tools is False
-        assert p.capital_at_risk() == p.budget_m + p.pa_spend_m
+        assert p.capital_at_risk() == pytest.approx(
+            p.budget_m + p.pa_spend_m + p.star_power * STAR_POWER_COST_PER_POINT_M
+        )
 
     def test_budget_discount_applies_to_budget_only_not_pa(self):
         base = _tentpole()
         tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
-        expected = base.budget_m * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+        expected = (base.budget_m * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M)
         assert tooled.capital_at_risk() == pytest.approx(expected)
         assert tooled.capital_at_risk() < base.capital_at_risk()
 
@@ -799,7 +980,8 @@ class TestAiProductionTools:
         base = MovieProject(**{**_tentpole().__dict__, "financing_structure": "tax_incentive"})
         tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
         from utils.movie_models import TAX_CREDIT_PCT
-        expected = base.budget_m * (1 - TAX_CREDIT_PCT) * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+        expected = (base.budget_m * (1 - TAX_CREDIT_PCT) * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M)
         assert tooled.capital_at_risk() == pytest.approx(expected)
 
     def test_timeline_shifts_every_cashflow_forward(self):

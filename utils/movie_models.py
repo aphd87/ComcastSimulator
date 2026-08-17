@@ -28,12 +28,25 @@ SVOD_SUB_LTV_MO       = 8.0    # matches utils/models.py's SVOD_SUB_LTV_MO for c
 SVOD_MARGIN           = 0.15
 BASE_PER_SCREEN_M     = 0.010  # $M ($10K) per screen — blockbuster-average opening baseline
 STAR_POWER_BOOST_MAX  = 0.30   # max star power (100) adds up to +30% to opening, not a multiplier stack
+# 2026-08-17, per explicit user question ("should Star Power be increased
+# without impacting budget?"): it previously was -- a completely free
+# slider delivering up to +30% opening lift at zero cost, which doesn't
+# match how casting actually works (the teaching note's own "Profits"
+# section: actors routinely get "$2 million upfront against 10% of gross,"
+# talent take up to 30% of earnings before net income). Real casting is a
+# real cost, added unconditionally in capital_at_risk() below -- this is a
+# genuine recalibration of every existing project's economics, not an
+# opt-in lever with a zero-effect default the way Concept Type/Source
+# Material/etc. are, because Star Power was already a required field every
+# project set to a real value -- there's no backward-compatible "off"
+# position to default to.
+STAR_POWER_COST_PER_POINT_M = 0.20   # $M per Star Power point -- maxing to 100 costs $20M in casting
 MKT_LIFT_PER_M        = 0.006  # opening-weekend awareness lift per $1M P&A — gentle on purpose:
                                 # this stacks with star power on the same opening-weekend number,
                                 # so both together should move it moderately, not compound explosively
 BASE_WINDOW_DAYS      = 90     # 2012-era theatrical exclusivity norm
 WINDOW_SHRINK_PER_CYCLE_DAYS = 15   # real-world post-2012 compression, applied per cycle (1->2->3)
-CYCLES_TOTAL          = 3
+CYCLES_TOTAL          = 5
 YEARS_PER_CYCLE        = 2
 WINDOWING_UNLOCK_CYCLE = 3   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" —
                               # cycles before this are wide-theatrical only, no strategy choice yet
@@ -102,8 +115,11 @@ CONCEPT_TYPES = ["New IP", "Sequel", "Family/Kids", "Indie-Horror"]
 # power/marketing — but the lift fades each successive cycle a team plays a
 # sequel (real franchise fatigue), decaying toward a flat, modest bonus by
 # cycle 3 rather than disappearing outright (a franchise never fully loses
-# its built-in audience, it just stops being a novelty).
-SEQUEL_OPENING_BONUS_BY_CYCLE = {1: 1.25, 2: 1.15, 3: 1.05}
+# its built-in audience, it just stops being a novelty). Explicit entries for
+# cycles 4-5 (added when CYCLES_TOTAL grew to 5) hold the plateau at the same
+# 1.05 floor rather than relying on .get()'s fallback -- a franchise doesn't
+# keep fading indefinitely, it bottoms out.
+SEQUEL_OPENING_BONUS_BY_CYCLE = {1: 1.25, 2: 1.15, 3: 1.05, 4: 1.05, 5: 1.05}
 
 # New IP: the neutral baseline — no built-in awareness bonus (unlike
 # Sequel) and no long-tail bonus (unlike Family/Kids), so it carries zero
@@ -126,6 +142,50 @@ KIDS_LONGTAIL_MULT = 1.6
 # category. The model assumes the cap is respected; it doesn't enforce it.
 INDIE_HORROR_BUDGET_CAP_M  = 25.0
 INDIE_HORROR_VARIANCE_MULT = 1.3
+
+
+# ── Source Material — a third axis alongside Genre and Concept Type ────────
+# 2026-08-17, per the teaching note's "Production" section: "up to 85% of
+# contemporary content at any given time is derived from pre-existing
+# intellectual property... [studios] may seek an advance... up to $5 million
+# may be spent on acquiring a script, particularly when intense competition
+# arises." This is genuinely separate from Concept Type (New IP/Sequel/etc.)
+# -- Concept Type asks "is this a franchise entry," Source Material asks
+# "where did the underlying story come from." A Sequel can be an original
+# screenplay franchise (no acquisition cost) OR a Book Adaptation sequel
+# (both apply). "Original Screenplay" is the true zero-effect baseline --
+# every project built before this feature existed keeps its exact original
+# calibrated economics, same posture as New IP/self_finance/standard/keep.
+SOURCE_MATERIALS = ["Original Screenplay", "Book Adaptation", "Video Game Adaptation", "TV Show Adaptation"]
+
+# Real cash paid upfront to option/acquire the underlying rights -- added on
+# top of budget_m in capital_at_risk(), not discounted by financing
+# structure or AI production tools (a rights fee isn't a production-cost
+# efficiency the way VFX/scheduling savings are). Video Game Adaptation
+# commands the highest premium -- real recent examples (major game-to-film
+# deals) show publishers extracting significant option fees given an
+# existing, proven global fanbase and tight IP-protection leverage over the
+# adaptation's creative direction.
+SOURCE_ACQUISITION_COST_M = {
+    "Original Screenplay":   0.0,
+    "Book Adaptation":       3.0,
+    "TV Show Adaptation":    5.0,
+    "Video Game Adaptation": 8.0,
+}
+
+# Built-in awareness from an existing fan base going into the opening
+# weekend -- deliberately smaller than Sequel's franchise recognition
+# (SEQUEL_OPENING_BONUS_BY_CYCLE), since this is the property's FIRST film,
+# not a proven film franchise entry, but real: an adaptation of a beloved
+# book/game/show starts with name recognition an original screenplay has to
+# earn entirely through P&A and star power. Stacks with Concept Type's own
+# opening boost (a Sequel to a prior game adaptation gets both).
+SOURCE_OPENING_BOOST = {
+    "Original Screenplay":   1.00,
+    "Book Adaptation":       1.05,
+    "TV Show Adaptation":    1.08,
+    "Video Game Adaptation": 1.12,
+}
 
 
 def scenario_multipliers_for(genre: str, concept_type: str = "New IP") -> dict:
@@ -178,8 +238,46 @@ AWARDS_WIN_THRESHOLD = 88
 # "genre determines theme park eligibility." Only genres with the scale and
 # durability to support a themed attraction or a real merchandise line
 # qualify; an awards drama or a comedy doesn't get a ride or a toy line.
-THEME_PARK_ELIGIBLE_GENRES = {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
-THEME_PARK_REVENUE_RATE    = 0.03   # fraction of domestic box office
+# 2026-08-17: genre alone was the ONLY gate -- a brand-new, unproven "New IP"
+# action movie got full theme-park/merch value, identical to an established
+# Sequel in the same genre, which doesn't match how this actually works:
+# rides and toy lines get built around PROVEN IP, and only once a movie has
+# actually shown up at the box office and with critics. Three qualification
+# layers now apply, in order:
+#   1. Genre OR Concept Type eligibility (a genre-ineligible movie can still
+#      qualify via Family/Kids -- merch is that concept type's whole draw,
+#      independent of genre; see THEME_PARK_CONCEPT_MULT below).
+#   2. A real box-office performance gate (THEME_PARK_BOX_OFFICE_GATE_MULT) —
+#      the resolved/previewed scenario must clear the genre's own base case,
+#      not just open. Applies during bear/base/bull PLANNING previews too
+#      (not a leak -- the scenario multiplier itself, unlike critical
+#      reception, is already visible information at that stage).
+#   3. A critical-reception gate (THEME_PARK_CRITICAL_GATE), checked ONLY
+#      once critical_score is actually resolved (None during planning
+#      previews -- same "can't leak what a student doesn't know yet" posture
+#      as awards_season_bump). A genre/concept-eligible movie that opens
+#      well but gets panned still doesn't get a themed attraction built
+#      around it.
+THEME_PARK_ELIGIBLE_GENRES     = {"Action/Tentpole", "Sci-Fi/Fantasy", "Animated"}
+THEME_PARK_REVENUE_RATE        = 0.03   # fraction of domestic box office
+THEME_PARK_BOX_OFFICE_GATE_MULT = 1.0   # resolved scenario multiplier must be >= genre's own base-case
+                                          # multiplier (1.0x of it) -- a bear-case underperformer doesn't
+                                          # get a ride no matter how eligible the genre is
+THEME_PARK_CRITICAL_GATE       = 40     # minimum resolved critical_score (0-100) to qualify -- a
+                                          # critically panned movie doesn't get merch investment behind it
+
+# Concept Type scales theme-park/merch value on top of the gates above --
+# franchise status is a real, separate signal from genre alone (Universal
+# doesn't greenlight a ride off a single unproven movie the way it will for
+# an established franchise entry). Sequel gets the full rate (proven IP);
+# New IP gets a reduced fraction (it has to prove itself this cycle, same as
+# every other New IP effect in this file); Family/Kids gets its own
+# independent qualifying path (see gate #1 above) at a fraction reflecting
+# that a kids property's merch case is real but not guaranteed blockbuster-
+# scale the way an eligible-genre tentpole's is. Indie-Horror isn't listed —
+# it falls through to genre eligibility alone (Horror was never an eligible
+# genre to begin with, so this never actually fires for Indie-Horror).
+THEME_PARK_CONCEPT_MULT = {"Sequel": 1.0, "New IP": 0.4, "Family/Kids": 0.85}
 
 
 def draw_critical_reception(team_name: str, cycle: int, genre: str,
@@ -338,24 +436,81 @@ def draw_ewom_piracy_swing(team_name: str, cycle: int) -> Optional[tuple[str, fl
 # utils/sports_models.py's seeded-rival-bidder precedent (real companies
 # bidding against you for league rights), scoped down to talent scheduling.
 #
-# Partners are fictional, modeled on real archetypes (an action-forward
-# producer-star collective, a prestige awards banner, a family-franchise
-# banner, a horror specialist) rather than naming real individuals --
+# Partners are fictional INDIVIDUAL actors/actresses, not real people --
 # distinct from Sports Rights' real company names or the Bravo/Oxygen/
 # Peacock slates' real show titles, since a talent deal is inherently about
 # an individual's persona/likeness, not a corporate brand or a title. Rival
 # studio names are fictional for the same reason (a "rival beat you to a
 # named real actor" framing would read as a claim about a real person).
+# 2026-08-17: originally modeled as fictional production-house "collectives"
+# (Meridian Collective, Northbench Pictures, etc.) rather than individuals --
+# per explicit user request, rebuilt as individual fictional actors/
+# actresses with real demographic/career profile fields (age, origin_medium,
+# lifetime_box_office_m, social_followers_m, bio, best_genres) so students
+# have something to actually weigh, not just a name and a bonus number.
+# origin_medium is the deliberate teaching hook: WHERE a talent built their
+# fame is a real casting tradeoff (a Film veteran is expensive but reliable;
+# a Social Media creator is cheap with a huge built-in following but no
+# proven dramatic track record) -- see ORIGIN_MEDIUM_SOURCE_SYNERGY below
+# for how it interacts with the Source Material feature.
 TALENT_PARTNERS = {
-    "meridian":   {"name": "Meridian Collective",  "specialty": "Action/Tentpole",
-                    "overall_deal_cost_m": 25.0, "hold_cost_m": 4.0, "star_power_bonus": 15},
-    "northbench": {"name": "Northbench Pictures",   "specialty": "Awards/Prestige",
-                    "overall_deal_cost_m": 18.0, "hold_cost_m": 3.0, "critical_score_bonus": 8.0},
-    "brightlane": {"name": "Brightlane Family",     "specialty": "Animated",
-                    "overall_deal_cost_m": 15.0, "hold_cost_m": 2.5, "star_power_bonus": 10},
-    "afterdark":  {"name": "Afterdark Studio",      "specialty": "Horror",
-                    "overall_deal_cost_m": 10.0, "hold_cost_m": 2.0, "star_power_bonus": 8},
+    "meridian": {
+        "name": "Jordan Vance", "gender": "actor", "age": 41,
+        "specialty": "Action/Tentpole", "best_genres": ["Action/Tentpole", "Sci-Fi/Fantasy"],
+        "origin_medium": "Film",
+        "bio": "A two-decade theatrical-franchise lead with three $500M+ openings on his résumé — "
+               "the safest, most expensive bet on this list, with a proven track record and no "
+               "crossover risk.",
+        "lifetime_box_office_m": 4200.0, "social_followers_m": 18.0,
+        "overall_deal_cost_m": 25.0, "hold_cost_m": 4.0, "star_power_bonus": 15,
+    },
+    "northbench": {
+        "name": "Adaeze Okonkwo", "gender": "actress", "age": 52,
+        "specialty": "Awards/Prestige", "best_genres": ["Awards/Prestige", "Drama"],
+        "origin_medium": "Television",
+        "bio": "Built her name on a decade of acclaimed prestige-TV lead roles before crossing "
+               "over to film — brings real critical credibility and a built-in Peacock-adjacent "
+               "audience, but a smaller-screen pedigree doesn't always translate to opening-weekend "
+               "box office.",
+        "lifetime_box_office_m": 310.0, "social_followers_m": 6.5,
+        "overall_deal_cost_m": 18.0, "hold_cost_m": 3.0, "critical_score_bonus": 8.0,
+    },
+    "brightlane": {
+        "name": "Casey Marsh", "gender": "actor", "age": 29,
+        "specialty": "Animated", "best_genres": ["Animated", "Comedy"],
+        "origin_medium": "Video Games",
+        "bio": "Broke out as the motion-capture lead and voice of a hit video-game franchise before "
+               "moving into animated features — a natural, synergistic fit fronting a Video Game "
+               "Adaptation specifically, less proven carrying a project with no game pedigree.",
+        "lifetime_box_office_m": 640.0, "social_followers_m": 24.0,
+        "overall_deal_cost_m": 15.0, "hold_cost_m": 2.5, "star_power_bonus": 10,
+    },
+    "afterdark": {
+        "name": "Reyna Kade", "gender": "actress", "age": 26,
+        "specialty": "Horror", "best_genres": ["Horror", "Comedy"],
+        "origin_medium": "Social Media",
+        "bio": "A social-first creator with a massive, highly engaged following — cheap, with huge "
+               "built-in awareness on day one, but no real dramatic track record yet, and that "
+               "following is a bet on staying relevant, not a guarantee.",
+        "lifetime_box_office_m": 45.0, "social_followers_m": 38.0,
+        "overall_deal_cost_m": 10.0, "hold_cost_m": 2.0, "star_power_bonus": 8,
+    },
 }
+
+# Which Source Material a talent's origin medium most naturally leverages --
+# casting FOR the adaptation (a game-famous actor fronting the actual game
+# adaptation) is a real, teachable synergy, distinct from casting purely on
+# raw bonus size. Film and Social Media don't map to a specific Source
+# Material (a film veteran's value is genre-general reliability; a creator's
+# value is raw awareness, not adaptation credibility) -- absence from this
+# dict is deliberate, not an oversight.
+ORIGIN_MEDIUM_SOURCE_SYNERGY = {
+    "Television":   "TV Show Adaptation",
+    "Video Games":  "Video Game Adaptation",
+}
+TALENT_SOURCE_SYNERGY_MULT = 1.5   # bonus multiplier when origin_medium's mapped Source Material
+                                     # matches the project's actual source_material -- rewards casting
+                                     # that's actually strategic, not just "sign whoever's cheapest/biggest"
 
 RIVAL_STUDIOS = ["Paragon Pictures", "Constellation Studios", "Anchor Bay Media", "Vantage Films"]
 RIVAL_CLAIM_CHANCE  = 0.20   # chance a rival has already locked the talent's window when you try to hold it
@@ -433,8 +588,21 @@ def draw_rival_poach(team_name: str, partner_key: str, cycle: int) -> Optional[s
 #     artificial downside just to make three choices symmetric; the real
 #     lesson is a studio should almost always take this when production
 #     logistics allow it.
+#
+# 2026-08-17, per the "Movie Business and Deal Mechanisms" teaching note's
+# "Raising funds" section: a real global pre-sale isn't a direct
+# studio-to-distributor handshake -- a sales agent brokers the territorial
+# deals, collects the advances, and takes a real fee (the note: "10% to 30%
+# with a portion often deferred until lenders are repaid") off the top
+# before the studio ever sees the cash. PRESALE_SALES_AGENT_FEE_PCT models
+# that real transaction cost -- previously the full PRESALE_ADVANCE_PCT
+# reduced capital_at_risk as if the studio kept 100% of the advance, which
+# understated what a global distribution deal actually costs to arrange.
 FINANCING_STRUCTURES = ["self_finance", "presale", "tax_incentive"]
-PRESALE_ADVANCE_PCT       = 0.40   # fraction of production budget covered by the advance
+PRESALE_ADVANCE_PCT       = 0.40   # fraction of production budget the international advance covers, GROSS
+                                     # (before the sales agent's fee -- see PRESALE_SALES_AGENT_FEE_PCT)
+PRESALE_SALES_AGENT_FEE_PCT = 0.20   # mid-point of the note's real 10-30% range -- the sales agent's cut
+                                       # of the advance, which never reaches the studio's own capital pool
 PRESALE_INTL_RETAINED_PCT = 0.15   # studio's residual/overage share of the international b.o. it gave away
 TAX_CREDIT_PCT            = 0.22   # net-of-discount effective credit (headline ~30%, but non-refundable
                                      # credits are commonly sold at a discount -- see the note)
@@ -604,26 +772,41 @@ class MovieProject:
     pay1_licensing: str = "keep"                 # "keep" | "license_out"
     ai_production_tools: bool = False            # see AI_TOOLS_* below
     debut_season: str = "Off-Peak"                # see DEBUT_SEASONS above
+    source_material: str = "Original Screenplay"  # see SOURCE_MATERIALS above
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
         reduced by financing_structure's chosen structure (see
         FINANCING_STRUCTURES above); self_finance is the unadjusted
-        budget_m + pa_spend_m baseline. ai_production_tools (2026-08-05,
-        see AI_TOOLS_BUDGET_SAVINGS_PCT below) applies its own discount on
-        top of whatever financing_structure already produced -- the two
-        levers are independent (a tax-incentive shoot can also lean on AI
+        budget_m + pa_spend_m baseline. presale's effective advance is net
+        of PRESALE_SALES_AGENT_FEE_PCT (2026-08-17) -- a global distribution
+        deal is brokered by a sales agent who takes a real 10-30% fee before
+        the studio ever sees the cash, so only the net amount actually
+        reduces capital at risk. ai_production_tools (2026-08-05, see
+        AI_TOOLS_BUDGET_SAVINGS_PCT below) applies its own discount on top
+        of whatever financing_structure already produced -- the two levers
+        are independent (a tax-incentive shoot can also lean on AI
         production tools), stacking multiplicatively on the budget
-        component only, never on P&A."""
+        component only, never on P&A. SOURCE_ACQUISITION_COST_M (2026-08-17)
+        is added on top, unaffected by either discount -- a rights fee to
+        option a book/game/show isn't a production-cost efficiency.
+        STAR_POWER_COST_PER_POINT_M (2026-08-17) is also added on top,
+        unconditionally -- casting a bigger star is a real cost, not a free
+        lever (see the constant's own comment for why this is the one
+        recalibration in this file with no backward-compatible zero-effect
+        default)."""
         if self.financing_structure == "presale":
-            budget_component = self.budget_m * (1 - PRESALE_ADVANCE_PCT)
+            effective_advance = self.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
+            budget_component = self.budget_m - effective_advance
         elif self.financing_structure == "tax_incentive":
             budget_component = self.budget_m * (1 - TAX_CREDIT_PCT)
         else:
             budget_component = self.budget_m
         if self.ai_production_tools:
             budget_component *= (1 - AI_TOOLS_BUDGET_SAVINGS_PCT)
-        return budget_component + self.pa_spend_m
+        acquisition_cost = SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0)
+        star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
+        return budget_component + self.pa_spend_m + acquisition_cost + star_power_cost
 
     def window_days(self) -> int:
         """Theatrical exclusivity window — shrinks each cycle, matching the
@@ -667,12 +850,15 @@ class MovieProject:
         warning check in the UI), while a harder negotiating posture nets
         fewer screens than asked for and a friendlier one nets more.
         debut_season applies its own crowding/genre-fit multiplier on top
-        (see season_opening_mult) -- 1.0x for the "Off-Peak" baseline."""
+        (see season_opening_mult) -- 1.0x for the "Off-Peak" baseline.
+        source_material applies its own built-in-fanbase awareness boost
+        (see SOURCE_OPENING_BOOST) -- 1.0x for "Original Screenplay"."""
         screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
         screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
+        source_boost = SOURCE_OPENING_BOOST.get(self.source_material, 1.0)
         return (BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost()
-                * self.awareness_lift() * self.season_opening_mult())
+                * self.awareness_lift() * self.season_opening_mult() * source_boost)
 
     def cannibalization_factor(self) -> float:
         """Theatrical box-office suppression from the release-strategy
@@ -774,20 +960,36 @@ class MovieProject:
         quality_mult = 0.7 + (critical_score / 100) * 1.1
         return base * quality_mult
 
-    def theme_park_value(self, scenario) -> float:
+    def theme_park_value(self, scenario, critical_score: Optional[float] = None) -> float:
         """Theme park attraction / merchandise / Universal licensing value —
         Zach Schlessel's brief: "theme park/merchandise opportunities,
         Universal licensing deals ('pay yourself' model)... genre
-        determines theme park eligibility." Only genres with the cultural
-        footprint and IP durability to support a themed attraction or a
-        real merchandise line qualify (see THEME_PARK_ELIGIBLE_GENRES) — an
-        awards drama doesn't get a ride. Sized off domestic box office as a
-        rough proxy for how big the IP actually landed; zero for
-        ineligible genres, not a smaller fraction — this is a real
-        eligibility gate, not a soft discount."""
-        if self.genre not in THEME_PARK_ELIGIBLE_GENRES:
+        determines theme park eligibility." Three real qualification gates
+        now apply (see the constants block above for the full rationale):
+        genre-or-Family/Kids eligibility, a box-office performance floor
+        (checked even during planning previews), and a critical-reception
+        floor (checked only once critical_score is actually resolved — a
+        planning-stage preview can't know reviews in advance). Sized off
+        domestic box office as a rough proxy for how big the IP actually
+        landed, then scaled by THEME_PARK_CONCEPT_MULT — a proven Sequel
+        gets the full rate, an unproven New IP gets a fraction, Family/Kids
+        gets its own independent rate. Zero for anything that fails a gate,
+        not a smaller fraction — these are real eligibility gates."""
+        genre_eligible   = self.genre in THEME_PARK_ELIGIBLE_GENRES
+        concept_eligible = self.concept_type == "Family/Kids"
+        if not (genre_eligible or concept_eligible):
             return 0.0
-        return self.domestic_box_office(scenario) * THEME_PARK_REVENUE_RATE
+
+        bounds = scenario_multipliers_for(self.genre, self.concept_type)
+        mult = bounds[scenario] if isinstance(scenario, str) else scenario
+        if mult < bounds["base"] * THEME_PARK_BOX_OFFICE_GATE_MULT:
+            return 0.0
+
+        if critical_score is not None and critical_score < THEME_PARK_CRITICAL_GATE:
+            return 0.0
+
+        concept_mult = THEME_PARK_CONCEPT_MULT.get(self.concept_type, 1.0 if genre_eligible else 0.0)
+        return self.domestic_box_office(scenario) * THEME_PARK_REVENUE_RATE * concept_mult
 
     def awards_season_bump(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """A limited theatrical rerelease during awards season (For-Your-
@@ -841,7 +1043,7 @@ class MovieProject:
         pvod       = self.pvod_revenue(scenario) * pvod_mult * ewom_mult
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
-        theme_park = self.theme_park_value(scenario) * theme_park_mult
+        theme_park = self.theme_park_value(scenario, critical_score) * theme_park_mult
         window_mo  = self.window_days() / 30.0
         if self.is_licensing_out():
             # A flat licensing fee, paid alongside PVOD -- faster and known
@@ -994,6 +1196,44 @@ def strategic_fit_score(project: MovieProject, critical_score: Optional[float] =
     return float(min(max(50 + delta_pct * 100, 0), 100))
 
 
+def portfolio_diversification_score(projects: list[MovieProject]) -> float:
+    """0-100: how diversified the slate is across Genre AND Concept Type,
+    weighted by capital committed per project (capital_at_risk()) — mirrors
+    utils/game_state.py's hhi_from_genres() for TV/Streaming's genre_mix
+    scoring component (see SCORE_WEIGHTS there), extended to a second axis
+    since a movie slate's franchise-fatigue risk (three Sequels in a row) is
+    just as real as its genre concentration. Lower HHI (more diverse) ->
+    higher score on each axis; the two axes are averaged, not multiplied,
+    so a slate diversified on only one axis still gets partial credit.
+
+    2026-08-17: this was previously a THEORY_CONTENT card only, describing
+    a mechanic that didn't actually exist in compute_movie_score — a slate
+    of 3 Sequels scored identically to a diversified one. This closes that
+    gap.
+
+    A slate with fewer than 2 projects returns a neutral 100 rather than
+    the technically-correct HHI=1.0 (maximally concentrated) — there's
+    nothing to diversify against yet after a single greenlight, and
+    penalizing Cycle 1 for not yet being diversified would be unfair, not
+    a real signal."""
+    if len(projects) < 2:
+        return 100.0
+
+    def _hhi(key_fn) -> float:
+        weights: dict = {}
+        for p in projects:
+            k = key_fn(p)
+            weights[k] = weights.get(k, 0.0) + p.capital_at_risk()
+        total = sum(weights.values())
+        if not total:
+            return 1.0
+        return sum((w / total) ** 2 for w in weights.values())
+
+    genre_hhi   = _hhi(lambda p: p.genre)
+    concept_hhi = _hhi(lambda p: p.concept_type)
+    return float(min(max((1 - genre_hhi) * 50 + (1 - concept_hhi) * 50, 0), 100))
+
+
 def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama",
                             concept_type: str = "New IP") -> float:
     """Resolves the real box-office multiplier at 'release' time — a
@@ -1044,7 +1284,7 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
     earned, not just the hypothetical bear/base box-office scenarios."""
     if not projects:
         return {"total": 0.0, "risk_adjusted_npv": 0.0, "capital_efficiency": 0.0,
-                 "strategic_fit": 0.0, "passed": False}
+                 "strategic_fit": 0.0, "portfolio_diversification": 0.0, "passed": False}
     if critical_scores is None:
         critical_scores = [None] * len(projects)
 
@@ -1062,14 +1302,21 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
     s_npv = min(max((avg_ra_npv + 100) / 300 * 100, 0), 100)    # -$100M -> 0, +$200M -> 100
     s_eff = min(max(avg_cap_eff / 6 * 100, 0), 100)               # 6x total revenue / P&A = perfect
     s_fit = avg_fit
+    s_div = portfolio_diversification_score(projects)
 
-    total = s_npv * 0.55 + s_eff * 0.20 + s_fit * 0.25
+    # 2026-08-17: added s_div as a real weighted component (previously a
+    # THEORY_CONTENT card only, not scored) -- rebalanced from
+    # 0.55/0.20/0.25 down proportionally rather than just appending 0.15 on
+    # top, keeping NPV clearly dominant (matches TV/Streaming's own
+    # genre_mix weight in utils/game_state.py::SCORE_WEIGHTS).
+    total = s_npv * 0.45 + s_eff * 0.20 + s_fit * 0.20 + s_div * 0.15
 
     return {
-        "total":              round(total, 1),
-        "risk_adjusted_npv":  round(s_npv, 1),
-        "capital_efficiency": round(s_eff, 1),
-        "strategic_fit":      round(s_fit, 1),
-        "avg_ra_npv_m":       round(avg_ra_npv, 2),
-        "passed":             avg_ra_npv > 0,   # pass/fail gate: positive risk-adjusted NPV, not a fixed margin %
+        "total":                    round(total, 1),
+        "risk_adjusted_npv":        round(s_npv, 1),
+        "capital_efficiency":       round(s_eff, 1),
+        "strategic_fit":            round(s_fit, 1),
+        "portfolio_diversification": round(s_div, 1),
+        "avg_ra_npv_m":             round(avg_ra_npv, 2),
+        "passed":                   avg_ra_npv > 0,   # pass/fail gate: positive risk-adjusted NPV, not a fixed margin %
     }

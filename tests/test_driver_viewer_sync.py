@@ -37,7 +37,7 @@ def _register(at, role="🎮 Driver — I'll make the decisions", team="Team Syn
     at.text_input(key="semester_input_field").set_value(semester)
     at.text_input(key="team_input_field").set_value(team)
     at.radio(key="role_input_field").set_value(role)
-    at.button[0].click()
+    at.button(key="register_team_button").click()
     at.run()
     at.button(key="section_tv").click()
     at.run()

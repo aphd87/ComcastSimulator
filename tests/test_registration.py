@@ -32,7 +32,7 @@ def _fill_and_submit(at, university="Test University", college="Test School of B
     at.text_input(key="class_title_input_field").set_value(class_title)
     at.text_input(key="semester_input_field").set_value(semester)
     at.text_input(key="team_input_field").set_value(team)
-    at.button[0].click()
+    at.button(key="register_team_button").click()
     at.run()
     return at
 
@@ -45,9 +45,9 @@ def test_registration_with_all_fields_succeeds():
     # Class Abbreviation (optional) -- Class Title/Semester split out of the
     # old merged "Class / Section" field 2026-08-04.
     assert len(at.text_input) == 6
-    # Register Team + the "View Leaderboard" shortcut added 2026-07-30
-    # (retitled from "Just check the Leaderboard" 2026-08-05) -- button[0]
-    # (Register Team, rendered first) is what _fill_and_submit clicks.
+    # Register Team + the header "🏆 Leaderboard" shortcut (moved above the
+    # form 2026-08-17 so it's visible without scrolling) -- keyed lookups
+    # below, not positional, since the header button now renders first.
     assert len(at.button) == 2
 
     _fill_and_submit(at)
@@ -71,7 +71,7 @@ def test_registration_captures_class_abbreviation_when_filled_in():
     at.text_input(key="semester_input_field").set_value("Fall 2026")
     at.text_input(key="class_abbrev_input_field").set_value("MBA6120")
     at.text_input(key="team_input_field").set_value("Team Alpha")
-    at.button[0].click()
+    at.button(key="register_team_button").click()
     at.run()
 
     assert not at.exception
@@ -112,7 +112,7 @@ def test_registration_blocks_on_missing_team_name():
     at.text_input(key="class_title_input_field").set_value("Sec A")
     at.text_input(key="semester_input_field").set_value("Fall 2026")
     at.text_input(key="team_input_field").set_value("")   # left blank
-    at.button[0].click()
+    at.button(key="register_team_button").click()
     at.run()
 
     assert not at.exception
@@ -128,7 +128,7 @@ def test_registration_blocks_on_missing_university():
     at.text_input(key="class_title_input_field").set_value("Sec A")
     at.text_input(key="semester_input_field").set_value("Fall 2026")
     at.text_input(key="team_input_field").set_value("Team Alpha")
-    at.button[0].click()
+    at.button(key="register_team_button").click()
     at.run()
 
     assert not at.exception
@@ -138,14 +138,14 @@ def test_registration_blocks_on_missing_university():
 
 
 def test_leaderboard_reachable_without_registering():
-    # "View Leaderboard" (sign-in screen, button[1] -- retitled 2026-08-05
-    # from "Just check the Leaderboard") sets active_section="leaderboard"
-    # without ever setting ss.registered -- app.py's top-level branch has
-    # to let that win over the not-registered gate, or an anonymous
-    # visitor would just see the sign-in form again.
+    # Header "🏆 Leaderboard" button (moved above the registration form
+    # 2026-08-17, see app.py's header-row block) sets active_section=
+    # "leaderboard" without ever setting ss.registered -- app.py's
+    # top-level branch has to let that win over the not-registered gate,
+    # or an anonymous visitor would just see the sign-in form again.
     at = _fresh_app()
-    assert at.button[1].label == "🏆 View Leaderboard"
-    at.button[1].click()
+    assert at.button(key="header_leaderboard_btn").label == "🏆 Leaderboard"
+    at.button(key="header_leaderboard_btn").click()
     at.run()
 
     assert not at.exception

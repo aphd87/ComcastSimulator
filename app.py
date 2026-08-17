@@ -19,6 +19,7 @@ FERPA Note: No student PII is collected. Only team names (student-chosen pseudon
 Leaderboard stores: team_name, network, attempt#, score, timestamp, pass/fail.
 """
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 
 st.set_page_config(
@@ -263,6 +264,18 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+if not ss.registered and ss.active_section != "leaderboard":
+    # Small header-row button so an anonymous visitor sees the leaderboard
+    # above the fold, without scrolling past the registration form (2026-08-17,
+    # per user request to make it more prominent than its old spot buried
+    # below the form). Secondary-styled and off to the side deliberately --
+    # registering a team is still the primary CTA on this screen.
+    _hcol1, _hcol2 = st.columns([5, 1])
+    with _hcol2:
+        if st.button("🏆 Leaderboard", key="header_leaderboard_btn", use_container_width=True):
+            ss.active_section = "leaderboard"
+            st.rerun()
+
 if ss.registered:
     tcol1, tcol2 = st.columns([5, 1])
     with tcol1:
@@ -434,7 +447,7 @@ if not ss.registered and ss.active_section != "leaderboard":
                  "If it's just you, pick Driver."
         )
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
-        if st.button("Register Team →", use_container_width=True, type="primary"):
+        if st.button("Register Team →", key="register_team_button", use_container_width=True, type="primary"):
             if not team_input.strip():
                 st.error("Please enter a team name.")
             elif not university_input.strip():
@@ -454,14 +467,6 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.registered    = True
                 st.rerun()
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
-
-    st.divider()
-    lcol, _ = st.columns([1, 2])
-    with lcol:
-        if st.button("🏆 View Leaderboard", use_container_width=True):
-            ss.active_section = "leaderboard"
-            st.rerun()
-        st.caption("No registration required — just browsing.")
 
     st.divider()
 
@@ -617,7 +622,13 @@ else:
     # Follow Along teammates read the Driver's live state before anything else
     # renders, so net/net_info/the level brief/etc. below all reflect the
     # Driver's actual choices, not this viewer's own stale local defaults.
+    # Auto-rerun every 5s (2026-08-17, per user request: "watch what happens
+    # live" without teammates having to manually refresh) so a fresh
+    # load_live_state() pull happens on its own -- scoped to viewers only,
+    # since forcibly rerunning the Driver's own screen mid-decision would
+    # blow away whatever they were mid-typing/mid-click on.
     if ss.team_role == "viewer":
+        st_autorefresh(interval=5000, key="viewer_live_refresh")
         _snap = load_live_state(ss.team_name, ss.school, ss.class_section)
         if _snap:
             _apply_live_snapshot(ss, _snap)

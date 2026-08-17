@@ -18,9 +18,11 @@ from utils.movie_models import (
     strategic_fit_score, compute_movie_score, draw_actual_multiplier, nearest_scenario_label,
     draw_critical_reception, AWARDS_ELIGIBLE_GENRES, AWARDS_CONTENDER_THRESHOLD, AWARDS_WIN_THRESHOLD,
     CONCEPT_TYPES, INDIE_HORROR_BUDGET_CAP_M, WINDOWING_UNLOCK_CYCLE,
+    SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST, STAR_POWER_COST_PER_POINT_M,
     draw_production_trouble, draw_ancillary_surprise,
-    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, TAX_CREDIT_PCT, participation_waterfall,
+    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
+    ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
     draw_ai_tooling_setback, multiplier_to_stars, draw_ewom_piracy_swing,
@@ -85,13 +87,20 @@ def _irr_label(irr) -> str:
     return f"{irr * 100:.0f}%"
 
 
-def _active_talent_bonus(ss, genre: str) -> dict:
+def _active_talent_bonus(ss, genre: str, source_material: str = None) -> dict:
     """Star-power/critical-score bonus from an active Overall Deal or a
     Holding Deal that resolved successfully for THIS cycle -- gated on the
     partner's specialty matching the chosen genre, a real incentive to keep
     the slate aligned with whichever relationship was paid for. Overall
     Deal takes priority if both are somehow true for the same partner.
-    Returns {} when nothing applies."""
+    Returns {} when nothing applies.
+
+    source_material (2026-08-17, default None = original behavior
+    unchanged): when the signed partner's origin_medium maps to this
+    project's actual source_material (see ORIGIN_MEDIUM_SOURCE_SYNERGY),
+    their bonus is amplified by TALENT_SOURCE_SYNERGY_MULT -- casting FOR
+    the adaptation is a real strategic choice, not just picking the
+    biggest raw bonus number."""
     key = ss.get("movie_overall_deal")
     if not key:
         for k, h in ss.get("movie_talent_holds", {}).items():
@@ -103,14 +112,21 @@ def _active_talent_bonus(ss, genre: str) -> dict:
     partner = TALENT_PARTNERS[key]
     if partner["specialty"] != genre:
         return {}
-    return {"partner_name": partner["name"],
-            **{k: v for k, v in partner.items() if k in ("star_power_bonus", "critical_score_bonus")}}
+    bonus = {"partner_name": partner["name"],
+             **{k: v for k, v in partner.items() if k in ("star_power_bonus", "critical_score_bonus")}}
+    synergy_material = ORIGIN_MEDIUM_SOURCE_SYNERGY.get(partner.get("origin_medium"))
+    if synergy_material and synergy_material == source_material:
+        for k in ("star_power_bonus", "critical_score_bonus"):
+            if k in bonus:
+                bonus[k] = bonus[k] * TALENT_SOURCE_SYNERGY_MULT
+        bonus["synergy"] = True
+    return bonus
 
 
 def _current_project(ss) -> MovieProject:
     d = ss.movie_draft
     genre = d.get("genre", GENRES[0])
-    bonus = _active_talent_bonus(ss, genre)
+    bonus = _active_talent_bonus(ss, genre, d.get("source_material", SOURCE_MATERIALS[0]))
     star_power = d.get("star_power", 50) + bonus.get("star_power_bonus", 0)
     return MovieProject(
         title=d.get("title", f"Untitled Cycle {ss.movie_cycle} Release"),
@@ -127,6 +143,7 @@ def _current_project(ss) -> MovieProject:
         pay1_licensing=d.get("pay1_licensing", "keep"),
         ai_production_tools=d.get("ai_production_tools", False),
         debut_season=d.get("debut_season", "Off-Peak"),
+        source_material=d.get("source_material", SOURCE_MATERIALS[0]),
     )
 
 
@@ -254,12 +271,21 @@ def _section_talent_partnerships(ss):
                 bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
                                else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
                 opacity = "opacity:.45;" if poached_by else ""
+                synergy_material = ORIGIN_MEDIUM_SOURCE_SYNERGY.get(partner.get("origin_medium"))
+                synergy_note = (f'<div class="text-[10px] mt-1" style="color:{ACCENT2};">🎯 {synergy_material} synergy '
+                                f'(×{TALENT_SOURCE_SYNERGY_MULT:.1f})</div>' if synergy_material else "")
                 st.markdown(f"""
                 <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;{opacity}">
-                  <div class="text-sm font-semibold text-ink">{partner['name']}</div>
-                  <div class="text-[10px] text-muted font-mono mb-2">{partner['specialty']}</div>
+                  <div class="text-sm font-semibold text-ink">{partner['name']} <span class="text-[10px] text-muted">
+                    ({partner.get('gender', '')}, {partner.get('age', '?')})</span></div>
+                  <div class="text-[10px] text-muted font-mono mb-1">Best genres: {', '.join(partner.get('best_genres', [partner['specialty']]))}</div>
+                  <div class="text-[10px] text-muted font-mono mb-2">From: {partner.get('origin_medium', '—')}</div>
+                  <div class="text-[10px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
+                  <div class="text-[10px] text-muted font-mono">Lifetime B.O.: ${partner.get('lifetime_box_office_m', 0):,.0f}M</div>
+                  <div class="text-[10px] text-muted font-mono mb-2">Social: {partner.get('social_followers_m', 0):.1f}M followers</div>
                   <div class="text-xs text-ink2">{bonus_label}</div>
                   <div class="text-xs text-warn mt-1">${partner['overall_deal_cost_m']:.0f}M</div>
+                  {synergy_note}
                   {f'<div class="text-[10px] mt-1" style="color:{DANGER};">Signed by {poached_by}</div>' if poached_by else ''}
                 </div>
                 """, unsafe_allow_html=True)
@@ -457,11 +483,12 @@ def _decisions(ss):
         gc1, gc2 = st.columns(2)
         genre = gc1.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
                                help="Drives international box-office reach and Peacock streaming appeal.")
-        active_bonus = _active_talent_bonus(ss, genre)
+        active_bonus = _active_talent_bonus(ss, genre, d.get("source_material", SOURCE_MATERIALS[0]))
         if active_bonus:
-            bonus_txt = (f"+{active_bonus['star_power_bonus']} Star Power" if "star_power_bonus" in active_bonus
+            bonus_txt = (f"+{active_bonus['star_power_bonus']:.0f} Star Power" if "star_power_bonus" in active_bonus
                          else f"+{active_bonus['critical_score_bonus']:.0f} Critical Reception")
-            st.caption(f"🤝 {active_bonus['partner_name']} bonus active for {genre}: {bonus_txt}")
+            synergy_txt = " 🎯 Source Material synergy active — bonus amplified." if active_bonus.get("synergy") else ""
+            st.caption(f"🤝 {active_bonus['partner_name']} bonus active for {genre}: {bonus_txt}.{synergy_txt}")
         concept_type = gc2.selectbox(
             "Concept Type", CONCEPT_TYPES,
             index=CONCEPT_TYPES.index(d.get("concept_type", CONCEPT_TYPES[0])) if d.get("concept_type") in CONCEPT_TYPES else 0,
@@ -470,6 +497,79 @@ def _decisions(ss):
                  "opening, much stronger long-tail library value. Indie-Horror: budget capped, "
                  "wider variance — huge outperformers on tiny budgets are the whole case for it.",
         )
+
+        gc3, _ = st.columns(2)
+        source_material = gc3.selectbox(
+            "Source Material", SOURCE_MATERIALS,
+            index=SOURCE_MATERIALS.index(d.get("source_material", SOURCE_MATERIALS[0]))
+                  if d.get("source_material") in SOURCE_MATERIALS else 0,
+            help="Where the underlying story comes from — separate from Concept Type (a Sequel "
+                 "can itself be an original-screenplay franchise OR a book-adaptation sequel).",
+        )
+        acq_cost = SOURCE_ACQUISITION_COST_M.get(source_material, 0.0)
+        boost = SOURCE_OPENING_BOOST.get(source_material, 1.0)
+        if acq_cost > 0:
+            st.caption(f"📚 Rights acquisition: +${acq_cost:.0f}M added to Capital at Risk — but a "
+                       f"built-in fan base lifts your opening weekend by {(boost - 1) * 100:.0f}% "
+                       f"before you spend a dollar of P&A. Real-world example: game/book/show "
+                       f"publishers command real premiums for adaptation rights precisely because "
+                       f"that audience already exists.")
+        else:
+            st.caption("An original screenplay has no rights to acquire, but also no built-in "
+                       "audience — every dollar of awareness has to be earned through P&A and Star Power.")
+
+        # ── AI Pitch Feedback (optional, BYOK — see README.md) ─────────────────
+        # 2026-08-17: Movies-side parallel to app_pages/greenlight.py's AI
+        # Pitch Feedback panel -- TV had this fully built and Movies never
+        # got the equivalent, even though the same BYOK infrastructure
+        # (utils/ai_grading.py) already existed. Uses grade_movie_concept, a
+        # genuinely separate model/prompt from TV's grade_show_concept (see
+        # MovieConceptGrade's docstring) -- theatrical feasibility/market-fit
+        # criteria don't map onto a TV budget/network framing.
+        from utils.ai_grading import api_key_configured, grade_movie_concept
+
+        st.markdown(
+            '<div class="section-title mt-3">AI Pitch Feedback '
+            '<span style="font-size:14px;color:#8a8f9e;">(optional)</span></div>',
+            unsafe_allow_html=True,
+        )
+        if not api_key_configured():
+            st.caption("Ask your instructor to enable AI feedback for this class.")
+        else:
+            pitch = st.text_area(
+                "Describe your movie concept in your own words (2-4 sentences)",
+                placeholder="e.g. A stranded astronaut has to out-think a planet that's actively "
+                            "trying to kill her, using only what she can scavenge...",
+                key="movie_pitch_text",
+            )
+            if st.button("🤖 Get AI Feedback", key="movie_grade_button"):
+                if not pitch.strip():
+                    st.warning("Write a short pitch first.")
+                else:
+                    with st.spinner("Grading your pitch..."):
+                        grade = grade_movie_concept(title, genre, concept_type, source_material, pitch)
+                    if grade is None:
+                        st.error("AI feedback is temporarily unavailable. Try again later.")
+                    else:
+                        total = (grade.originality_score + grade.market_fit_score
+                                  + grade.feasibility_score + grade.presentation_score)
+                        st.markdown(f"**Score: {total}/100**")
+                        st.write(grade.feedback)
+                        pgc1, pgc2 = st.columns(2)
+                        with pgc1:
+                            st.markdown("**Strengths**")
+                            for s in grade.strengths:
+                                st.markdown(f"- {s}")
+                        with pgc2:
+                            st.markdown("**Risks**")
+                            for r in grade.risks:
+                                st.markdown(f"- {r}")
+                        if grade.research_recommended:
+                            st.info(f"🔬 **Worth paying for Research on this one** before you "
+                                    f"commit budget — {grade.research_rationale}")
+                        else:
+                            st.caption(f"🔬 Probably not worth paying for Research on this one — "
+                                       f"{grade.research_rationale}")
 
         # ── Research / Social Listening ──────────────────────────────────────
         # Phase 4 item 9, 2026-08-05: Movies-side parallel to TV/Streaming's
@@ -484,10 +584,17 @@ def _decisions(ss):
         # Trouble, the AI Tooling Setback, Ancillary Markets Surprise, or
         # eWOM & Piracy -- those are separate, later risk axes, same as TV's
         # Research never previewing draw_production_risk_event.
+        research_ip_note = (
+            "for this Sequel — how much of the franchise's built-in awareness is actually "
+            "carrying through this cycle, not just this one entry's fresh reception"
+            if concept_type == "Sequel" else "for this New IP concept — you have no franchise "
+            "track record to lean on, so this is your only signal before you commit"
+        )
         st.markdown(
             f'<p class="text-xs text-ink2 mt-1 mb-1">🔎 <b class="text-ink">Research / Social Listening</b> '
             f'— pay ${RESEARCH_FEE_M:.0f}M (added to P&A spend) to preview the actual box-office and '
-            f'critical-reception signals for this concept before committing your budget.</p>',
+            f'critical-reception signals {research_ip_note}, before committing your budget. Works the same '
+            f'way whether the concept is brand-new or an established franchise entry.</p>',
             unsafe_allow_html=True)
         if ss.movie_research_paid.get(ss.movie_cycle):
             preview_mult = draw_actual_multiplier(ss.team_name, ss.movie_cycle, genre, concept_type)
@@ -519,19 +626,46 @@ def _decisions(ss):
         c1, c2 = st.columns(2)
         budget_cap = INDIE_HORROR_BUDGET_CAP_M if concept_type == "Indie-Horror" else 300.0
         budget_default = min(float(d.get("budget_m", 60.0)), budget_cap)
-        budget = c1.number_input("Production Budget ($M)", 10.0, budget_cap, budget_default, step=5.0,
-                                  help=f"Capped at ${INDIE_HORROR_BUDGET_CAP_M:.0f}M for Indie-Horror — "
-                                       f"that's what makes it \"indie.\"" if concept_type == "Indie-Horror" else None)
-        pa = c2.number_input("P&A / Marketing Spend ($M)", 5.0, 200.0, float(d.get("pa_spend_m", 40.0)), step=5.0,
-                              help="Historically rivals or exceeds the production budget for a wide release.")
+        with c1:
+            budget = st.number_input("Production Budget ($M)", 10.0, budget_cap, budget_default, step=5.0,
+                                      help=f"Capped at ${INDIE_HORROR_BUDGET_CAP_M:.0f}M for Indie-Horror — "
+                                           f"that's what makes it \"indie.\"" if concept_type == "Indie-Horror" else None)
+            st.caption("The negative cost — everything spent to actually make the film (cast/crew, sets, "
+                       "VFX, post-production) before a single ticket sells. Not the same as Capital at "
+                       "Risk below, which also folds in P&A and any financing discount you've chosen.")
+        with c2:
+            pa = st.number_input("P&A / Marketing Spend ($M)", 5.0, 200.0, float(d.get("pa_spend_m", 40.0)), step=5.0,
+                                  help="Historically rivals or exceeds the production budget for a wide release.")
+            st.caption("Prints & Advertising — trailers, media buys, publicity, the physical/digital "
+                       "prints themselves. Real studios routinely spend as much on P&A as on production "
+                       "itself for a wide release; it buys awareness (see Star Power below) but not "
+                       "quality or word-of-mouth.")
         c3, c4 = st.columns(2)
-        star = c3.slider("Star Power", 0, 100, int(d.get("star_power", 50)),
-                          help="Lifts opening awareness, moderately — doesn't compound with P&A.")
-        screens = c4.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
+        with c3:
+            star = st.slider("Star Power", 0, 100, int(d.get("star_power", 50)),
+                              help="Lifts opening awareness, moderately — doesn't compound with P&A. "
+                                   f"Costs ${STAR_POWER_COST_PER_POINT_M:.2f}M per point, added to "
+                                   "Capital at Risk.")
+            star_cost = star * STAR_POWER_COST_PER_POINT_M
+            st.caption(f"A-list casting's built-in name recognition — lifts opening-weekend awareness "
+                       f"on top of whatever P&A buys, but doesn't stack multiplicatively with it. Costs "
+                       f"real money, added directly to Capital at Risk below: at this level, "
+                       f"+${star_cost:.1f}M. Real A-list talent also commands gross participation once "
+                       f"the movie is out (see the Deal-Participation Waterfall) — this is the upfront "
+                       f"cost of getting them attached at all.")
+        with c4:
+            screens = st.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
+            st.caption("The U.S. has roughly 40,000 movie screens total (NATO estimate), of which only "
+                       "about 700-900 are true large-format IMAX screens — a genuine scarce resource "
+                       "exhibitors allocate to their highest-confidence openings. A wide theatrical "
+                       "release typically opens on 3,500-4,500 screens; a platform/awards-qualifying "
+                       "rollout deliberately starts on a few hundred and expands week over week if the "
+                       "film performs. More screens raises your opening (see Opening Weekend below) but "
+                       "doesn't guarantee people show up.")
 
         fin_labels = {
             "self_finance": "Self-Finance — full capital at risk, full upside",
-            "presale": "Territorial Pre-Sales — lower capital at risk, caps international upside",
+            "presale": "Global Distribution Deal (Territorial Pre-Sales) — lower capital at risk, caps international upside",
             "tax_incentive": "Tax-Incentive Location — cuts budget cost, no upside cap",
         }
         financing_structure = st.selectbox(
@@ -541,12 +675,17 @@ def _decisions(ss):
             format_func=lambda k: fin_labels[k],
             help="How this movie gets funded before a single ticket sells.",
         )
+        net_advance_pct = PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
         fin_notes = {
             "self_finance": "You fund 100% of budget + P&A yourself and keep every dollar of "
                              "revenue, domestic and international.",
-            "presale": f"An international distributor advances ~{PRESALE_ADVANCE_PCT:.0%} of your "
-                       f"production budget before you shoot, in exchange for owning most of the "
-                       f"international box office outright — real cash relief now, a capped upside later.",
+            "presale": f"A sales agent brokers advances from international distributors, territory "
+                       f"by territory, worth ~{PRESALE_ADVANCE_PCT:.0%} of your production budget "
+                       f"before you shoot — but the agent takes a real {PRESALE_SALES_AGENT_FEE_PCT:.0%} "
+                       f"fee off that advance (real-world range: 10-30%), so only ~{net_advance_pct:.0%} "
+                       f"of budget actually reaches you. In exchange, those distributors own most of "
+                       f"the international box office outright — real cash relief now, a capped "
+                       f"upside later.",
             "tax_incentive": f"Shooting in a tax-friendly location cuts your effective production "
                               f"budget by ~{TAX_CREDIT_PCT:.0%} (net of the discount most non-local "
                               f"studios take to monetize the credit) — no revenue trade-off.",
@@ -597,12 +736,16 @@ def _decisions(ss):
                  release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
                  financing_structure=financing_structure, exhibitor_posture=exhibitor_posture,
                  pay1_licensing=d.get("pay1_licensing", "keep"), ai_production_tools=ai_production_tools,
-                 debut_season=d.get("debut_season", "Off-Peak"))
+                 debut_season=d.get("debut_season", "Off-Peak"), source_material=source_material)
     ss.movie_draft = draft
     project = _current_project(ss)
 
     with right:
         st.markdown('<div class="section-title">Capital at Risk</div>', unsafe_allow_html=True)
+        st.caption("Every dollar committed before a single ticket sells — production budget, P&A, "
+                   "casting cost, and any rights acquisition, net of whatever your Financing "
+                   "Structure and AI Production Tools choices discount. This is the number NPV is "
+                   "measured against.")
         raw_capital = budget + pa
         financed_capital = project.capital_at_risk()
         savings_line = ""
@@ -610,12 +753,22 @@ def _decisions(ss):
             savings_line = (f'<div class="flex justify-between text-sm py-1" style="color:{SUCCESS};">'
                              f'<span class="text-ink2">Financing Savings</span>'
                              f'<span class="font-mono">-${raw_capital - financed_capital:.1f}M</span></div>')
+        star_cost_line = ""
+        if star_cost > 0:
+            star_cost_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">Star Power Cost</span>'
+                               f'<span class="font-mono text-warn">+${star_cost:.1f}M</span></div>')
+        acq_line = ""
+        if acq_cost > 0:
+            acq_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">Rights Acquisition</span>'
+                        f'<span class="font-mono text-warn">+${acq_cost:.1f}M</span></div>')
         st.markdown(f"""
         <div class="rounded-lg border border-line bg-surface p-4">
           <div class="flex justify-between text-sm py-1"><span class="text-ink2">Production Budget</span>
             <span class="font-mono text-warn">${budget:.1f}M</span></div>
           <div class="flex justify-between text-sm py-1 border-b border-line pb-2"><span class="text-ink2">P&A Spend</span>
             <span class="font-mono text-warn">${pa:.1f}M</span></div>
+          {star_cost_line}
+          {acq_line}
           {savings_line}
           <div class="flex justify-between text-base font-semibold pt-2">
             <span class="text-ink">Capital At Risk</span>
@@ -767,7 +920,7 @@ def _decisions(ss):
         # ceiling of this draw (see utils/movie_models.py).
         critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre,
                                                   ai_production_tools=project.ai_production_tools)
-        talent_bonus = _active_talent_bonus(ss, project.genre)
+        talent_bonus = _active_talent_bonus(ss, project.genre, project.source_material)
         if "critical_score_bonus" in talent_bonus:
             critical_score = min(100.0, critical_score + talent_bonus["critical_score_bonus"])
 
@@ -842,7 +995,7 @@ def _decisions(ss):
                                   else project.subscriber_value(multiplier) * ewom_mult),
             "longtail":         project.library_longtail(multiplier, critical_score),
             "awards_bump":      project.awards_season_bump(multiplier, critical_score),
-            "theme_park":       project.theme_park_value(multiplier) * theme_park_mult,
+            "theme_park":       project.theme_park_value(multiplier, critical_score) * theme_park_mult,
             "capital_at_risk":  project.capital_at_risk(),
             "talent_take":      waterfall["talent_take"],
             "producer_take":    waterfall["producer_take"],
@@ -885,13 +1038,17 @@ def _results(ss):
       </div>
       <div class="flex gap-8 flex-wrap">
         <div><div class="text-[9px] text-muted font-mono">TOTAL REVENUE</div>
-          <div class="text-2xl font-serif text-ink">${result['total_revenue']:.1f}M</div></div>
+          <div class="text-2xl font-serif text-ink">${result['total_revenue']:.1f}M</div>
+          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Every window summed — theatrical through library longtail.</div></div>
         <div><div class="text-[9px] text-muted font-mono">CAPITAL AT RISK</div>
-          <div class="text-2xl font-serif" style="color:{WARN};">${result['capital_at_risk']:.1f}M</div></div>
+          <div class="text-2xl font-serif" style="color:{WARN};">${result['capital_at_risk']:.1f}M</div>
+          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">What you committed before revenue arrived — the number NPV is measured against.</div></div>
         <div><div class="text-[9px] text-muted font-mono">NPV</div>
-          <div class="text-2xl font-serif" style="color:{npv_c};">{_fmt_money(result['npv'])}</div></div>
+          <div class="text-2xl font-serif" style="color:{npv_c};">{_fmt_money(result['npv'])}</div>
+          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Total Revenue's present value minus Capital at Risk — positive means real value created.</div></div>
         <div><div class="text-[9px] text-muted font-mono">IRR</div>
-          <div class="text-2xl font-serif text-ink">{_irr_label(result['irr'])}</div></div>
+          <div class="text-2xl font-serif text-ink">{_irr_label(result['irr'])}</div>
+          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Annualized rate of return — &gt;500% means capital came back too fast for the rate to be meaningful.</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1088,11 +1245,20 @@ def _complete(ss):
     with score_col:
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
         components = [
-            ("Risk-Adj. NPV",     score["risk_adjusted_npv"],  "55%"),
-            ("Capital Efficiency", score["capital_efficiency"], "20%"),
-            ("Strategic Fit",      score["strategic_fit"],      "25%"),
+            ("Risk-Adj. NPV",           score["risk_adjusted_npv"],       "45%",
+             "Weights your bear-case outcome at 50% rather than scoring on the rosy base case alone — "
+             "rewards risk-aware greenlighting, not blind optimism."),
+            ("Capital Efficiency",      score["capital_efficiency"],      "20%",
+             "Total lifetime revenue per P&A dollar spent, averaged across your slate — a real-world "
+             "3-6x is healthy; 6x total revenue / P&A scores 100."),
+            ("Strategic Fit",           score["strategic_fit"],           "20%",
+             "Did your release-strategy choice (wide/platform/day-and-date) actually beat a naive "
+             "'always go wide theatrical' default, net of cannibalization?"),
+            ("Portfolio Diversification", score["portfolio_diversification"], "15%",
+             "How spread your slate is across Genre AND Concept Type, weighted by capital committed — "
+             "three Sequels in a row scores low even if each one individually did well."),
         ]
-        for label, val, weight in components:
+        for label, val, weight, defn in components:
             c = SUCCESS if val >= 70 else (WARN if val >= 40 else DANGER)
             st.markdown(f"""
             <div class="mb-3">
@@ -1101,6 +1267,7 @@ def _complete(ss):
                 <span class="font-mono" style="color:{c};">{val:.0f}/100</span></div>
               <div class="h-[5px] rounded bg-line overflow-hidden">
                 <div class="h-full rounded" style="width:{val}%;background:{c};"></div></div>
+              <div class="text-[10px] text-muted mt-1">{defn}</div>
             </div>
             """, unsafe_allow_html=True)
 
