@@ -30,10 +30,11 @@ from utils.movie_models import (
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
     participation_waterfall, TALENT_GROSS_GUARANTEE_M, TALENT_GROSS_PARTICIPATION,
     PRODUCER_NET_PARTICIPATION,
-    TALENT_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
+    TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
     draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST,
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
+    IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
@@ -276,6 +277,38 @@ class TestStarPowerCost:
 
 
 # ── Source Material — acquisition cost + built-in audience (2026-08-17) ────
+class TestImax:
+    """2026-08-18: default False must reproduce the exact unadjusted
+    baseline every project used before this field existed."""
+
+    def test_default_false_is_the_unadjusted_baseline(self):
+        p = _tentpole()
+        assert p.imax_release is False
+        assert not p.is_imax_eligible()
+
+    def test_imax_boosts_opening_and_adds_cost_for_an_eligible_genre(self):
+        base = MovieProject(title="A", genre="Action/Tentpole", budget_m=150, pa_spend_m=90,
+                             star_power=80, screens=4000, cycle=1)
+        imax = MovieProject(**{**base.__dict__, "imax_release": True, "title": "B"})
+        assert imax.is_imax_eligible()
+        assert imax.opening_weekend() == pytest.approx(base.opening_weekend() * (1 + IMAX_OPENING_BOOST_PCT))
+        assert imax.capital_at_risk() == pytest.approx(base.capital_at_risk() + IMAX_COST_M)
+
+    def test_imax_is_ineligible_for_a_non_eligible_genre(self):
+        p = MovieProject(title="Drama", genre="Drama", budget_m=30, pa_spend_m=15,
+                          star_power=60, screens=1200, cycle=1, imax_release=True)
+        assert not p.is_imax_eligible()
+        assert p.opening_weekend() == pytest.approx(
+            MovieProject(**{**p.__dict__, "imax_release": False}).opening_weekend()
+        )
+
+    def test_imax_is_ineligible_for_day_and_date(self):
+        p = MovieProject(title="Tentpole", genre="Action/Tentpole", budget_m=150, pa_spend_m=90,
+                          star_power=80, screens=4000, cycle=1, imax_release=True,
+                          release_strategy="day_and_date")
+        assert not p.is_imax_eligible()
+
+
 class TestSourceMaterial:
     def test_original_screenplay_is_the_zero_effect_baseline(self):
         p = _tentpole()
@@ -779,27 +812,44 @@ class TestOscarThresholds:
 
 
 class TestTalentPartners:
-    """2026-08-04: TALENT_PARTNERS data integrity -- every partner must
-    carry exactly one bonus type (star_power_bonus XOR critical_score_bonus)
-    so app_pages/movies.py's bonus-label logic (`if 'star_power_bonus' in
+    """2026-08-18: STUDIO_PARTNERS (Overall/First-Look Deal targets) and
+    TALENT_PARTNERS (Holding Deal targets, individual actors) are two
+    genuinely separate rosters -- every entry in either must carry exactly
+    one bonus type (star_power_bonus XOR critical_score_bonus) so
+    app_pages/movies.py's bonus-label logic (`if 'star_power_bonus' in
     partner else ...`) never silently picks the wrong branch."""
 
-    def test_every_partner_has_exactly_one_bonus_type(self):
-        for key, partner in TALENT_PARTNERS.items():
+    def test_every_studio_and_talent_partner_has_exactly_one_bonus_type(self):
+        for key, partner in {**STUDIO_PARTNERS, **TALENT_PARTNERS}.items():
             has_star = "star_power_bonus" in partner
             has_critical = "critical_score_bonus" in partner
             assert has_star != has_critical, f"{key} must have exactly one bonus type"
 
-    def test_every_partner_has_positive_costs(self):
-        for partner in TALENT_PARTNERS.values():
-            assert partner["overall_deal_cost_m"] > 0
-            assert partner["hold_cost_m"] > 0
-            assert partner["overall_deal_cost_m"] > partner["hold_cost_m"]   # standing > one-off, always
+    def test_every_studio_partner_has_a_positive_deal_cost(self):
+        for partner in STUDIO_PARTNERS.values():
+            assert partner["deal_cost_m"] > 0
 
-    def test_every_partner_specialty_is_a_real_genre(self):
-        from utils.movie_models import GENRES
+    def test_every_talent_partner_has_a_positive_hold_cost(self):
         for partner in TALENT_PARTNERS.values():
+            assert partner["hold_cost_m"] > 0
+
+    def test_studio_deal_cost_exceeds_any_talent_hold_cost(self):
+        # A standing studio-level relationship should cost more than a
+        # one-off individual booking, always.
+        min_deal = min(p["deal_cost_m"] for p in STUDIO_PARTNERS.values())
+        max_hold = max(p["hold_cost_m"] for p in TALENT_PARTNERS.values())
+        assert min_deal > max_hold
+
+    def test_every_studio_and_talent_specialty_is_a_real_genre(self):
+        from utils.movie_models import GENRES
+        for partner in {**STUDIO_PARTNERS, **TALENT_PARTNERS}.values():
             assert partner["specialty"] in GENRES
+
+    def test_studio_and_talent_rosters_use_distinct_keys(self):
+        # Re-keyed 2026-08-18 specifically to avoid this collision -- the
+        # two rosters must never share a key, or Sign/Hold button keys in
+        # the UI would collide.
+        assert not (set(STUDIO_PARTNERS) & set(TALENT_PARTNERS))
 
 
 class TestRivalStudioDynamics:

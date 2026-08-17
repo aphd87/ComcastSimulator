@@ -429,32 +429,65 @@ def draw_ewom_piracy_swing(team_name: str, cycle: int) -> Optional[tuple[str, fl
     return reason, mult
 
 
-# ── Talent Deals — Overall/First-Look Partnerships & Holding Deals ─────────
+# ── Talent Deals — Studio Partnerships (Overall/First-Look) & Holding Deals ──
 # 2026-08-04, per user request to build out talent-negotiation content from
 # the Movie Business and Deal Mechanisms note, plus rival-studio competitive
 # dynamics ("can you see how your choices impact rival studios?") -- mirrors
 # utils/sports_models.py's seeded-rival-bidder precedent (real companies
 # bidding against you for league rights), scoped down to talent scheduling.
 #
-# Partners are fictional INDIVIDUAL actors/actresses, not real people --
-# distinct from Sports Rights' real company names or the Bravo/Oxygen/
-# Peacock slates' real show titles, since a talent deal is inherently about
-# an individual's persona/likeness, not a corporate brand or a title. Rival
-# studio names are fictional for the same reason (a "rival beat you to a
-# named real actor" framing would read as a claim about a real person).
-# 2026-08-17: originally modeled as fictional production-house "collectives"
-# (Meridian Collective, Northbench Pictures, etc.) rather than individuals --
-# per explicit user request, rebuilt as individual fictional actors/
-# actresses with real demographic/career profile fields (age, origin_medium,
-# lifetime_box_office_m, social_followers_m, bio, best_genres) so students
-# have something to actually weigh, not just a name and a bonus number.
-# origin_medium is the deliberate teaching hook: WHERE a talent built their
-# fame is a real casting tradeoff (a Film veteran is expensive but reliable;
-# a Social Media creator is cheap with a huge built-in following but no
-# proven dramatic track record) -- see ORIGIN_MEDIUM_SOURCE_SYNERGY below
-# for how it interacts with the Source Material feature.
+# 2026-08-18, real fix per explicit user catch: these are TWO genuinely
+# different entity types, previously conflated into one shared dict/mechanic.
+# The teaching note itself is explicit: "For high profile creatives, they
+# may have overall deals or first-look deals in which studios pay them for
+# the privilege of having first-look access to content they are working
+# on. Currently, Ryan Reynolds' Maximum Effort production house has a deal
+# with Paramount, and Margot Robbie's LuckyChap and Timothee Chalamet are
+# both tied to Warner Bros." -- an Overall/First-Look Deal is a STUDIO-level
+# relationship with a production banner/company (Maximum Effort, LuckyChap),
+# not a direct signing of one individual actor. A Holding Deal, by contrast,
+# genuinely is about one individual's calendar -- reserving a specific
+# actor's window for a specific upcoming production.
+#
+# STUDIO_PARTNERS (Overall/First-Look Deal targets) -- fictional production
+# banners/companies, a standing studio-level relationship independent of any
+# one project, signed once and benefiting every remaining cycle whose genre
+# matches. Fictional for the same reason RIVAL_STUDIOS is: a "you got beaten
+# to a deal with [named real production company]" framing would read as a
+# claim about a real company's actual business relationships.
+STUDIO_PARTNERS = {
+    "meridian":   {"name": "Meridian Collective",  "specialty": "Action/Tentpole",
+                    "bio": "An action-forward producer-star collective — first-look access to "
+                           "whatever they're developing next, in exchange for a standing studio deal.",
+                    "deal_cost_m": 25.0, "star_power_bonus": 15},
+    "northbench": {"name": "Northbench Pictures",   "specialty": "Awards/Prestige",
+                    "bio": "A prestige awards banner with real critical pedigree across its slate.",
+                    "deal_cost_m": 18.0, "critical_score_bonus": 8.0},
+    "brightlane": {"name": "Brightlane Family",     "specialty": "Animated",
+                    "bio": "A family-franchise production house with a track record of durable IP.",
+                    "deal_cost_m": 15.0, "star_power_bonus": 10},
+    "afterdark":  {"name": "Afterdark Studio",      "specialty": "Horror",
+                    "bio": "A horror specialist production house known for punching above its budget.",
+                    "deal_cost_m": 10.0, "star_power_bonus": 8},
+}
+
+# TALENT_PARTNERS (Holding Deal targets) -- fictional INDIVIDUAL actors/
+# actresses, not real people, distinct from STUDIO_PARTNERS above the same
+# way an individual's persona/likeness is distinct from a corporate banner.
+# Rebuilt 2026-08-17 with real demographic/career profile fields (age,
+# origin_medium, lifetime_box_office_m, social_followers_m, bio,
+# best_genres) so students have something to actually weigh, not just a
+# name and a bonus number. origin_medium is the deliberate teaching hook:
+# WHERE a talent built their fame is a real casting tradeoff (a Film
+# veteran is expensive but reliable; a Social Media creator is cheap with a
+# huge built-in following but no proven dramatic track record) -- see
+# ORIGIN_MEDIUM_SOURCE_SYNERGY below for how it interacts with Source
+# Material. Re-keyed 2026-08-18 (was reusing STUDIO_PARTNERS' keys, which
+# broke once the two rosters became genuinely separate) -- each individual
+# still shares their old key's specialty genre, purely for thematic
+# continuity, not a mechanical link between the two entity types.
 TALENT_PARTNERS = {
-    "meridian": {
+    "vance": {
         "name": "Jordan Vance", "gender": "actor", "age": 41,
         "specialty": "Action/Tentpole", "best_genres": ["Action/Tentpole", "Sci-Fi/Fantasy"],
         "origin_medium": "Film",
@@ -462,9 +495,9 @@ TALENT_PARTNERS = {
                "the safest, most expensive bet on this list, with a proven track record and no "
                "crossover risk.",
         "lifetime_box_office_m": 4200.0, "social_followers_m": 18.0,
-        "overall_deal_cost_m": 25.0, "hold_cost_m": 4.0, "star_power_bonus": 15,
+        "hold_cost_m": 4.0, "star_power_bonus": 15,
     },
-    "northbench": {
+    "okonkwo": {
         "name": "Adaeze Okonkwo", "gender": "actress", "age": 52,
         "specialty": "Awards/Prestige", "best_genres": ["Awards/Prestige", "Drama"],
         "origin_medium": "Television",
@@ -473,9 +506,9 @@ TALENT_PARTNERS = {
                "audience, but a smaller-screen pedigree doesn't always translate to opening-weekend "
                "box office.",
         "lifetime_box_office_m": 310.0, "social_followers_m": 6.5,
-        "overall_deal_cost_m": 18.0, "hold_cost_m": 3.0, "critical_score_bonus": 8.0,
+        "hold_cost_m": 3.0, "critical_score_bonus": 8.0,
     },
-    "brightlane": {
+    "marsh": {
         "name": "Casey Marsh", "gender": "actor", "age": 29,
         "specialty": "Animated", "best_genres": ["Animated", "Comedy"],
         "origin_medium": "Video Games",
@@ -483,9 +516,9 @@ TALENT_PARTNERS = {
                "moving into animated features — a natural, synergistic fit fronting a Video Game "
                "Adaptation specifically, less proven carrying a project with no game pedigree.",
         "lifetime_box_office_m": 640.0, "social_followers_m": 24.0,
-        "overall_deal_cost_m": 15.0, "hold_cost_m": 2.5, "star_power_bonus": 10,
+        "hold_cost_m": 2.5, "star_power_bonus": 10,
     },
-    "afterdark": {
+    "kade": {
         "name": "Reyna Kade", "gender": "actress", "age": 26,
         "specialty": "Horror", "best_genres": ["Horror", "Comedy"],
         "origin_medium": "Social Media",
@@ -493,7 +526,7 @@ TALENT_PARTNERS = {
                "built-in awareness on day one, but no real dramatic track record yet, and that "
                "following is a bet on staying relevant, not a guarantee.",
         "lifetime_box_office_m": 45.0, "social_followers_m": 38.0,
-        "overall_deal_cost_m": 10.0, "hold_cost_m": 2.0, "star_power_bonus": 8,
+        "hold_cost_m": 2.0, "star_power_bonus": 8,
     },
 }
 
@@ -700,6 +733,30 @@ def draw_ai_tooling_setback(team_name: str, cycle: int) -> Optional[tuple[str, f
     return reason, float(rng.uniform(lo, hi))
 
 
+# ── IMAX / Premium Large Format ─────────────────────────────────────────────
+# 2026-08-18, per explicit user question ("is there any imax stuff we can
+# include for some of the distribution?"). Real-world grounding: the U.S.
+# has roughly 40,000 movie screens total (NATO estimate) but only ~700-900
+# true large-format IMAX screens -- a genuinely scarce resource exhibitors
+# allocate to their highest-confidence spectacle openings, and one that
+# commands real premium ticket pricing (IMAX tickets typically run 1.5-2x a
+# standard screen). Modeled as a flat opening-weekend boost from that
+# pricing/event-appeal premium -- NOT additional screens (self.screens
+# already represents the student's full requested screen count; IMAX
+# doesn't add screens, it upgrades the economics of some of the ones you
+# already have) -- plus a real flat cost (specialized prints/mastering,
+# large-format marketing coordination). Only available for the genres that
+# realistically warrant a premium-format push (same set as theme-park
+# eligibility -- spectacle-scale tentpoles, not an awards drama) and only
+# for a real theatrical run (day_and_date has no meaningful theatrical
+# window to upgrade). Default False reproduces every existing project's
+# exact original behavior -- a true zero-effect baseline, same posture as
+# every other opt-in lever in this file.
+IMAX_ELIGIBLE_GENRES  = THEME_PARK_ELIGIBLE_GENRES   # Action/Tentpole, Sci-Fi/Fantasy, Animated
+IMAX_OPENING_BOOST_PCT = 0.12   # +12% opening weekend from premium pricing/event appeal
+IMAX_COST_M            = 3.0    # flat cost: large-format prints/mastering, marketing coordination
+
+
 # ── Seasonality / Debut Timing ───────────────────────────────────────────────
 # 2026-08-05, Phase 5 (deliberately last among the Movies items — reshapes
 # windowed_cashflows()'s previously-fixed month offsets and interacts with
@@ -773,6 +830,7 @@ class MovieProject:
     ai_production_tools: bool = False            # see AI_TOOLS_* below
     debut_season: str = "Off-Peak"                # see DEBUT_SEASONS above
     source_material: str = "Original Screenplay"  # see SOURCE_MATERIALS above
+    imax_release: bool = False                     # see IMAX_* above
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -806,7 +864,17 @@ class MovieProject:
             budget_component *= (1 - AI_TOOLS_BUDGET_SAVINGS_PCT)
         acquisition_cost = SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0)
         star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
-        return budget_component + self.pa_spend_m + acquisition_cost + star_power_cost
+        imax_cost = IMAX_COST_M if self.is_imax_eligible() else 0.0
+        return budget_component + self.pa_spend_m + acquisition_cost + star_power_cost + imax_cost
+
+    def is_imax_eligible(self) -> bool:
+        """Whether an IMAX/large-format release is actually in effect this
+        project -- requires imax_release=True AND a genre with real
+        large-format demand AND a real theatrical run (day_and_date has
+        none to upgrade). False (the common case) means IMAX never touches
+        capital_at_risk() or opening_weekend() at all."""
+        return (self.imax_release and self.genre in IMAX_ELIGIBLE_GENRES
+                and self.release_strategy != "day_and_date")
 
     def window_days(self) -> int:
         """Theatrical exclusivity window — shrinks each cycle, matching the
@@ -852,13 +920,17 @@ class MovieProject:
         debut_season applies its own crowding/genre-fit multiplier on top
         (see season_opening_mult) -- 1.0x for the "Off-Peak" baseline.
         source_material applies its own built-in-fanbase awareness boost
-        (see SOURCE_OPENING_BOOST) -- 1.0x for "Original Screenplay"."""
+        (see SOURCE_OPENING_BOOST) -- 1.0x for "Original Screenplay". A real
+        IMAX/large-format release (see is_imax_eligible) adds its own flat
+        premium-pricing/event-appeal boost on top -- an upgrade to the
+        screens you already have, not additional screens."""
         screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
         screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
         source_boost = SOURCE_OPENING_BOOST.get(self.source_material, 1.0)
+        imax_boost = 1 + IMAX_OPENING_BOOST_PCT if self.is_imax_eligible() else 1.0
         return (BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost()
-                * self.awareness_lift() * self.season_opening_mult() * source_boost)
+                * self.awareness_lift() * self.season_opening_mult() * source_boost * imax_boost)
 
     def cannibalization_factor(self) -> float:
         """Theatrical box-office suppression from the release-strategy

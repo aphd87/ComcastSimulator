@@ -37,7 +37,9 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.game_state as gs
-from utils.movie_models import TALENT_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M
+from utils.movie_models import (
+    TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -289,10 +291,11 @@ def test_poached_partner_is_shown_disabled_not_as_a_sign_or_hold_button():
     assert "Signed by Paragon Pictures" in text
     button_keys = [b.key for b in at.button if b.key]
     assert "sign_overall_northbench" not in button_keys
-    assert "hold_northbench" not in button_keys
-    # Untouched partners are still fully available.
+    # Untouched studio partners are still fully available. Holding Deals
+    # (individual TALENT_PARTNERS actors) don't render until after
+    # Greenlight -- not reachable from this fresh, unscrolled render, and
+    # poaching never applies to them (see _resolve_talent_cycle_transitions).
     assert "sign_overall_meridian" in button_keys
-    assert "hold_meridian" in button_keys
 
 
 def test_signing_overall_deal_updates_state_and_tracks_spend():
@@ -300,31 +303,31 @@ def test_signing_overall_deal_updates_state_and_tracks_spend():
     at.button(key="sign_overall_brightlane").click().run()
     assert not at.exception, f"Sign click raised: {list(at.exception)}"
     assert at.session_state["movie_overall_deal"] == "brightlane"
-    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["brightlane"]["overall_deal_cost_m"]
+    assert at.session_state["movie_talent_total_spend"] == STUDIO_PARTNERS["brightlane"]["deal_cost_m"]
 
 
 def test_holding_a_rival_claimed_partner_costs_the_fee_for_nothing(monkeypatch):
     import app_pages.movies as movies_module
     monkeypatch.setattr(movies_module, "draw_rival_claim", lambda team, cycle, key: "Paragon Pictures")
     at = _movies_app_no_poaching()
-    at.button(key="hold_meridian").click().run()
+    at.button(key="hold_vance").click().run()
     assert not at.exception, f"Hold click raised: {list(at.exception)}"
-    hold = at.session_state["movie_talent_holds"]["meridian"]
+    hold = at.session_state["movie_talent_holds"]["vance"]
     assert hold["status"] == "rival_claimed"
     assert hold["rival"] == "Paragon Pictures"
-    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["meridian"]["hold_cost_m"]
+    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["vance"]["hold_cost_m"]
 
 
 def test_holding_a_clear_partner_succeeds_as_pending(monkeypatch):
     import app_pages.movies as movies_module
     monkeypatch.setattr(movies_module, "draw_rival_claim", lambda team, cycle, key: None)
     at = _movies_app_no_poaching()
-    at.button(key="hold_afterdark").click().run()
+    at.button(key="hold_kade").click().run()
     assert not at.exception, f"Hold click raised: {list(at.exception)}"
-    hold = at.session_state["movie_talent_holds"]["afterdark"]
+    hold = at.session_state["movie_talent_holds"]["kade"]
     assert hold["status"] == "pending"
     assert hold["cycle_placed"] == 1
-    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["afterdark"]["hold_cost_m"]
+    assert at.session_state["movie_talent_total_spend"] == TALENT_PARTNERS["kade"]["hold_cost_m"]
 
 
 def _movies_app_with_overall_deal(partner_key: str) -> AppTest:
@@ -362,23 +365,27 @@ def test_star_power_bonus_flows_into_the_resolved_outcome_when_genre_matches():
     assert not at.exception, f"Simulate click raised: {list(at.exception)}"
     outcome = at.session_state["movie_log"][0]
     assert outcome["project_kwargs"]["genre"] == "Action/Tentpole"
-    assert outcome["project_kwargs"]["star_power"] == 50 + TALENT_PARTNERS["meridian"]["star_power_bonus"]
-    assert outcome["talent_partner_bonus"] == TALENT_PARTNERS["meridian"]["name"]
+    assert outcome["project_kwargs"]["star_power"] == 50 + STUDIO_PARTNERS["meridian"]["star_power_bonus"]
+    assert outcome["talent_partner_bonus"] == STUDIO_PARTNERS["meridian"]["name"]
 
 
 def test_origin_medium_source_material_synergy_amplifies_bonus():
-    # brightlane's origin_medium is "Video Games" (ORIGIN_MEDIUM_SOURCE_SYNERGY
+    # marsh's origin_medium is "Video Games" (ORIGIN_MEDIUM_SOURCE_SYNERGY
     # maps it to "Video Game Adaptation") and specialty is "Animated" -- when
     # the draft's genre AND source_material both match, the bonus should be
     # amplified by TALENT_SOURCE_SYNERGY_MULT, not just the raw partner bonus.
+    # Seeds a succeeded Holding Deal directly (2026-08-18: synergy is a
+    # TALENT_PARTNERS/Holding Deal mechanic now, not Overall Deal/Studio --
+    # STUDIO_PARTNERS entries have no origin_medium at all).
     def script():
         import streamlit as st
         import sys
         sys.path.insert(0, ".")
         st.session_state.team_name = "AppTest Team"
-        st.session_state.movie_overall_deal = "brightlane"
         st.session_state.movie_rival_exclusive = {}
         st.session_state.movie_rival_poach_checked_through = 1
+        st.session_state.movie_talent_holds = {"marsh": {"status": "succeeded", "cycle_placed": 0,
+                                                           "available_cycle": 1}}
         st.session_state.movie_draft = {"genre": "Animated", "source_material": "Video Game Adaptation"}
         import app_pages.movies as movies
         movies.render()
@@ -389,7 +396,7 @@ def test_origin_medium_source_material_synergy_amplifies_bonus():
     _simulate_button(at).click().run()
     assert not at.exception, f"Simulate click raised: {list(at.exception)}"
     outcome = at.session_state["movie_log"][0]
-    expected_bonus = TALENT_PARTNERS["brightlane"]["star_power_bonus"] * TALENT_SOURCE_SYNERGY_MULT
+    expected_bonus = TALENT_PARTNERS["marsh"]["star_power_bonus"] * TALENT_SOURCE_SYNERGY_MULT
     assert outcome["project_kwargs"]["star_power"] == pytest.approx(50 + expected_bonus)
 
 
@@ -703,14 +710,30 @@ def _movies_app_at_cycle_2_with_prior_log() -> AppTest:
 def test_last_cycle_recap_shows_at_cycle_2_with_prior_outcome():
     at = _movies_app_at_cycle_2_with_prior_log()
     text = "\n".join(md.value for md in at.markdown)
-    assert "Last Cycle's Actuals" in text
+    assert "Last Period's Actuals" in text
     assert "First Movie" in text
 
 
 def test_last_cycle_recap_absent_at_cycle_1_with_no_prior_outcome():
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
-    assert "Last Cycle's Actuals" not in text
+    assert "Last Period's Actuals" not in text
+
+
+# ── Distribution Pipeline scorecard (2026-08-18) ─────────────────────────────
+def test_distribution_pipeline_scorecard_absent_with_no_prior_movies():
+    at = _movies_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Distribution Pipeline" not in text
+
+
+def test_distribution_pipeline_scorecard_shows_prior_movie():
+    at = _movies_app_at_cycle_2_with_prior_log()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Distribution Pipeline" in text
+    assert len(at.dataframe) >= 1
+    df = at.dataframe[0].value
+    assert "First Movie" in df["Title"].tolist()
 
 
 # ── Progress chart (2026-08-04) ──────────────────────────────────────────────
