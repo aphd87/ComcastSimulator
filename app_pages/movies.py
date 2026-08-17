@@ -22,6 +22,12 @@ from utils.movie_models import (
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
     generate_background_slate,
     generate_scouted_concepts, draw_scouted_poach, resolve_scouted_outcome, SCOUTED_POACH_CHANCE,
+    LICENSING_PLATFORMS, DEFAULT_LICENSING_PLATFORM,
+    PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
+    THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
+    PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
+    SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
+    STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
     draw_production_trouble, draw_ancillary_surprise,
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
@@ -88,6 +94,21 @@ def _init(ss):
         ss.movie_scouted_poached = {}
     if "movie_scouted_resolved_through" not in ss:
         ss.movie_scouted_resolved_through = 0
+    # Multi-Picture Talent Deal (2026-08-18) -- ss.movie_multi_picture_deals:
+    # {talent_key: cycle_signed}, active through cycle_signed +
+    # MULTI_PICTURE_DEAL_CYCLES - 1 inclusive. Real negotiation depth beyond
+    # Holding: expensive-and-safe (no rival-claim/forfeit risk, locked for
+    # multiple cycles) vs. Holding's cheap-and-risky one-shot booking.
+    if not isinstance(ss.get("movie_multi_picture_deals"), dict):
+        ss.movie_multi_picture_deals = {}
+    # Studio Annual Budget (2026-08-18) -- a real, performance-linked
+    # capital pool that explains and sizes the Background Studio Slate.
+    # See next_studio_budget()/generate_background_slate's studio_budget_m
+    # param.
+    if "movie_studio_budget_m" not in ss:
+        ss.movie_studio_budget_m = STUDIO_ANNUAL_BUDGET_START_M
+    if "movie_studio_budget_updated_through" not in ss:
+        ss.movie_studio_budget_updated_through = 0
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -179,12 +200,21 @@ def _active_talent_bonus(ss, genre: str, source_material: str = None) -> dict:
             crit_bonus += studio.get("critical_score_bonus", 0.0)
             partner_names.append(studio["name"])
 
-    talent_key = None
+    # Active talent sources this cycle: a succeeded Holding Deal (one-shot,
+    # already resolved for THIS cycle) and/or a Multi-Picture Deal (signed
+    # once, active for MULTI_PICTURE_DEAL_CYCLES cycles from signing --
+    # 2026-08-18, see MULTI_PICTURE_DEAL_CYCLES's own comment). A talent
+    # could in principle satisfy both (UI gating discourages it, doesn't
+    # forbid it) -- bonuses still just sum, same posture as Studio+Holding above.
+    active_talent_keys = set()
     for k, h in ss.get("movie_talent_holds", {}).items():
         if h.get("status") == "succeeded" and h.get("available_cycle") == ss.movie_cycle:
-            talent_key = k
-            break
-    if talent_key:
+            active_talent_keys.add(k)
+    for k, signed_cycle in ss.get("movie_multi_picture_deals", {}).items():
+        if signed_cycle <= ss.movie_cycle < signed_cycle + MULTI_PICTURE_DEAL_CYCLES:
+            active_talent_keys.add(k)
+
+    for talent_key in active_talent_keys:
         talent = TALENT_PARTNERS[talent_key]
         if talent["specialty"] == genre:
             t_star = talent.get("star_power_bonus", 0)
@@ -230,6 +260,11 @@ def _current_project(ss) -> MovieProject:
         debut_season=d.get("debut_season", "Off-Peak"),
         source_material=d.get("source_material", SOURCE_MATERIALS[0]),
         imax_release=d.get("imax_release", False),
+        pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
+        pay2_licensing=d.get("pay2_licensing", "keep"),
+        pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
+        theatrical_run_length=d.get("theatrical_run_length"),
+        pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
     )
 
 
@@ -311,12 +346,27 @@ def _section_distribution_pipeline(ss):
 
     Renders from Cycle 1 onward regardless of whether the student has
     simulated anything yet -- the background slate alone is enough to show
-    "movies already slated to go out this year"."""
+    "movies already slated to go out this year". Header line shows the
+    Studio Annual Budget (2026-08-18, see next_studio_budget) -- a real,
+    performance-linked capital pool that also sizes the Background Slate
+    below (a shrunk pool visibly produces a smaller/cheaper background
+    slate)."""
     st.markdown('<div class="section-title">Distribution Pipeline — Slate Scorecard</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="text-xs text-ink2 mb-1">🏦 Studio Annual Budget: '
+        f'<b class="text-ink">${ss.movie_studio_budget_m:,.0f}M</b> '
+        f'<span class="text-muted">— moves year to year based on how the slate actually performs.</span></p>',
+        unsafe_allow_html=True)
     st.caption("Where every movie in the studio's pipeline actually sits in its distribution run right "
                "now, based on real elapsed time since each one's own release. \"Yours\" is your own "
                "greenlit slate; \"Studio\" is the rest of the studio's non-interactive background slate "
                "for context — it never affects your score.")
+
+    def _platform_label(project_kwargs: dict, licensing_key: str, platform_key: str) -> str:
+        if project_kwargs.get(licensing_key, "keep") != "license_out":
+            return "Keep In-House"
+        platform = project_kwargs.get(platform_key, DEFAULT_LICENSING_PLATFORM)
+        return LICENSING_PLATFORMS.get(platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["name"]
 
     rows = []   # list of (cycle, row_dict) so the final sort is numeric, not lexical on the year label
     seen_genres_with_sequel = {r["project_kwargs"]["genre"] for r in ss.movie_log
@@ -338,11 +388,13 @@ def _section_distribution_pipeline(ss):
                                                                 project.is_licensing_out()),
             "NPV":               _fmt_money(entry["npv"]),
             "Theme Park / Merch": f"${entry['theme_park']:.1f}M" if entry.get("theme_park", 0) > 0 else "—",
+            "Pay-1":             _platform_label(entry["project_kwargs"], "pay1_licensing", "pay1_platform"),
+            "Pay-2":             _platform_label(entry["project_kwargs"], "pay2_licensing", "pay2_platform"),
             "Sequel Potential":  sequel_potential,
         }))
 
     for cyc in range(1, ss.movie_cycle + 1):
-        for bg in generate_background_slate(ss.team_name, cyc):
+        for bg in generate_background_slate(ss.team_name, cyc, studio_budget_m=ss.movie_studio_budget_m):
             months_elapsed = (ss.movie_cycle - bg["cycle"]) * YEARS_PER_CYCLE * 12.0
             rows.append((cyc, {
                 "Slate":             "Studio",
@@ -352,6 +404,8 @@ def _section_distribution_pipeline(ss):
                 "Current Window":    _current_distribution_window(bg["window_days"], months_elapsed),
                 "NPV":               _fmt_money(bg["npv"]),
                 "Theme Park / Merch": f"${bg['theme_park']:.1f}M" if bg.get("theme_park", 0) > 0 else "—",
+                "Pay-1":             "—",
+                "Pay-2":             "—",
                 "Sequel Potential":  "—",
             }))
 
@@ -364,6 +418,8 @@ def _section_distribution_pipeline(ss):
             "Current Window":    "🏆 Rival Release",
             "NPV":               _fmt_money(outcome["npv"]),
             "Theme Park / Merch": f"${outcome['theme_park']:.1f}M" if outcome.get("theme_park", 0) > 0 else "—",
+            "Pay-1":             "—",
+            "Pay-2":             "—",
             "Sequel Potential":  "—",
         }))
 
@@ -594,8 +650,20 @@ def _section_holding_deals(ss, resolved_hold_key):
                 </div>
                 """, unsafe_allow_html=True)
 
+    def _multi_picture_active(key: str) -> bool:
+        signed = ss.movie_multi_picture_deals.get(key)
+        return signed is not None and signed <= ss.movie_cycle < signed + MULTI_PICTURE_DEAL_CYCLES
+
+    st.markdown(
+        '<p class="text-xs text-ink2 mt-3 mb-2">Or negotiate a Multi-Picture Deal — real negotiation '
+        f'depth beyond a one-off Hold: pay more upfront (~4x the hold fee) to lock an actor\'s '
+        f'availability for {MULTI_PICTURE_DEAL_CYCLES} full cycles outright, with no rival-claim roll '
+        'and no forfeit risk. Expensive and safe, versus Holding\'s cheap and risky.</p>',
+        unsafe_allow_html=True)
+
     holdable = [k for k in TALENT_PARTNERS
-                if ss.movie_talent_holds.get(k, {}).get("status") != "pending"]
+                if ss.movie_talent_holds.get(k, {}).get("status") != "pending"
+                and not _multi_picture_active(k)]
     if holdable:
         hcols = st.columns(len(holdable))
         for col, key in zip(hcols, holdable):
@@ -617,19 +685,31 @@ def _section_holding_deals(ss, resolved_hold_key):
                   <div class="text-[10px] text-muted font-mono">Lifetime B.O.: ${partner.get('lifetime_box_office_m', 0):,.0f}M</div>
                   <div class="text-[10px] text-muted font-mono mb-2">Social: {partner.get('social_followers_m', 0):.1f}M followers</div>
                   <div class="text-xs text-ink2">{bonus_label}</div>
-                  <div class="text-[10px] text-muted font-mono">${partner['hold_cost_m']:.1f}M hold fee</div>
+                  <div class="text-[10px] text-muted font-mono">${partner['hold_cost_m']:.1f}M hold fee · ${partner['multi_picture_cost_m']:.0f}M multi-picture</div>
                   {synergy_note}
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
-                    ss.movie_talent_total_spend += partner["hold_cost_m"]
-                    rival = draw_rival_claim(ss.team_name, ss.movie_cycle, key)
-                    if rival:
-                        ss.movie_talent_holds[key] = {"status": "rival_claimed",
-                                                       "cycle_placed": ss.movie_cycle, "rival": rival}
-                    else:
-                        ss.movie_talent_holds[key] = {"status": "pending", "cycle_placed": ss.movie_cycle}
-                    st.rerun()
+                bcol1, bcol2 = st.columns(2)
+                with bcol1:
+                    if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
+                        ss.movie_talent_total_spend += partner["hold_cost_m"]
+                        rival = draw_rival_claim(ss.team_name, ss.movie_cycle, key)
+                        if rival:
+                            ss.movie_talent_holds[key] = {"status": "rival_claimed",
+                                                           "cycle_placed": ss.movie_cycle, "rival": rival}
+                        else:
+                            ss.movie_talent_holds[key] = {"status": "pending", "cycle_placed": ss.movie_cycle}
+                        st.rerun()
+                with bcol2:
+                    if st.button("Multi-Picture", key=f"multi_{key}", use_container_width=True):
+                        ss.movie_talent_total_spend += partner["multi_picture_cost_m"]
+                        ss.movie_multi_picture_deals[key] = ss.movie_cycle
+                        st.rerun()
+
+    for key, signed_cycle in ss.movie_multi_picture_deals.items():
+        if _multi_picture_active(key):
+            through = _cycle_years_label(signed_cycle + MULTI_PICTURE_DEAL_CYCLES - 1)
+            st.caption(f"🤝 Multi-Picture Deal active: {TALENT_PARTNERS[key]['name']} — locked through {through}.")
 
     st.divider()
 
@@ -984,13 +1064,14 @@ def _decisions(ss):
                        f"cost of getting them attached at all.")
         with c4:
             screens = st.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
-            st.caption("The U.S. has roughly 40,000 movie screens total (NATO estimate), of which only "
-                       "about 700-900 are true large-format IMAX screens — a genuine scarce resource "
-                       "exhibitors allocate to their highest-confidence openings. A wide theatrical "
-                       "release typically opens on 3,500-4,500 screens; a platform/awards-qualifying "
-                       "rollout deliberately starts on a few hundred and expands week over week if the "
-                       "film performs. More screens raises your opening (see Opening Weekend below) but "
-                       "doesn't guarantee people show up.")
+            st.caption(f"The U.S. has roughly 40,000 movie screens total (NATO estimate), of which only "
+                       f"about 700-900 are true large-format IMAX screens — a genuine scarce resource "
+                       f"exhibitors allocate to their highest-confidence openings. A wide theatrical "
+                       f"release typically opens on 3,500-4,500 screens; a platform/awards-qualifying "
+                       f"rollout deliberately starts on a few hundred and expands week over week if the "
+                       f"film performs. More screens raises your opening (see Opening Weekend below) — "
+                       f"but going wide is a real, unconditional cost too (~${SCREEN_COST_PER_SCREEN_M*1000:.0f}K/screen "
+                       f"in print/booking fees, paid whether the movie hits or flops), not just a soft warning.")
 
             imax_eligible_here = genre in IMAX_ELIGIBLE_GENRES and d.get("release_strategy", "wide_theatrical") != "day_and_date"
             imax_release = st.checkbox(
@@ -1084,7 +1165,12 @@ def _decisions(ss):
                  financing_structure=financing_structure, exhibitor_posture=exhibitor_posture,
                  pay1_licensing=d.get("pay1_licensing", "keep"), ai_production_tools=ai_production_tools,
                  debut_season=d.get("debut_season", "Off-Peak"), source_material=source_material,
-                 imax_release=imax_release)
+                 imax_release=imax_release,
+                 pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
+                 pay2_licensing=d.get("pay2_licensing", "keep"),
+                 pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
+                 theatrical_run_length=d.get("theatrical_run_length"),
+                 pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False))
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -1113,6 +1199,11 @@ def _decisions(ss):
         if project.is_imax_eligible():
             imax_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">IMAX / Large Format</span>'
                          f'<span class="font-mono text-warn">+${IMAX_COST_M:.0f}M</span></div>')
+        screen_cost = screens * SCREEN_COST_PER_SCREEN_M
+        screen_cost_line = (
+            f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">Screen/Booking Fees</span>'
+            f'<span class="font-mono text-warn">+${screen_cost:.1f}M</span></div>'
+        )
         st.markdown(f"""
         <div class="rounded-lg border border-line bg-surface p-4">
           <div class="flex justify-between text-sm py-1"><span class="text-ink2">Production Budget</span>
@@ -1122,6 +1213,7 @@ def _decisions(ss):
           {star_cost_line}
           {acq_line}
           {imax_line}
+          {screen_cost_line}
           {savings_line}
           <div class="flex justify-between text-base font-semibold pt-2">
             <span class="text-ink">Capital At Risk</span>
@@ -1237,17 +1329,20 @@ def _decisions(ss):
     st.markdown(f'<p class="text-sm text-ink2">Currently selected: <b class="text-ink">{RELEASE_LABELS[chosen]}</b></p>',
                 unsafe_allow_html=True)
 
-    # ── Pay-1 Window Licensing ────────────────────────────────────────────────
-    # Doesn't apply to Day-and-Date -- that strategy already commits the
-    # title to Peacock exclusivity as its core premise, so licensing the
-    # same window away would contradict the choice just made (enforced
-    # defensively in MovieProject.is_licensing_out() too, not just here).
+    # ── Pay-1 Window Licensing — now a real marketplace, not one flat rate ──────
+    # 2026-08-18, per explicit user question ("maybe the issue is desirable
+    # streaming platforms want different cuts?"). Doesn't apply to
+    # Day-and-Date -- that strategy already commits the title to Peacock
+    # exclusivity as its core premise, so licensing the same window away
+    # would contradict the choice just made (enforced defensively in
+    # MovieProject.is_licensing_out() too, not just here).
+    platform_labels = {k: f"{v['name']} (~{v['fee_pct']:.0%} of base-case subscriber value)"
+                        for k, v in LICENSING_PLATFORMS.items()}
     if chosen != "day_and_date":
         st.markdown('<div class="section-title mt-3">Pay-1 Window Licensing</div>', unsafe_allow_html=True)
         pay1_labels = {
             "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
-            "license_out": f"License to a Rival Platform — flat, guaranteed fee "
-                            f"(~{PAY1_LICENSE_DISCOUNT:.0%} of base-case subscriber value), paid sooner",
+            "license_out": "License to Another Platform — flat, guaranteed fee, paid sooner",
         }
         pay1_choice = st.selectbox(
             "Pay-1 SVOD Window", PAY1_LICENSING_OPTIONS,
@@ -1258,10 +1353,88 @@ def _decisions(ss):
                  "streaming relationship.",
         )
         ss.movie_draft["pay1_licensing"] = pay1_choice
+        if pay1_choice == "license_out":
+            pay1_platform = st.selectbox(
+                "Which Platform (Pay-1)", list(LICENSING_PLATFORMS.keys()),
+                index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay1_platform", DEFAULT_LICENSING_PLATFORM)),
+                format_func=lambda k: platform_labels[k],
+                help="Different platforms pay different cuts — a real negotiation choice, not one flat rate.",
+            )
+            ss.movie_draft["pay1_platform"] = pay1_platform
     else:
         ss.movie_draft["pay1_licensing"] = "keep"
         st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
                    "commits this title to Peacock exclusivity.")
+
+    # ── Pay-2 Window Licensing ───────────────────────────────────────────────
+    # 2026-08-18, per explicit user question ("where is pay 2 window...and
+    # the full windowing for each of the movies?"). Real secondary window,
+    # well after Pay-1 exhausts -- see PAY2_WINDOW_MONTH. Same day-and-date
+    # exclusion as Pay-1.
+    if chosen != "day_and_date":
+        st.markdown('<div class="section-title mt-3">Pay-2 Window Licensing '
+                    '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+        st.caption(f"~{PAY2_WINDOW_MONTH/12:.0f} years after release, once Pay-1 exhausts, a real "
+                   f"secondary licensing window opens — smaller than Pay-1 (~{PAY2_VALUE_PCT_OF_PAY1:.0%} "
+                   f"of its scale), but real found money on a title that's otherwise just sitting in "
+                   f"library. \"Keep\" is a genuine, valid choice too — not every title needs a Pay-2 deal.")
+        pay2_labels = {
+            "keep": "Keep — no Pay-2 deal pursued",
+            "license_out": "License Out (Pay-2) — a real, smaller secondary window",
+        }
+        pay2_choice = st.selectbox(
+            "Pay-2 Window", PAY2_LICENSING_OPTIONS,
+            index=PAY2_LICENSING_OPTIONS.index(ss.movie_draft.get("pay2_licensing", "keep")),
+            format_func=lambda k: pay2_labels[k],
+            key="pay2_licensing_select",
+        )
+        ss.movie_draft["pay2_licensing"] = pay2_choice
+        if pay2_choice == "license_out":
+            pay2_platform = st.selectbox(
+                "Which Platform (Pay-2)", list(LICENSING_PLATFORMS.keys()),
+                index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay2_platform", DEFAULT_LICENSING_PLATFORM)),
+                format_func=lambda k: platform_labels[k],
+                key="pay2_platform_select",
+            )
+            ss.movie_draft["pay2_platform"] = pay2_platform
+    else:
+        ss.movie_draft["pay2_licensing"] = "keep"
+
+    # ── Theatrical Run Length ────────────────────────────────────────────────
+    # 2026-08-18, per explicit user question ("we should also think about
+    # how many days in theater too"). None (Auto) preserves the original
+    # automatic cycle-based window -- a real, valid choice, not just a
+    # placeholder default.
+    st.markdown('<div class="section-title mt-3">Theatrical Run Length</div>', unsafe_allow_html=True)
+    run_options = ["Auto"] + list(THEATRICAL_RUN_LENGTHS.keys())
+    run_labels = {
+        "Auto": "Auto — matches this cycle's industry-standard window compression",
+        **{k: f"{k} (~{v} days) — {'more legs, delays digital windows' if k == 'Extended' else 'faster to digital, less cumulative box office' if k == 'Short' else 'the real 45-day industry benchmark'}"
+           for k, v in THEATRICAL_RUN_LENGTHS.items()},
+    }
+    current_run = ss.movie_draft.get("theatrical_run_length") or "Auto"
+    run_choice = st.selectbox(
+        "Run Length", run_options, index=run_options.index(current_run) if current_run in run_options else 0,
+        format_func=lambda k: run_labels[k],
+        help="Longer runs capture more cumulative box office (diminishing returns, not linear) but "
+             "delay every downstream window — costing real NPV through discounting. Shorter runs trade "
+             "the reverse. Universal's own real benchmark: at least 30 days if a film opens above $50M.",
+    )
+    ss.movie_draft["theatrical_run_length"] = None if run_choice == "Auto" else run_choice
+
+    # ── PVOD Dynamic Pricing ──────────────────────────────────────────────────
+    # 2026-08-18, per explicit user request and the S-0410 case's own real
+    # example: Universal's The Invisible Man opened PVOD at full price, then
+    # dropped to $5.99 later in the same window.
+    pvod_dynamic = st.checkbox(
+        "📉 PVOD Dynamic Pricing (premium → discount stage)",
+        value=bool(ss.movie_draft.get("pvod_dynamic_pricing", False)),
+        help=f"Premium stage at ${PVOD_PRICE_PREMIUM:.2f} captures early demand; a later discount stage "
+             f"at ${PVOD_PRICE_DISCOUNT:.2f} captures price-sensitive holdouts the premium price left on "
+             f"the table — real price discrimination, captures more of the demand curve than one flat "
+             f"price, but some revenue arrives later.",
+    )
+    ss.movie_draft["pvod_dynamic_pricing"] = pvod_dynamic
 
     st.divider()
 
@@ -1544,6 +1717,17 @@ def _results(ss):
     with nav2:
         if ss.movie_cycle < CYCLES_TOTAL:
             if st.button(f"→ Start {_cycle_years_label(ss.movie_cycle + 1)}", type="primary", use_container_width=True):
+                # Studio Annual Budget (2026-08-18): a performance-linked
+                # pool, adjusted once per real cycle transition off this
+                # just-completed cycle's own resolved NPV -- "year to year
+                # performance should also explain budget slate," per
+                # explicit user request.
+                if ss.movie_studio_budget_updated_through < ss.movie_cycle:
+                    just_completed = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle), None)
+                    ss.movie_studio_budget_m = next_studio_budget(
+                        ss.movie_studio_budget_m, just_completed["npv"] if just_completed else None
+                    )
+                    ss.movie_studio_budget_updated_through = ss.movie_cycle
                 ss.movie_cycle += 1
                 ss.movie_draft = {}
                 ss.movie_phase = "decisions"

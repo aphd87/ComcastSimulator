@@ -35,9 +35,18 @@ from utils.movie_models import (
     SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST,
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
+    SCREEN_COST_PER_SCREEN_M, LICENSING_PLATFORMS, DEFAULT_LICENSING_PLATFORM,
+    PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
+    THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT, MULTI_PICTURE_DEAL_CYCLES,
     generate_background_slate, BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX, GENRES,
     generate_scouted_concepts, draw_scouted_poach, resolve_scouted_outcome,
     SCOUTED_CONCEPTS_PER_CYCLE, SCOUTED_POACH_CHANCE,
+    LICENSING_PLATFORMS, DEFAULT_LICENSING_PLATFORM,
+    PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
+    THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT, MULTI_PICTURE_DEAL_CYCLES,
+    PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT, PVOD_DISCOUNT_STAGE_OFFSET_MONTHS,
+    PVOD_PRICE, PVOD_STUDIO_SHARE,
+    STUDIO_ANNUAL_BUDGET_START_M, STUDIO_BUDGET_MIN_M, next_studio_budget,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
@@ -273,13 +282,225 @@ class TestStarPowerCost:
             (90 - 10) * STAR_POWER_COST_PER_POINT_M
         )
 
-    def test_zero_star_power_adds_no_cost(self):
+    def test_zero_star_power_adds_no_star_cost(self):
+        # Screen cost (2026-08-18) is still real and unconditional even at
+        # zero star power -- this only isolates the star-power term.
         p = MovieProject(title="Unknown Cast", genre="Drama", budget_m=30, pa_spend_m=15,
                           star_power=0, screens=1200, cycle=1)
-        assert p.capital_at_risk() == pytest.approx(p.budget_m + p.pa_spend_m)
+        assert p.capital_at_risk() == pytest.approx(
+            p.budget_m + p.pa_spend_m + p.screens * SCREEN_COST_PER_SCREEN_M
+        )
 
 
 # ── Source Material — acquisition cost + built-in audience (2026-08-17) ────
+class TestScreenCost:
+    """2026-08-18: real penalty for going wide, not just a soft UI warning
+    -- per explicit user question ('are there penalties if we have a lot
+    of theaters for a wide release... but the movie doesn't do well, is
+    this built in?'). Honest answer before this: no."""
+
+    def test_more_screens_means_more_capital_at_risk(self):
+        low = MovieProject(title="Low", genre="Drama", budget_m=30, pa_spend_m=15,
+                            star_power=40, screens=500, cycle=1)
+        high = MovieProject(**{**low.__dict__, "screens": 4500, "title": "High"})
+        assert high.capital_at_risk() > low.capital_at_risk()
+        assert high.capital_at_risk() - low.capital_at_risk() == pytest.approx(
+            (4500 - 500) * SCREEN_COST_PER_SCREEN_M
+        )
+
+    def test_cost_is_paid_regardless_of_how_the_movie_performs(self):
+        # The whole point: a wide release that FLOPS still paid the fixed
+        # screen cost -- capital_at_risk() (what NPV is measured against)
+        # includes it regardless of which scenario actually resolves.
+        p = MovieProject(title="Wide Flop", genre="Action/Tentpole", budget_m=150, pa_spend_m=90,
+                          star_power=50, screens=4000, cycle=1)
+        narrow = MovieProject(**{**p.__dict__, "screens": 500, "title": "Narrow"})
+        # Same bear-case NPV gap regardless of scenario -- the screen cost is
+        # baked into capital_at_risk(), not conditioned on the outcome.
+        assert (p.capital_at_risk() - narrow.capital_at_risk()) == pytest.approx(
+            (4000 - 500) * SCREEN_COST_PER_SCREEN_M
+        )
+
+
+class TestPvodDynamicPricing:
+    """2026-08-18, per explicit user request and the S-0410 case's own real
+    example (The Invisible Man: full price, then $5.99 later in the same
+    window)."""
+
+    def test_default_false_reproduces_original_single_price_total(self):
+        p = _tentpole()
+        assert p.pvod_dynamic_pricing is False
+        premium, discount = p.pvod_revenue_tiers("base")
+        assert discount == 0.0
+        dom = p.domestic_box_office("base")
+        expected = (dom / PVOD_PRICE) * 0.35 * PVOD_PRICE * PVOD_STUDIO_SHARE
+        assert premium == pytest.approx(expected)
+        assert p.pvod_revenue("base") == pytest.approx(expected)
+
+    def test_dynamic_pricing_splits_into_two_real_stages(self):
+        base = _tentpole()
+        dynamic = MovieProject(**{**base.__dict__, "pvod_dynamic_pricing": True})
+        premium, discount = dynamic.pvod_revenue_tiers("base")
+        assert premium > 0
+        assert discount > 0
+        # Combined conversion (0.42) exceeds the single-tier baseline (0.35) --
+        # price discrimination captures more of the demand curve.
+        assert dynamic.pvod_revenue("base") > base.pvod_revenue("base")
+
+    def test_discount_stage_lands_later_in_the_cashflow_timeline(self):
+        p = MovieProject(**{**_tentpole().__dict__, "pvod_dynamic_pricing": True})
+        flows = p.windowed_cashflows("base")
+        months = sorted(m for m, cash in flows if cash > 0)
+        # Two distinct PVOD-adjacent months should exist once split.
+        window_mo = p.window_days() / 30.0
+        premium_month = window_mo + 1.0
+        discount_month = window_mo + 1.0 + PVOD_DISCOUNT_STAGE_OFFSET_MONTHS
+        assert any(abs(m - premium_month) < 0.01 for m in months)
+        assert any(abs(m - discount_month) < 0.01 for m in months)
+
+    def test_day_and_date_still_skips_pvod_entirely_when_dynamic(self):
+        p = MovieProject(title="D&D", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                          screens=1200, cycle=1, release_strategy="day_and_date", pvod_dynamic_pricing=True)
+        assert p.pvod_revenue_tiers("base") == (0.0, 0.0)
+
+
+class TestLicensingMarketplace:
+    """2026-08-18, per explicit user question ('maybe the issue is
+    desirable streaming platforms want different cuts?')."""
+
+    def test_default_platform_reproduces_original_flat_discount_exactly(self):
+        assert LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM]["fee_pct"] == PAY1_LICENSE_DISCOUNT
+
+    def test_different_platforms_pay_different_fees(self):
+        base = MovieProject(title="A", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                             screens=1200, cycle=1, pay1_licensing="license_out", pay1_platform="streamco")
+        alt = MovieProject(**{**base.__dict__, "pay1_platform": "valuestream", "title": "B"})
+        assert base.pay1_license_fee() != alt.pay1_license_fee()
+        assert base.pay1_license_fee() == pytest.approx(
+            base.subscriber_value("base") * LICENSING_PLATFORMS["streamco"]["fee_pct"]
+        )
+
+    def test_keep_pays_no_license_fee_regardless_of_platform(self):
+        p = MovieProject(title="Keep", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                          screens=1200, cycle=1, pay1_licensing="keep", pay1_platform="valuestream")
+        assert p.pay1_license_fee() == 0.0
+
+
+class TestPay2Window:
+    """2026-08-18, per explicit user question ('where is pay 2 window...and
+    the full windowing for each of the movies?')."""
+
+    def test_default_keep_means_zero_pay2_value(self):
+        p = _tentpole()
+        assert p.pay2_licensing == "keep"
+        assert p.pay2_value() == 0.0
+        assert not p.is_licensing_out_pay2()
+
+    def test_license_out_produces_a_real_smaller_than_pay1_value(self):
+        base = MovieProject(title="A", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                             screens=1200, cycle=1, pay1_licensing="license_out", pay2_licensing="license_out")
+        pay1 = base.pay1_license_fee()
+        pay2 = base.pay2_value()
+        assert pay2 > 0
+        assert pay2 < pay1   # Pay-2 is real but materially smaller
+
+    def test_day_and_date_excludes_pay2_same_as_pay1(self):
+        p = MovieProject(title="D&D", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                          screens=1200, cycle=1, release_strategy="day_and_date", pay2_licensing="license_out")
+        assert p.pay2_value() == 0.0
+
+    def test_pay2_value_flows_into_windowed_cashflows_at_pay2_window_month(self):
+        p = MovieProject(title="A", genre="Drama", budget_m=30, pa_spend_m=15, star_power=40,
+                          screens=1200, cycle=1, pay1_licensing="license_out", pay2_licensing="license_out")
+        flows = p.windowed_cashflows("base")
+        assert any(abs(m - PAY2_WINDOW_MONTH) < 0.01 and cash > 0 for m, cash in flows)
+
+    def test_default_never_adds_a_pay2_cashflow(self):
+        p = _tentpole()
+        flows_with = p.windowed_cashflows("base")
+        flows_without = MovieProject(**{**p.__dict__}).windowed_cashflows("base")
+        assert flows_with == flows_without
+        assert not any(abs(m - PAY2_WINDOW_MONTH) < 0.01 for m, _ in flows_with)
+
+
+class TestTheatricalRunLength:
+    """2026-08-18, per explicit user question ('we should also think about
+    how many days in theater too')."""
+
+    def test_none_preserves_original_automatic_cycle_based_window(self):
+        p = _tentpole(cycle=2)
+        assert p.theatrical_run_length is None
+        shrink = WINDOW_SHRINK_PER_CYCLE_DAYS * (p.cycle - 1)
+        assert p.window_days() == max(BASE_WINDOW_DAYS - shrink, 17)
+
+    def test_explicit_run_length_overrides_the_cycle_formula(self):
+        p = MovieProject(**{**_tentpole(cycle=3).__dict__, "theatrical_run_length": "Short"})
+        assert p.window_days() == THEATRICAL_RUN_LENGTHS["Short"]
+
+    def test_run_length_applies_a_real_box_office_multiplier(self):
+        base = _tentpole()
+        short = MovieProject(**{**base.__dict__, "theatrical_run_length": "Short"})
+        extended = MovieProject(**{**base.__dict__, "theatrical_run_length": "Extended"})
+        assert short.domestic_box_office("base") < base.domestic_box_office("base")
+        assert extended.domestic_box_office("base") > base.domestic_box_office("base")
+
+    def test_unknown_run_length_string_falls_back_to_standard(self):
+        p = MovieProject(**{**_tentpole().__dict__, "theatrical_run_length": "Nonsense"})
+        assert p.window_days() == THEATRICAL_RUN_LENGTHS["Standard"]
+
+
+class TestMultiPictureDeal:
+    """2026-08-18, per explicit user question ('aside from holding...there
+    should be a feature to negotiate with actors actresses right? do we
+    just have holding contracts? this may not be enough')."""
+
+    def test_every_talent_partner_has_a_multi_picture_cost_exceeding_hold(self):
+        for partner in TALENT_PARTNERS.values():
+            assert partner["multi_picture_cost_m"] > partner["hold_cost_m"]
+
+    def test_cycles_constant_is_a_real_multi_cycle_commitment(self):
+        assert MULTI_PICTURE_DEAL_CYCLES > 1
+
+
+class TestStudioAnnualBudget:
+    """2026-08-18, per explicit user request ('year to year performance
+    should also explain budget slate...studios have $2 to $5 billion per
+    year to make movies...let's have $3.5 billion to start...and it may
+    vary year to year based on performance')."""
+
+    def test_start_value_is_in_the_requested_range(self):
+        assert 2000.0 <= STUDIO_ANNUAL_BUDGET_START_M <= 5000.0
+        assert STUDIO_ANNUAL_BUDGET_START_M == 3500.0
+
+    def test_no_resolved_movies_yet_leaves_budget_unchanged(self):
+        assert next_studio_budget(3500.0, None) == 3500.0
+
+    def test_strong_year_grows_the_budget(self):
+        grown = next_studio_budget(3500.0, avg_npv_m=50.0)
+        assert grown > 3500.0
+
+    def test_weak_year_shrinks_the_budget(self):
+        shrunk = next_studio_budget(3500.0, avg_npv_m=-20.0)
+        assert shrunk < 3500.0
+
+    def test_breakeven_year_holds_steady(self):
+        assert next_studio_budget(3500.0, avg_npv_m=5.0) == pytest.approx(3500.0)
+
+    def test_budget_never_drops_below_the_floor(self):
+        shrunk = next_studio_budget(STUDIO_BUDGET_MIN_M, avg_npv_m=-100.0)
+        assert shrunk >= STUDIO_BUDGET_MIN_M
+
+    def test_background_slate_shrinks_with_a_crunched_budget(self):
+        rich = generate_background_slate("Team Budget", 1, studio_budget_m=3500.0)
+        poor = generate_background_slate("Team Budget", 1, studio_budget_m=STUDIO_BUDGET_MIN_M)
+        assert max(e["npv"] for e in rich) != max(e["npv"] for e in poor)   # genuinely different slates
+
+    def test_none_studio_budget_reproduces_original_unscaled_range(self):
+        a = generate_background_slate("Team Budget", 1)
+        b = generate_background_slate("Team Budget", 1, studio_budget_m=None)
+        assert a == b
+
+
 class TestImax:
     """2026-08-18: default False must reproduce the exact unadjusted
     baseline every project used before this field existed."""
@@ -808,17 +1029,19 @@ class TestFinancingStructure:
         assert p.financing_structure == "self_finance"
         assert p.capital_at_risk() == pytest.approx(
             p.budget_m + p.pa_spend_m + p.star_power * STAR_POWER_COST_PER_POINT_M
+            + p.screens * SCREEN_COST_PER_SCREEN_M
         )
 
     def test_presale_reduces_capital_at_risk(self):
         # Net of the sales agent's fee (2026-08-17) -- only the fee-adjusted
         # effective advance actually reduces capital at risk, not the gross
-        # advance amount. Star Power cost (2026-08-17) is added on top,
-        # unaffected by financing_structure.
+        # advance amount. Star Power/Screen cost (2026-08-17/08-18) are
+        # added on top, unaffected by financing_structure.
         base = _tentpole()
         presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
         effective_advance = base.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
-        expected = (base.budget_m - effective_advance) + base.pa_spend_m + base.star_power * STAR_POWER_COST_PER_POINT_M
+        expected = ((base.budget_m - effective_advance) + base.pa_spend_m
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M + base.screens * SCREEN_COST_PER_SCREEN_M)
         assert presale.capital_at_risk() == pytest.approx(expected)
         assert presale.capital_at_risk() < base.capital_at_risk()
 
@@ -836,7 +1059,8 @@ class TestFinancingStructure:
     def test_tax_incentive_reduces_capital_at_risk(self):
         base = _tentpole()
         tax = MovieProject(**{**base.__dict__, "financing_structure": "tax_incentive"})
-        expected = base.budget_m * (1 - TAX_CREDIT_PCT) + base.pa_spend_m + base.star_power * STAR_POWER_COST_PER_POINT_M
+        expected = (base.budget_m * (1 - TAX_CREDIT_PCT) + base.pa_spend_m
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M + base.screens * SCREEN_COST_PER_SCREEN_M)
         assert tax.capital_at_risk() == pytest.approx(expected)
         assert tax.capital_at_risk() < base.capital_at_risk()
 
@@ -1129,13 +1353,14 @@ class TestAiProductionTools:
         assert p.ai_production_tools is False
         assert p.capital_at_risk() == pytest.approx(
             p.budget_m + p.pa_spend_m + p.star_power * STAR_POWER_COST_PER_POINT_M
+            + p.screens * SCREEN_COST_PER_SCREEN_M
         )
 
     def test_budget_discount_applies_to_budget_only_not_pa(self):
         base = _tentpole()
         tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
         expected = (base.budget_m * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
-                    + base.star_power * STAR_POWER_COST_PER_POINT_M)
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M + base.screens * SCREEN_COST_PER_SCREEN_M)
         assert tooled.capital_at_risk() == pytest.approx(expected)
         assert tooled.capital_at_risk() < base.capital_at_risk()
 
@@ -1144,7 +1369,7 @@ class TestAiProductionTools:
         tooled = MovieProject(**{**base.__dict__, "ai_production_tools": True})
         from utils.movie_models import TAX_CREDIT_PCT
         expected = (base.budget_m * (1 - TAX_CREDIT_PCT) * (1 - AI_TOOLS_BUDGET_SAVINGS_PCT) + base.pa_spend_m
-                    + base.star_power * STAR_POWER_COST_PER_POINT_M)
+                    + base.star_power * STAR_POWER_COST_PER_POINT_M + base.screens * SCREEN_COST_PER_SCREEN_M)
         assert tooled.capital_at_risk() == pytest.approx(expected)
 
     def test_timeline_shifts_every_cashflow_forward(self):

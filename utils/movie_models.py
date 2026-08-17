@@ -24,6 +24,25 @@ EXHIBITOR_SPLIT      = 0.52   # studio's share of domestic box office (rentals),
 COST_OF_CAPITAL       = 0.11   # annual discount rate for NPV — studio cost-of-capital proxy
 PVOD_STUDIO_SHARE     = 0.80   # studio keeps ~80% of a PVOD transaction (vs. ~52% theatrical split)
 PVOD_PRICE            = 19.99
+# 2026-08-18, per the "Behind the Box Office" case (S-0410) and explicit
+# user request: real PVOD isn't one flat price for the whole window --
+# Universal's own The Invisible Man opened PVOD at full price, then dropped
+# to $5.99 later in the same window as demand cooled and price-sensitive
+# holdouts became the marginal buyer. pvod_dynamic_pricing=False (default)
+# reproduces the original single-price behavior exactly. When True,
+# revenue splits into two real stages -- a premium stage (captures
+# early/high-willingness-to-pay demand) and a later discount stage
+# (captures additional price-sensitive demand the premium price left on
+# the table) -- landing at different points on the cashflow timeline, which
+# genuinely changes NPV through discounting, not just relabels the same
+# total. Combined conversion (0.22+0.20=0.42) exceeds the single-tier
+# 0.35 -- the real economic story of price discrimination: segmenting by
+# willingness-to-pay captures more of the demand curve than one flat price.
+PVOD_PRICE_PREMIUM              = 19.99
+PVOD_PRICE_DISCOUNT             = 5.99
+PVOD_PREMIUM_CONVERSION         = 0.22
+PVOD_DISCOUNT_CONVERSION        = 0.20
+PVOD_DISCOUNT_STAGE_OFFSET_MONTHS = 1.5   # how much later the discount stage lands vs. the premium stage
 SVOD_SUB_LTV_MO       = 8.0    # matches utils/models.py's SVOD_SUB_LTV_MO for consistency with Day 1
 SVOD_MARGIN           = 0.15
 BASE_PER_SCREEN_M     = 0.010  # $M ($10K) per screen — blockbuster-average opening baseline
@@ -495,7 +514,7 @@ TALENT_PARTNERS = {
                "the safest, most expensive bet on this list, with a proven track record and no "
                "crossover risk.",
         "lifetime_box_office_m": 4200.0, "social_followers_m": 18.0,
-        "hold_cost_m": 4.0, "star_power_bonus": 15,
+        "hold_cost_m": 4.0, "multi_picture_cost_m": 16.0, "star_power_bonus": 15,
     },
     "okonkwo": {
         "name": "Adaeze Okonkwo", "gender": "actress", "age": 52,
@@ -506,7 +525,7 @@ TALENT_PARTNERS = {
                "audience, but a smaller-screen pedigree doesn't always translate to opening-weekend "
                "box office.",
         "lifetime_box_office_m": 310.0, "social_followers_m": 6.5,
-        "hold_cost_m": 3.0, "critical_score_bonus": 8.0,
+        "hold_cost_m": 3.0, "multi_picture_cost_m": 12.0, "critical_score_bonus": 8.0,
     },
     "marsh": {
         "name": "Casey Marsh", "gender": "actor", "age": 29,
@@ -516,7 +535,7 @@ TALENT_PARTNERS = {
                "moving into animated features — a natural, synergistic fit fronting a Video Game "
                "Adaptation specifically, less proven carrying a project with no game pedigree.",
         "lifetime_box_office_m": 640.0, "social_followers_m": 24.0,
-        "hold_cost_m": 2.5, "star_power_bonus": 10,
+        "hold_cost_m": 2.5, "multi_picture_cost_m": 10.0, "star_power_bonus": 10,
     },
     "kade": {
         "name": "Reyna Kade", "gender": "actress", "age": 26,
@@ -526,9 +545,24 @@ TALENT_PARTNERS = {
                "built-in awareness on day one, but no real dramatic track record yet, and that "
                "following is a bet on staying relevant, not a guarantee.",
         "lifetime_box_office_m": 45.0, "social_followers_m": 38.0,
-        "hold_cost_m": 2.0, "star_power_bonus": 8,
+        "hold_cost_m": 2.0, "multi_picture_cost_m": 8.0, "star_power_bonus": 8,
     },
 }
+
+# ── Multi-Picture Talent Deal — real negotiation depth beyond Holding ──────
+# 2026-08-18, per explicit user question ("aside from holding...there should
+# be a feature to negotiate with actors actresses right? do we just have
+# holding contracts? this may not be enough"). A Holding Deal is a cheap,
+# one-off, genuinely risky booking (rival-claim + hold-forfeit). A
+# Multi-Picture Deal is the other real negotiating posture: pay
+# multi_picture_cost_m (roughly 4x the hold fee) once to lock a specific
+# actor's availability for MULTI_PICTURE_DEAL_CYCLES cycles outright -- no
+# rival-claim roll, no forfeit risk, a genuine negotiated commitment
+# instead of a one-shot bet. Real tradeoff: expensive-and-safe vs.
+# cheap-and-risky, the same shape as STUDIO_PARTNERS' Overall Deal vs.
+# TALENT_PARTNERS' Holding Deal, just applied within the talent roster
+# itself.
+MULTI_PICTURE_DEAL_CYCLES = 3
 
 # Which Source Material a talent's origin medium most naturally leverages --
 # casting FOR the adaptation (a game-famous actor fronting the actual game
@@ -683,6 +717,75 @@ PAY1_LICENSE_DISCOUNT  = 0.55   # flat fee as a fraction of BASE-case subscriber
                                   # licensing deal is negotiated before release, not indexed to
                                   # how the movie actually performs
 
+# ── Licensing Marketplace — "different platforms want different cuts" ──────
+# 2026-08-18, per explicit user question: licensing out was previously a
+# single flat-rate choice, as if there were only one possible buyer. Real
+# platforms negotiate different terms -- StreamCo Prime pays a bigger
+# guaranteed fee (a premium buyer), ValueStream+ pays less but is a real,
+# available alternative. "streamco"'s rate is set EXACTLY equal to the
+# original PAY1_LICENSE_DISCOUNT so the pre-existing default reproduces the
+# prior flat-rate behavior exactly -- no silent recalibration for anyone
+# not touching this feature. Reused for BOTH Pay-1 and Pay-2 licensing
+# (see below) -- the same two platforms buy either window, at their own
+# independent rate each time.
+LICENSING_PLATFORMS = {
+    "streamco":    {"name": "StreamCo Prime",  "fee_pct": PAY1_LICENSE_DISCOUNT},
+    "valuestream":  {"name": "ValueStream+",    "fee_pct": 0.40},
+}
+DEFAULT_LICENSING_PLATFORM = "streamco"
+
+# ── Pay-2 Window ──────────────────────────────────────────────────────────
+# 2026-08-18, per explicit user question ("where is pay 2 window...and the
+# full windowing for each of the movies?") -- the teaching note's own
+# "pay-one schedule... can be extended indefinitely" framing implies a real
+# secondary window after Pay-1 exhausts, which this engine never modeled;
+# a title just sat in library forever after Pay-1. Pay-2 is a real,
+# materially smaller secondary licensing window (real-world Pay-2 deals
+# are worth a fraction of Pay-1) -- "keep" here means the studio chose NOT
+# to pursue a Pay-2 deal at all (real, valid choice: hold the title
+# exclusively rather than diversify revenue further), not "keep it on
+# Peacock" the way Pay-1's "keep" does (Pay-1 "keep" retains real ongoing
+# subscriber value; there's no equivalent ongoing value to retain by
+# cycle 4, so Pay-2 "keep" is simply "no additional revenue here").
+PAY2_LICENSING_OPTIONS  = ["keep", "license_out"]
+PAY2_WINDOW_MONTH        = 48.0   # ~4 years post-release -- well past Pay-1's exhausted exclusivity
+PAY2_VALUE_PCT_OF_PAY1   = 0.30   # Pay-2 deals are real but materially smaller than Pay-1
+
+# ── Theatrical Run Length ────────────────────────────────────────────────────
+# 2026-08-18, per explicit user question ("we should also think about how
+# many days in theater too"). Previously window_days() was ENTIRELY
+# automatic (a function of cycle only, modeling real post-2012 industry-
+# wide window compression) -- the student never chose how long THEIR
+# specific movie stays exclusive. theatrical_run_length=None (default)
+# preserves that exact automatic behavior. When set, it overrides the
+# cycle-based formula outright and applies a real, modest box-office
+# effect (RUN_LENGTH_BOX_OFFICE_MULT) -- a longer run captures more
+# cumulative box office (diminishing returns, not linear -- legs fade),
+# but delays every downstream window (PVOD/Pay-1/Pay-2), costing real NPV
+# through discounting. A shorter run trades the reverse. The teaching
+# note's own real-world benchmark sits between Short and Standard:
+# "Universal Pictures... adheres to a theatrical window of at least 30
+# days if a film generates $50 million or more during its opening
+# weekend."
+THEATRICAL_RUN_LENGTHS = {"Short": 21, "Standard": 45, "Extended": 75}
+RUN_LENGTH_BOX_OFFICE_MULT = {"Short": 0.92, "Standard": 1.0, "Extended": 1.06}
+
+# ── Wide-Release Screen Cost — a real penalty for going wide, not just a
+# soft UI warning ────────────────────────────────────────────────────────────
+# 2026-08-18, per explicit user question ("are there penalties if we have
+# a lot of theaters for a wide release... but the movie doesn't do well,
+# is this built in?"). Honest answer before this: no -- screens only ever
+# scaled revenue up, for free, with just a soft UI caption warning
+# ("unrealistic screen count") that never touched the actual math. Real
+# wide releases carry real fixed costs regardless of performance (digital
+# print/booking/duplication fees, exhibitor marketing minimums) -- added
+# unconditionally to capital_at_risk() below, same posture as
+# STAR_POWER_COST_PER_POINT_M: a genuine recalibration with no
+# backward-compatible zero-effect default, since screens was already a
+# required field every existing project set to a real value.
+SCREEN_COST_PER_SCREEN_M = 0.0015   # ~$1,500/screen -- a 3,000-screen wide release costs $4.5M
+                                      # in fixed exhibition costs alone, win or lose
+
 
 # ── AI Production Tools ──────────────────────────────────────────────────────
 # 2026-08-05, Phase 4 item 8: a cost/timeline lever in Greenlight, deliberately
@@ -831,6 +934,13 @@ class MovieProject:
     debut_season: str = "Off-Peak"                # see DEBUT_SEASONS above
     source_material: str = "Original Screenplay"  # see SOURCE_MATERIALS above
     imax_release: bool = False                     # see IMAX_* above
+    pay1_platform: str = DEFAULT_LICENSING_PLATFORM  # see LICENSING_PLATFORMS above -- only
+                                                       # matters when pay1_licensing == "license_out"
+    pay2_licensing: str = "keep"                    # see PAY2_LICENSING_OPTIONS above
+    pay2_platform: str = DEFAULT_LICENSING_PLATFORM  # only matters when pay2_licensing == "license_out"
+    theatrical_run_length: Optional[str] = None      # see THEATRICAL_RUN_LENGTHS above --
+                                                       # None = original automatic cycle-based window_days()
+    pvod_dynamic_pricing: bool = False               # see PVOD_PRICE_PREMIUM/DISCOUNT above
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -850,9 +960,13 @@ class MovieProject:
         option a book/game/show isn't a production-cost efficiency.
         STAR_POWER_COST_PER_POINT_M (2026-08-17) is also added on top,
         unconditionally -- casting a bigger star is a real cost, not a free
-        lever (see the constant's own comment for why this is the one
-        recalibration in this file with no backward-compatible zero-effect
-        default)."""
+        lever. SCREEN_COST_PER_SCREEN_M (2026-08-18) is likewise added on
+        top, unconditionally -- real print/booking/duplication fees a wide
+        release pays regardless of performance, closing a real gap (screens
+        previously only ever scaled revenue up for free). Both are
+        recalibrations in this file with no backward-compatible zero-effect
+        default, since star_power/screens were already required fields
+        every existing project set to a real value."""
         if self.financing_structure == "presale":
             effective_advance = self.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
             budget_component = self.budget_m - effective_advance
@@ -865,7 +979,9 @@ class MovieProject:
         acquisition_cost = SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0)
         star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
         imax_cost = IMAX_COST_M if self.is_imax_eligible() else 0.0
-        return budget_component + self.pa_spend_m + acquisition_cost + star_power_cost + imax_cost
+        screen_cost = self.screens * SCREEN_COST_PER_SCREEN_M
+        return (budget_component + self.pa_spend_m + acquisition_cost + star_power_cost
+                + imax_cost + screen_cost)
 
     def is_imax_eligible(self) -> bool:
         """Whether an IMAX/large-format release is actually in effect this
@@ -877,8 +993,13 @@ class MovieProject:
                 and self.release_strategy != "day_and_date")
 
     def window_days(self) -> int:
-        """Theatrical exclusivity window — shrinks each cycle, matching the
+        """Theatrical exclusivity window. theatrical_run_length (2026-08-18,
+        default None) overrides this outright when the student has chosen a
+        real run length (see THEATRICAL_RUN_LENGTHS) -- otherwise falls back
+        to the original automatic behavior: shrinks each cycle, matching the
         real post-2012 compression (Universal/AMC 2020 deal, etc.)."""
+        if self.theatrical_run_length is not None:
+            return THEATRICAL_RUN_LENGTHS.get(self.theatrical_run_length, THEATRICAL_RUN_LENGTHS["Standard"])
         shrink = WINDOW_SHRINK_PER_CYCLE_DAYS * (self.cycle - 1)
         return max(BASE_WINDOW_DAYS - shrink, 17)   # 17 days = real 2021 post-COVID floor
 
@@ -946,12 +1067,18 @@ class MovieProject:
         own genre-adjusted variance band) or a raw float multiplier (for the
         actual drawn outcome — see draw_actual_multiplier below). Every
         other revenue/NPV/IRR method forwards its `scenario` argument here,
-        so both call styles work everywhere without duplicating formulas."""
+        so both call styles work everywhere without duplicating formulas.
+        theatrical_run_length (2026-08-18, default None) applies a real,
+        modest RUN_LENGTH_BOX_OFFICE_MULT on top -- a longer run captures
+        more cumulative box office (diminishing returns, not linear), a
+        shorter run less. None means 1.0x, exact original behavior."""
         if isinstance(scenario, str):
             multiplier = scenario_multipliers_for(self.genre, self.concept_type)[scenario]
         else:
             multiplier = scenario
-        return self.opening_weekend() * multiplier * self.cannibalization_factor()
+        run_mult = (RUN_LENGTH_BOX_OFFICE_MULT.get(self.theatrical_run_length, 1.0)
+                    if self.theatrical_run_length is not None else 1.0)
+        return self.opening_weekend() * multiplier * self.cannibalization_factor() * run_mult
 
     def international_box_office(self, domestic_gross: float) -> float:
         """International box office the studio itself keeps. Under a
@@ -974,15 +1101,33 @@ class MovieProject:
         split = EXHIBITOR_SPLIT_BY_POSTURE.get(self.exhibitor_posture, EXHIBITOR_SPLIT)
         return (dom + intl) * split
 
+    def pvod_revenue_tiers(self, scenario: str) -> tuple[float, float]:
+        """(premium_revenue, discount_revenue) -- the real two-stage PVOD
+        rollout when pvod_dynamic_pricing=True (see the constant block's
+        own comment for the full rationale), or (total, 0.0) reproducing
+        the original single-price behavior exactly when False (default).
+        day-and-date skips this window entirely either way (subscribers
+        get it on Peacock instead, no separate rental transaction)."""
+        if self.release_strategy == "day_and_date":
+            return 0.0, 0.0
+        dom = self.domestic_box_office(scenario)
+        if not self.pvod_dynamic_pricing:
+            est_transactions_m = (dom / PVOD_PRICE) * 0.35   # ~35% of theatrical audience converts to a rental
+            return est_transactions_m * PVOD_PRICE * PVOD_STUDIO_SHARE, 0.0
+        premium_transactions_m  = (dom / PVOD_PRICE_PREMIUM) * PVOD_PREMIUM_CONVERSION
+        discount_transactions_m = (dom / PVOD_PRICE_DISCOUNT) * PVOD_DISCOUNT_CONVERSION
+        premium_rev  = premium_transactions_m * PVOD_PRICE_PREMIUM * PVOD_STUDIO_SHARE
+        discount_rev = discount_transactions_m * PVOD_PRICE_DISCOUNT * PVOD_STUDIO_SHARE
+        return premium_rev, discount_rev
+
     def pvod_revenue(self, scenario: str) -> float:
         """Premium-rental window, sized off theatrical awareness — day-and-date
         skips this window (subscribers get it on Peacock instead, no separate
-        rental transaction)."""
-        if self.release_strategy == "day_and_date":
-            return 0.0
-        dom = self.domestic_box_office(scenario)
-        est_transactions_m = (dom / PVOD_PRICE) * 0.35   # ~35% of theatrical audience converts to a rental
-        return est_transactions_m * PVOD_PRICE * PVOD_STUDIO_SHARE
+        rental transaction). Total across both PVOD stages when
+        pvod_dynamic_pricing=True -- see pvod_revenue_tiers() for the real
+        cashflow-timing split used in windowed_cashflows()."""
+        premium, discount = self.pvod_revenue_tiers(scenario)
+        return premium + discount
 
     def subscriber_value(self, scenario: str) -> float:
         """Dollarized Peacock subscriber-acquisition/retention value
@@ -1007,13 +1152,38 @@ class MovieProject:
 
     def pay1_license_fee(self) -> float:
         """Flat, pre-negotiated fee for licensing the Pay-1 SVOD window to
-        a rival platform instead of keeping it on Peacock -- computed off
+        another platform instead of keeping it on Peacock -- computed off
         the BASE case regardless of the actual resolved scenario (a real
         licensing deal is negotiated before release, not indexed to how the
-        movie actually performs). 0.0 when not licensing out."""
+        movie actually performs). 0.0 when not licensing out. 2026-08-18:
+        the rate now depends on which platform (pay1_platform, see
+        LICENSING_PLATFORMS) -- different platforms pay different cuts, a
+        real choice instead of one flat rate. Default platform's rate
+        equals the original PAY1_LICENSE_DISCOUNT exactly, so a project
+        that never touches pay1_platform reproduces prior behavior."""
         if not self.is_licensing_out():
             return 0.0
-        return self.subscriber_value("base") * PAY1_LICENSE_DISCOUNT
+        fee_pct = LICENSING_PLATFORMS.get(self.pay1_platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
+        return self.subscriber_value("base") * fee_pct
+
+    def is_licensing_out_pay2(self) -> bool:
+        """Whether a real Pay-2 licensing deal is in effect -- same
+        day_and_date exclusion as Pay-1 (that release strategy already
+        commits the title to Peacock exclusivity, so there's no Pay-2
+        window to license away either)."""
+        return self.pay2_licensing == "license_out" and self.release_strategy != "day_and_date"
+
+    def pay2_value(self) -> float:
+        """A real, materially smaller secondary licensing window after
+        Pay-1 exhausts (2026-08-18) -- see PAY2_WINDOW_MONTH/PAY2_VALUE_PCT_
+        OF_PAY1's own comments for the full rationale. Computed off the BASE
+        case subscriber value, same "negotiated before release" posture as
+        pay1_license_fee(). 0.0 when pay2_licensing == "keep" (a real,
+        valid choice not to pursue a Pay-2 deal at all) or for day_and_date."""
+        if not self.is_licensing_out_pay2():
+            return 0.0
+        fee_pct = LICENSING_PLATFORMS.get(self.pay2_platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
+        return self.subscriber_value("base") * PAY2_VALUE_PCT_OF_PAY1 * fee_pct
 
     def library_longtail(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """Small, deferred EST/library licensing tail — a fixed fraction of
@@ -1112,7 +1282,9 @@ class MovieProject:
         fee is negotiated and priced before release, not indexed to how
         digital word-of-mouth or piracy actually plays out."""
         theatrical = self.theatrical_studio_net(scenario)
-        pvod       = self.pvod_revenue(scenario) * pvod_mult * ewom_mult
+        pvod_premium, pvod_discount = self.pvod_revenue_tiers(scenario)
+        pvod_premium  *= pvod_mult * ewom_mult
+        pvod_discount *= pvod_mult * ewom_mult
         longtail   = self.library_longtail(scenario, critical_score)
         bump       = self.awards_season_bump(scenario, critical_score)
         theme_park = self.theme_park_value(scenario, critical_score) * theme_park_mult
@@ -1128,10 +1300,15 @@ class MovieProject:
             sub_value_month = window_mo + 3.0   # Peacock exclusive window follows PVOD
         flows = [
             (1.5,                theatrical),               # midpoint of a ~12-week theatrical run
-            (window_mo + 1.0,    pvod),                       # PVOD opens right after theatrical window
+            (window_mo + 1.0,    pvod_premium),               # PVOD opens right after theatrical window
             (sub_value_month,    sub_value),
             (24.0,               longtail),                   # library/EST tail, ~2 years out
         ]
+        if pvod_discount > 0:
+            # 2026-08-18: real second PVOD stage (pvod_dynamic_pricing=True
+            # only) -- price drops, a later wave of price-sensitive demand
+            # converts. 0.0 by default, a true no-op for every existing caller.
+            flows.append((window_mo + 1.0 + PVOD_DISCOUNT_STAGE_OFFSET_MONTHS, pvod_discount))
         if bump > 0:
             # Real-world awards season sits around Jan-Feb -- how many
             # months after release that actually is depends on debut_season
@@ -1140,6 +1317,14 @@ class MovieProject:
             flows.append((SEASON_AWARDS_BUMP_MONTH.get(self.debut_season, 11.0), bump))
         if theme_park > 0:
             flows.append((30.0, theme_park))   # attractions/merchandise take real time to develop and license
+
+        pay2 = self.pay2_value()
+        if pay2 > 0:
+            # 2026-08-18: a real secondary licensing window, well after
+            # Pay-1 exhausts (see PAY2_WINDOW_MONTH) -- 0.0 by default
+            # (pay2_licensing="keep"), so this is a true no-op for every
+            # existing caller.
+            flows.append((PAY2_WINDOW_MONTH, pay2))
 
         if self.ai_production_tools:
             # Faster post-production pulls the whole timeline forward --
@@ -1408,6 +1593,44 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
 # Fully deterministic (seeded off team_name+cycle, same posture as every
 # other draw_* function in this file) -- no persistence needed, regenerable
 # identically on every render.
+# ── Studio Annual Budget — performance-linked capital pool ──────────────────
+# 2026-08-18, per explicit user request: "year to year performance should
+# also explain budget slate...studios have $2 to $5 billion per year to
+# make movies...let's have $3.5 billion to start...and it may vary year to
+# year based on performance." Real-world grounding: major studios' annual
+# content spend genuinely sits in this range. This pool explains and SIZES
+# the Background Studio Slate below -- it is NOT a hard cap on the
+# student's own Greenlight decision (that would need a much larger UI/
+# validation rewrite for one number's worth of realism); it's real,
+# visible context that moves with performance, mirroring utils/game_state.
+# py's TV-side performance-linked level_budget rule (grow on a strong year,
+# shrink on a weak one) but keyed to average NPV per movie -- this engine's
+# own scoring currency -- instead of OCF margin.
+STUDIO_ANNUAL_BUDGET_START_M       = 3500.0
+STUDIO_BUDGET_GROWTH_PCT           = 0.12   # a strong year grows next year's pool
+STUDIO_BUDGET_SHRINK_PCT           = 0.15   # a weak/negative year shrinks it -- real capital discipline
+STUDIO_BUDGET_NPV_GOOD_THRESHOLD_M = 20.0   # avg NPV/movie above this = a "strong" year
+STUDIO_BUDGET_MIN_M                = 800.0  # a real floor -- crunched, never zero
+
+
+def next_studio_budget(current_budget_m: float, avg_npv_m: Optional[float]) -> float:
+    """Performance-linked annual budget adjustment, called once per cycle
+    transition. avg_npv_m=None (nothing resolved yet) leaves the budget
+    unchanged. >=STUDIO_BUDGET_NPV_GOOD_THRESHOLD_M grows it; a
+    non-negative-but-below-threshold year holds steady (a real break-even
+    year isn't a capital-discipline failure); a negative year shrinks it.
+    Floored at STUDIO_BUDGET_MIN_M."""
+    if avg_npv_m is None:
+        return current_budget_m
+    if avg_npv_m >= STUDIO_BUDGET_NPV_GOOD_THRESHOLD_M:
+        new_budget = current_budget_m * (1 + STUDIO_BUDGET_GROWTH_PCT)
+    elif avg_npv_m >= 0:
+        new_budget = current_budget_m
+    else:
+        new_budget = current_budget_m * (1 - STUDIO_BUDGET_SHRINK_PCT)
+    return max(new_budget, STUDIO_BUDGET_MIN_M)
+
+
 BACKGROUND_SLATE_MIN = 5
 BACKGROUND_SLATE_MAX = 10
 # A small curated word bank for flavor titles -- deliberately generic/
@@ -1419,7 +1642,8 @@ BACKGROUND_TITLE_WORDS_B = ["Horizon", "Protocol", "Harbor", "District", "Signal
                              "Tide", "Frontier", "Anthem", "Pursuit", "Bloom", "Reckoning", "Static"]
 
 
-def generate_background_slate(team_name: str, cycle: int) -> list[dict]:
+def generate_background_slate(team_name: str, cycle: int,
+                                studio_budget_m: Optional[float] = None) -> list[dict]:
     """Deterministic per-(team, cycle) list of 5-10 non-interactive 'rest of
     the studio's slate' movie summaries -- pure flavor/context, never
     scored. Reuses the real financial engine (MovieProject,
@@ -1428,16 +1652,25 @@ def generate_background_slate(team_name: str, cycle: int) -> list[dict]:
     "__bg__<team>__<i>" team name) so it never perturbs the student's own
     draws for the same real cycle. Returns light dicts (title, genre,
     concept_type, npv, theme_park, cycle) -- not full outcome records,
-    since nothing downstream needs IRR/waterfall/etc. for background flavor."""
+    since nothing downstream needs IRR/waterfall/etc. for background flavor.
+
+    studio_budget_m (2026-08-18, default None = original fixed $20-200M
+    range, unchanged): when given the studio's actual current annual
+    budget pool (see STUDIO_ANNUAL_BUDGET_START_M/next_studio_budget), no
+    single background movie's budget exceeds ~4% of that pool -- a real,
+    visible consequence of a shrunk pool (a bad year literally produces a
+    smaller, cheaper background slate) or a grown one (a strong year's
+    slate visibly gets bigger bets)."""
     seed = (abs(hash(team_name)) + cycle * 9769 + 401) % (2 ** 31)
     rng = np.random.default_rng(seed)
     n = int(rng.integers(BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX + 1))
+    budget_max = min(200.0, max(20.0, studio_budget_m * 0.04)) if studio_budget_m is not None else 200.0
 
     slate = []
     for i in range(n):
         genre = GENRES[int(rng.integers(0, len(GENRES)))]
         concept_type = CONCEPT_TYPES[int(rng.integers(0, len(CONCEPT_TYPES)))]
-        budget = float(rng.uniform(20, 200))
+        budget = float(rng.uniform(20, budget_max))
         pa = budget * float(rng.uniform(0.4, 0.9))
         star = int(rng.integers(20, 90))
         screens = int(rng.uniform(1200, 4200))

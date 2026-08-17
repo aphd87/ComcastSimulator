@@ -39,6 +39,7 @@ from streamlit.testing.v1 import AppTest
 import utils.game_state as gs
 from utils.movie_models import (
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M,
+    SCREEN_COST_PER_SCREEN_M,
 )
 
 
@@ -87,9 +88,11 @@ def test_decisions_phase_has_expected_widgets():
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
     # genre, concept type, source material, financing structure, exhibitor
-    # posture (Greenlight) + debut season, Pay-1 licensing (Release Strategy
-    # -- shown even at Cycle 1 since "wide_theatrical" != "day_and_date")
-    assert len(at.selectbox) == 7
+    # posture (Greenlight) + debut season, Pay-1 licensing, Pay-2 licensing,
+    # Theatrical Run Length (Release Strategy -- shown even at Cycle 1 since
+    # "wide_theatrical" != "day_and_date"; Pay-1/Pay-2 platform pickers only
+    # render once "license_out" is actually chosen, not at the "keep" default)
+    assert len(at.selectbox) == 9
     assert len(at.slider) == 1         # star power
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
@@ -140,6 +143,7 @@ def test_simulate_outcome_includes_financing_and_waterfall_fields():
     assert outcome["capital_at_risk"] == pytest.approx(
         outcome["project_kwargs"]["budget_m"] + outcome["project_kwargs"]["pa_spend_m"]
         + outcome["project_kwargs"]["star_power"] * STAR_POWER_COST_PER_POINT_M
+        + outcome["project_kwargs"]["screens"] * SCREEN_COST_PER_SCREEN_M
     )
     for key in ("oscar_win", "talent_take", "producer_take", "studio_residual"):
         assert key in outcome
