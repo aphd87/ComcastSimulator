@@ -1459,3 +1459,113 @@ def generate_background_slate(team_name: str, cycle: int) -> list[dict]:
             "is_background": True,
         })
     return slate
+
+
+# ── Scouted Concepts — real competitive consequence for passing ────────────
+# 2026-08-18, per explicit user request for real game theory around movie
+# CONCEPTS, not just talent: "is there game theory in here? do we get
+# updates... about rival studios buying movies we pass on?" Previously the
+# only competitive-consequence mechanics were talent-side (STUDIO_PARTNERS
+# poaching, TALENT_PARTNERS hold contests) -- there was structurally
+# nothing to "pass on" at the concept level, since every cycle's movie is
+# hand-built from raw sliders, never chosen from a menu. This closes that
+# gap: each cycle, the studio's scouts surface SCOUTED_CONCEPTS_PER_CYCLE
+# candidate concepts (genre/concept-type/source-material/logline/rough
+# budget spec) the student can either Option (pre-fills the Greenlight
+# draft) or let pass. A concept not optioned by the time the NEXT cycle
+# begins faces a ONE-TIME chance (SCOUTED_POACH_CHANCE) of being picked up
+# by a rival studio -- deliberately a single roll, not an ongoing per-cycle
+# risk the way STUDIO_PARTNERS poaching is, so old unclaimed concepts don't
+# accumulate indefinitely (matches "review a fresh batch each year," not
+# "manage an ever-growing backlog"). A poached concept's fate resolves
+# immediately (its own deterministic box-office/critical draw, same engine)
+# so the Distribution Pipeline scorecard can show a real, visible
+# consequence -- "you passed on this, a rival made it a hit."
+SCOUTED_CONCEPTS_PER_CYCLE = 3
+SCOUTED_POACH_CHANCE       = 0.35   # deliberately steep -- passing has a real, likely cost
+
+SCOUTED_LOGLINE_BY_GENRE = {
+    "Action/Tentpole":  "An elite operative races against a global threat only they can stop.",
+    "Sci-Fi/Fantasy":   "A discovery on the edge of known space forces a reckoning with what's real.",
+    "Animated":         "A misfit hero learns that belonging is worth the risk of being different.",
+    "Horror":           "A remote community unravels as something in the dark refuses to stay buried.",
+    "Comedy":           "Two rivals are forced together by circumstance and discover they need each other.",
+    "Drama":            "A family confronts a long-buried truth that reshapes everyone's future.",
+    "Awards/Prestige":  "A quiet act of conscience ripples outward, testing everyone it touches.",
+}
+
+
+def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
+    """Deterministic per-(team, cycle) list of SCOUTED_CONCEPTS_PER_CYCLE
+    candidate concepts -- the pool the student can Option (pre-fill their
+    Greenlight draft from) or pass on this cycle. Each concept carries a
+    stable id ("<cycle>_<i>") used to track optioned/poached status across
+    cycles in ss.movie_scouted_optioned/ss.movie_scouted_poached. Reuses
+    GENRES/CONCEPT_TYPES/SOURCE_MATERIALS so every concept is buildable
+    with the real engine -- these aren't flavor-only like the Background
+    Studio Slate, they're real starting points for the student's own
+    project."""
+    seed = (abs(hash(team_name)) + cycle * 6151 + 631) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    concepts = []
+    for i in range(SCOUTED_CONCEPTS_PER_CYCLE):
+        genre = GENRES[int(rng.integers(0, len(GENRES)))]
+        concept_type = CONCEPT_TYPES[int(rng.integers(0, len(CONCEPT_TYPES)))]
+        source_material = SOURCE_MATERIALS[int(rng.integers(0, len(SOURCE_MATERIALS)))]
+        budget = float(rng.uniform(20, 150))
+        concepts.append({
+            "id":               f"{cycle}_{i}",
+            "cycle":            cycle,
+            "genre":            genre,
+            "concept_type":     concept_type,
+            "source_material":  source_material,
+            "logline":          SCOUTED_LOGLINE_BY_GENRE.get(genre, "A bold new concept looking for a studio."),
+            "budget_m":         round(budget, 0),
+            "pa_spend_m":       round(budget * 0.5, 0),
+            "star_power":       40,
+            "screens":          2500,
+        })
+    return concepts
+
+
+def draw_scouted_poach(team_name: str, concept_id: str) -> Optional[str]:
+    """One-time chance a rival studio picks up a scouted concept the team
+    never optioned -- own independent seed namespace (never perturbs
+    draw_rival_poach's STUDIO_PARTNERS sequence, or anything else). Called
+    exactly once per concept (by the caller's own checked_through gating,
+    same posture as draw_rival_poach) -- this function itself doesn't track
+    whether it's already been rolled. Returns the rival's name if poached,
+    else None."""
+    seed = (abs(hash(team_name)) + abs(hash(concept_id)) % 7919 + 4001) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > SCOUTED_POACH_CHANCE:
+        return None
+    return RIVAL_STUDIOS[int(rng.integers(0, len(RIVAL_STUDIOS)))]
+
+
+def resolve_scouted_outcome(concept: dict, rival: str) -> dict:
+    """Once a scouted concept is confirmed poached, resolve its fate with
+    the SAME financial engine every other movie uses -- own seed namespace
+    (independent of the team's own draws and of generate_background_slate's)
+    so a rival's fate for this concept is fixed the moment it's poached,
+    not re-rolled on every render."""
+    project = MovieProject(
+        title=f"{concept['genre']} Project ({rival})", genre=concept["genre"],
+        budget_m=concept["budget_m"], pa_spend_m=concept["pa_spend_m"],
+        star_power=concept["star_power"], screens=concept["screens"], cycle=concept["cycle"],
+        concept_type=concept["concept_type"], source_material=concept["source_material"],
+    )
+    seed_team = f"__scouted__{concept['id']}"
+    multiplier = draw_actual_multiplier(seed_team, concept["cycle"], concept["genre"], concept["concept_type"])
+    critical_score = draw_critical_reception(seed_team, concept["cycle"], concept["genre"])
+    return {
+        "concept_id": concept["id"],
+        "rival":      rival,
+        "cycle":      concept["cycle"],
+        "title":      project.title,
+        "genre":      concept["genre"],
+        "concept_type": concept["concept_type"],
+        "npv":        project.npv(multiplier, critical_score),
+        "theme_park": project.theme_park_value(multiplier, critical_score),
+        "window_days": project.window_days(),
+    }

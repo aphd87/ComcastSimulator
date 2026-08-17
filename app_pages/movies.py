@@ -21,6 +21,7 @@ from utils.movie_models import (
     SOURCE_MATERIALS, SOURCE_ACQUISITION_COST_M, SOURCE_OPENING_BOOST, STAR_POWER_COST_PER_POINT_M,
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
     generate_background_slate,
+    generate_scouted_concepts, draw_scouted_poach, resolve_scouted_outcome, SCOUTED_POACH_CHANCE,
     draw_production_trouble, draw_ancillary_surprise,
     FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
@@ -74,6 +75,19 @@ def _init(ss):
         ss.movie_talent_total_spend = 0.0
     if not isinstance(ss.get("movie_research_paid"), dict):
         ss.movie_research_paid = {}   # {cycle: True} once paid -- see _decisions()'s Research section
+    # Scouted Concepts (2026-08-18) -- ss.movie_scouted_optioned: set of
+    # concept ids ("<cycle>_<i>") the team has ever optioned. ss.movie_
+    # scouted_poached: {concept_id: resolve_scouted_outcome() dict} for
+    # concepts a rival picked up after the team passed. ss.movie_scouted_
+    # resolved_through: last PAST cycle whose unclaimed concepts have
+    # already had their one-time poach roll -- see _resolve_scouted_
+    # concept_transitions.
+    if not isinstance(ss.get("movie_scouted_optioned"), set):
+        ss.movie_scouted_optioned = set()
+    if not isinstance(ss.get("movie_scouted_poached"), dict):
+        ss.movie_scouted_poached = {}
+    if "movie_scouted_resolved_through" not in ss:
+        ss.movie_scouted_resolved_through = 0
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -273,7 +287,7 @@ def _section_distribution_pipeline(ss):
     so we can see where each movie is from year to year in the distribution
     run... is there a way to tabulate this?").
 
-    Two row sources, clearly distinguished by a Slate column:
+    Three row sources, clearly distinguished by a Slate column:
     - "Yours": the student's own real greenlit-and-simulated movies
       (ss.movie_log) -- reuses each project's own real windowed_cashflows()
       boundaries via _current_distribution_window, never a parallel
@@ -288,6 +302,12 @@ def _section_distribution_pipeline(ss):
       option) -- these never affect compute_movie_score, purely context so
       the studio's slate looks and feels busy around the one real bet the
       student is actually making each cycle.
+    - "Rival": Scouted Concepts the team passed on and a rival studio
+      picked up (ss.movie_scouted_poached) -- the real, visible
+      competitive consequence per explicit user request ("do we get
+      updates... about rival studios buying movies we pass on?"). Shown
+      with a fixed "🏆 Rival Release" window label since these resolve
+      immediately on poaching, not on the team's own timeline.
 
     Renders from Cycle 1 onward regardless of whether the student has
     simulated anything yet -- the background slate alone is enough to show
@@ -334,6 +354,18 @@ def _section_distribution_pipeline(ss):
                 "Theme Park / Merch": f"${bg['theme_park']:.1f}M" if bg.get("theme_park", 0) > 0 else "—",
                 "Sequel Potential":  "—",
             }))
+
+    for outcome in ss.movie_scouted_poached.values():
+        rows.append((outcome["cycle"], {
+            "Slate":             "Rival",
+            "Year":              _cycle_years_label(outcome["cycle"]),
+            "Title":             f"{outcome['title']} ({outcome['rival']})",
+            "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
+            "Current Window":    "🏆 Rival Release",
+            "NPV":               _fmt_money(outcome["npv"]),
+            "Theme Park / Merch": f"${outcome['theme_park']:.1f}M" if outcome.get("theme_park", 0) > 0 else "—",
+            "Sequel Potential":  "—",
+        }))
 
     rows.sort(key=lambda cr: (cr[0], cr[1]["Slate"]))
     st.dataframe(pd.DataFrame([r for _, r in rows]), use_container_width=True, hide_index=True,
@@ -418,6 +450,91 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         st.caption(f"💸 Total spent on talent/studio relationships so far: ${ss.movie_talent_total_spend:.1f}M "
                    f"(a real cash cost, tracked separately from any single project's NPV — see the "
                    f"Slate Complete summary).")
+
+    st.divider()
+
+
+def _resolve_scouted_concept_transitions(ss) -> dict:
+    """One-time poach roll for every PAST cycle's scouted concepts not yet
+    optioned or already resolved -- 2026-08-18, real game theory for movie
+    CONCEPTS (not just talent), per explicit user request. Deliberately
+    excludes the CURRENT cycle's own freshly-shown concepts (range stops
+    before ss.movie_cycle) -- they get a full cycle to be optioned before
+    facing any risk. Idempotent via movie_scouted_resolved_through, same
+    gating pattern as _resolve_talent_cycle_transitions. Returns
+    {concept_id: resolve_scouted_outcome() dict} for concepts poached THIS
+    render, for the caller to show as fresh notices."""
+    newly_poached = {}
+    checked_through = ss.movie_scouted_resolved_through
+    if ss.movie_cycle > checked_through:
+        for cyc in range(checked_through + 1, ss.movie_cycle):
+            for concept in generate_scouted_concepts(ss.team_name, cyc):
+                cid = concept["id"]
+                if cid in ss.movie_scouted_optioned or cid in ss.movie_scouted_poached:
+                    continue
+                rival = draw_scouted_poach(ss.team_name, cid)
+                if rival:
+                    outcome = resolve_scouted_outcome(concept, rival)
+                    ss.movie_scouted_poached[cid] = outcome
+                    newly_poached[cid] = outcome
+        ss.movie_scouted_resolved_through = ss.movie_cycle - 1
+    return newly_poached
+
+
+def _section_scouted_concepts(ss, newly_poached: dict):
+    """This cycle's 2-3 studio-scouted candidate concepts -- Option one to
+    pre-fill the Greenlight draft below, or build your own from scratch.
+    2026-08-18, per explicit user request for real competitive consequence
+    around movie concepts specifically ("is there game theory in here? do
+    we get updates... about rival studios buying movies we pass on?"). A
+    concept not optioned by next cycle faces a real, steep one-time chance
+    of being picked up by a rival -- see _resolve_scouted_concept_
+    transitions and resolve_scouted_outcome. Rendered between Studio
+    Partnerships and Greenlight -- a scouted concept, once optioned, feeds
+    directly into the Greenlight fields right below it."""
+    st.markdown('<a id="scouted"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Scouted Concepts '
+                '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface a few concepts every cycle. '
+        'Option one to pre-fill your Greenlight decision below, or build your own from scratch. A '
+        f'concept you don\'t option has a real, steep (~{SCOUTED_POACH_CHANCE:.0%}) one-time chance of '
+        'being picked up by a rival studio by next cycle.</p>', unsafe_allow_html=True)
+
+    for cid, outcome in newly_poached.items():
+        npv_ok = outcome["npv"] >= 0
+        st.markdown(f"""
+        <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
+          <div class="text-sm font-semibold" style="color:{WARN};">🚨 {outcome['rival']} picked up
+          "{outcome['title']}" — you passed on this {outcome['genre']} concept.</div>
+          <div class="text-xs text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
+          {_fmt_money(outcome['npv'])} NPV for them{' — a real hit you left on the table.' if npv_ok else '.'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    concepts = generate_scouted_concepts(ss.team_name, ss.movie_cycle)
+    cols = st.columns(len(concepts))
+    for col, concept in zip(cols, concepts):
+        with col:
+            optioned = concept["id"] in ss.movie_scouted_optioned
+            st.markdown(f"""
+            <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+              <div class="text-[10px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
+              <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
+              <div class="text-[10px] text-muted font-mono">Est. Budget: ${concept['budget_m']:.0f}M</div>
+              {'<div class="text-[10px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
+            </div>
+            """, unsafe_allow_html=True)
+            if not optioned and st.button("Option This Concept", key=f"option_{concept['id']}", use_container_width=True):
+                ss.movie_scouted_optioned.add(concept["id"])
+                ss.movie_draft = {
+                    **ss.movie_draft,
+                    "genre": concept["genre"], "concept_type": concept["concept_type"],
+                    "source_material": concept["source_material"], "budget_m": concept["budget_m"],
+                    "pa_spend_m": concept["pa_spend_m"], "star_power": concept["star_power"],
+                    "screens": concept["screens"],
+                }
+                st.rerun()
 
     st.divider()
 
@@ -646,11 +763,21 @@ def _decisions(ss):
     st.markdown(
         '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
         '<a href="#talent" style="color:#1a6bb5;">Studio Partnerships</a> · '
+        '<a href="#scouted" style="color:#1a6bb5;">Scouted Concepts</a> · '
         '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#holding" style="color:#1a6bb5;">Holding Deals</a> · '
         '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
         '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'
         '</div>', unsafe_allow_html=True)
+
+    # Both resolutions run BEFORE the scorecard renders -- ss.movie_scouted_
+    # poached/ss.movie_rival_exclusive must already reflect this render's
+    # transitions by the time _section_distribution_pipeline reads them, or
+    # the scorecard would show last render's stale state for one full
+    # render (Streamlit isn't reactive -- an earlier st.dataframe() call
+    # doesn't see state mutated later in the same script run).
+    resolved_hold_key, newly_poached = _resolve_talent_cycle_transitions(ss)
+    newly_poached_concepts = _resolve_scouted_concept_transitions(ss)
 
     _section_distribution_pipeline(ss)
 
@@ -659,8 +786,11 @@ def _decisions(ss):
     # rationale as TV/Streaming's Sports Rights section. Holding Deals
     # (individual actors) render AFTER Greenlight instead -- see
     # _section_holding_deals's docstring for why.
-    resolved_hold_key, newly_poached = _resolve_talent_cycle_transitions(ss)
     _section_studio_partnerships(ss, newly_poached)
+
+    # Scouted Concepts render right before Greenlight -- optioning one
+    # pre-fills the Greenlight fields directly below it.
+    _section_scouted_concepts(ss, newly_poached_concepts)
 
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">2 · Greenlight the Concept</div>', unsafe_allow_html=True)

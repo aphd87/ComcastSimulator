@@ -743,6 +743,52 @@ def test_distribution_pipeline_scorecard_shows_prior_movie():
     assert "First Movie" in df["Title"].tolist()
 
 
+# ── Scouted Concepts (2026-08-18) ────────────────────────────────────────────
+def test_scouted_concepts_section_renders_with_option_buttons():
+    at = _movies_app()
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Scouted Concepts" in text
+    option_keys = [b.key for b in at.button if b.key and b.key.startswith("option_")]
+    assert len(option_keys) == 3   # SCOUTED_CONCEPTS_PER_CYCLE
+
+
+def test_optioning_a_scouted_concept_prefills_the_greenlight_draft():
+    from utils.movie_models import generate_scouted_concepts
+    at = _movies_app()
+    concept = generate_scouted_concepts("AppTest Team", 1)[0]
+    at.button(key=f"option_{concept['id']}").click().run()
+    assert not at.exception, f"Option click raised: {list(at.exception)}"
+    assert concept["id"] in at.session_state["movie_scouted_optioned"]
+    assert at.session_state["movie_draft"]["genre"] == concept["genre"]
+    assert at.session_state["movie_draft"]["budget_m"] == concept["budget_m"]
+
+
+def test_scouted_concept_poach_notice_and_scorecard_row_when_poached(monkeypatch):
+    import app_pages.movies as movies_module
+    monkeypatch.setattr(movies_module, "draw_scouted_poach", lambda team, cid: "Paragon Pictures")
+
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.movie_cycle = 2
+        st.session_state.movie_phase = "decisions"
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Cycle 2 decisions phase raised: {list(at.exception)}"
+    text = "\n".join(md.value for md in at.markdown)
+    assert "picked up" in text
+    assert "Paragon Pictures" in text
+    assert at.session_state["movie_scouted_resolved_through"] == 1
+    assert len(at.session_state["movie_scouted_poached"]) == 3   # all of cycle 1's unclaimed concepts
+    df = at.dataframe[0].value
+    assert (df["Slate"] == "Rival").sum() == 3
+
+
 # ── Progress chart (2026-08-04) ──────────────────────────────────────────────
 def _movies_app_at_cycle_3_with_two_prior_logs() -> AppTest:
     """Cycle 3 Decisions with two real cycle outcomes (1, 2) already in

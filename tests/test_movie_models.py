@@ -36,6 +36,8 @@ from utils.movie_models import (
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
     generate_background_slate, BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX, GENRES,
+    generate_scouted_concepts, draw_scouted_poach, resolve_scouted_outcome,
+    SCOUTED_CONCEPTS_PER_CYCLE, SCOUTED_POACH_CHANCE,
     EXHIBITOR_POSTURES, EXHIBITOR_SPLIT_BY_POSTURE, EXHIBITOR_SCREENS_MULT_BY_POSTURE, EXHIBITOR_SPLIT,
     PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
@@ -396,6 +398,69 @@ class TestPortfolioDiversification:
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
+class TestScoutedConcepts:
+    """2026-08-18: real competitive consequence for passing on a movie
+    CONCEPT (not just talent), per explicit user request ("is there game
+    theory in here? do we get updates... about rival studios buying movies
+    we pass on?")."""
+
+    def test_reproducible_for_same_team_cycle(self):
+        a = generate_scouted_concepts("Team Echo", 1)
+        b = generate_scouted_concepts("Team Echo", 1)
+        assert a == b
+
+    def test_count_matches_the_configured_constant(self):
+        assert len(generate_scouted_concepts("Team Alpha", 1)) == SCOUTED_CONCEPTS_PER_CYCLE
+
+    def test_every_concept_has_a_stable_id_and_real_fields(self):
+        for i, concept in enumerate(generate_scouted_concepts("Team Beta", 3)):
+            assert concept["id"] == f"3_{i}"
+            assert concept["cycle"] == 3
+            assert concept["genre"] in GENRES
+            assert concept["concept_type"] in CONCEPT_TYPES
+            assert concept["source_material"] in SOURCE_MATERIALS
+            assert concept["budget_m"] > 0
+
+    def test_different_teams_or_cycles_get_different_concepts(self):
+        a = generate_scouted_concepts("Team Gamma", 1)
+        b = generate_scouted_concepts("Team Delta", 1)
+        c = generate_scouted_concepts("Team Gamma", 2)
+        assert a != b
+        assert a != c
+
+    def test_poach_rate_matches_the_configured_chance(self):
+        fired = sum(1 for i in range(1500) if draw_scouted_poach(f"Team{i}", "1_0"))
+        rate = fired / 1500
+        assert abs(rate - SCOUTED_POACH_CHANCE) < 0.05
+
+    def test_poach_never_shares_a_seed_with_talent_poach_or_background_slate(self):
+        # Same team/cycle-ish inputs shouldn't collide across the three
+        # independent mechanisms -- a concrete regression guard against an
+        # accidental shared seed namespace.
+        team = "Team Namespace"
+        concept_poach = [draw_scouted_poach(team, f"1_{i}") for i in range(3)]
+        talent_poach = [draw_rival_poach(team, "meridian", c) for c in range(1, 4)]
+        assert concept_poach != talent_poach
+
+    def test_resolve_scouted_outcome_is_deterministic_and_uses_real_engine(self):
+        concept = generate_scouted_concepts("Team Epsilon", 1)[0]
+        a = resolve_scouted_outcome(concept, "Paragon Pictures")
+        b = resolve_scouted_outcome(concept, "Paragon Pictures")
+        assert a == b
+        assert a["concept_id"] == concept["id"]
+        assert a["genre"] == concept["genre"]
+        assert isinstance(a["npv"], float)
+
+    def test_resolve_scouted_outcome_never_touches_compute_movie_score(self):
+        # Purely a documentation-style guard: resolve_scouted_outcome's
+        # return shape has no "passed"/scoring fields, confirming it isn't
+        # wired into the real scoring pipeline.
+        concept = generate_scouted_concepts("Team Zeta", 1)[0]
+        outcome = resolve_scouted_outcome(concept, "Vantage Films")
+        assert "passed" not in outcome
+        assert "risk_adjusted_npv" not in outcome
+
+
 class TestBackgroundStudioSlate:
     """2026-08-18: non-interactive 'rest of the studio' flavor layer --
     scoped down from a full portfolio rewrite per explicit user choice.
