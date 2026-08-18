@@ -39,7 +39,7 @@ from streamlit.testing.v1 import AppTest
 import utils.game_state as gs
 from utils.movie_models import (
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M,
-    SCREEN_COST_PER_SCREEN_M,
+    SCREEN_COST_PER_SCREEN_M, FESTIVALS,
 )
 
 
@@ -86,7 +86,10 @@ def test_decisions_phase_has_expected_widgets():
     # (depends on the deterministic-but-not-obvious rival-poach roll for
     # this team/cycle) -- Simulate must still be present and last.
     at = _movies_app()
-    assert len(at.number_input) == 3   # budget, P&A, screens
+    # 2026-08-18, Phase 7: Film Festival Acquisitions adds one "Your bid
+    # ($M)" number_input per festival (len(FESTIVALS) == 3), rendered
+    # before Greenlight -- total is now 3 festival bids + budget/P&A/screens.
+    assert len(at.number_input) == 3 + len(FESTIVALS)   # festival bids, then budget, P&A, screens
     # genre, concept type, source material, financing structure, exhibitor
     # posture (Greenlight) + debut season, Pay-2 licensing (Release Strategy
     # -- shown even at Cycle 1 since "wide_theatrical" != "day_and_date";
@@ -222,12 +225,15 @@ def test_research_unpaid_shows_pay_button_not_the_signal():
 def test_paying_for_research_reveals_the_signal_and_costs_pa_spend():
     from app_pages.movies import RESEARCH_FEE_M
     at = _movies_app()
-    pa_before = at.number_input[1].value   # budget, P&A, screens in that order
+    # 2026-08-18, Phase 7: Film Festival Acquisitions prepends len(FESTIVALS)
+    # "Your bid ($M)" number_inputs before Greenlight's own budget/P&A/screens.
+    pa_idx = len(FESTIVALS) + 1
+    pa_before = at.number_input[pa_idx].value   # festival bids, then budget, P&A, screens in that order
     at.button(key="movie_research_1").click().run()
     assert not at.exception, f"Research click raised: {list(at.exception)}"
     assert at.session_state["movie_research_paid"] == {1: True}
     assert at.session_state["movie_draft"]["pa_spend_m"] == pytest.approx(pa_before + RESEARCH_FEE_M)
-    assert at.number_input[1].value == pytest.approx(pa_before + RESEARCH_FEE_M)
+    assert at.number_input[pa_idx].value == pytest.approx(pa_before + RESEARCH_FEE_M)
     text = "\n".join(md.value for md in at.markdown)
     assert "BOX-OFFICE SIGNAL" in text
     assert "SOCIAL / CRITICAL BUZZ" in text

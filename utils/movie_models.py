@@ -914,14 +914,25 @@ LICENSING_APPETITE_PREMIUM_RANGE        = (1.15, 1.45)
 LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD = 10.0   # $M avg background-slate NPV at/below which "hungry" can fire
 
 
-def draw_licensing_bidder_appetite(team_name: str, cycle: int, background_slate: list[dict]) -> dict:
+def draw_licensing_bidder_appetite(team_name: str, cycle: int, background_slate: list[dict],
+                                     bidders: Optional[list[str]] = None) -> dict:
     """Per-bidder hot/hungry/neutral roll for this cycle's licensing
     auction -- own independent seed (team+cycle hash offset), never
     perturbs any other draw_* sequence. background_slate is this cycle's
     REAL generate_background_slate() output (reused, not re-derived) --
     its average NPV gates which states are even eligible to fire this
     cycle (see the constants block above). Returns
-    {bidder: {"mult": float, "state": "hot"|"hungry"|None}}."""
+    {bidder: {"mult": float, "state": "hot"|"hungry"|None}}.
+
+    bidders (2026-08-18, Phase 7) defaults to LICENSING_BIDDERS (original
+    behavior unchanged) -- Film Festival Acquisitions passes RIVAL_STUDIOS
+    instead, reusing this SAME function/logic for rival-appetite on the
+    buy side rather than building a parallel system, per explicit user
+    request ("the same hot/hungry rival-appetite rolls from Phase 6 should
+    apply here too since it's the same underlying rival-studio-appetite
+    logic")."""
+    if bidders is None:
+        bidders = LICENSING_BIDDERS
     avg_npv = (sum(m["npv"] for m in background_slate) / len(background_slate)) if background_slate else 0.0
     hot_eligible = avg_npv > 0
     hungry_eligible = avg_npv <= LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD
@@ -929,7 +940,7 @@ def draw_licensing_bidder_appetite(team_name: str, cycle: int, background_slate:
     rng = np.random.default_rng(seed)
     lo, hi = LICENSING_APPETITE_PREMIUM_RANGE
     out = {}
-    for bidder in LICENSING_BIDDERS:
+    for bidder in bidders:
         roll = rng.random()
         if roll < LICENSING_APPETITE_HOT_CHANCE and hot_eligible:
             state = "hot"
@@ -2109,4 +2120,199 @@ def resolve_scouted_outcome(concept: dict, rival: str) -> dict:
         "npv":        project.npv(multiplier, critical_score),
         "theme_park": project.theme_park_value(multiplier, critical_score),
         "window_days": project.window_days(),
+    }
+
+
+# ── Film Festival Acquisitions (Sundance / TIFF / Cannes) ──────────────────
+# 2026-08-18, per explicit user request: "is it possible to build in
+# Sundance, TIFF and Cannes film festival here... perhaps as a way to find
+# movies to buy?" A new ACQUISITION path, distinct from Greenlight-from-
+# scratch: each cycle, one candidate per festival appears with its critical
+# reception ALREADY REVEALED (real post-screening buzz -- the film already
+# screened) while box-office/audience variance stays open (hasn't opened
+# wide yet). Real studios (RIVAL_STUDIOS, same fictional pool Scouted
+# Concepts already uses) also want these films -- acquisition is a real
+# competitive sealed-bid auction, buyer-side this time (the team submits
+# its OWN bid and competes against rivals, the SAME structural shape as
+# utils/sports_models.py's Sports Rights auctions -- highest bid wins and
+# pays its own bid, a real winner's-curse risk), NOT the Pay-1 licensing
+# flow's shape (where the team is a passive seller picking the best of
+# incoming offers). Reuses draw_licensing_bidder_appetite's hot/hungry
+# game theory directly (generalized above to accept a bidders list) rather
+# than building a parallel appetite system, per explicit user request.
+#
+# Deliberately excluded from compute_movie_score -- same disclosed
+# simplification as Talent Partnership spend (see DESIGN_NOTES.md's Phase
+# 2/Holding Deals entry): a won acquisition is stored in its own
+# ss.movie_festival_log, never touching ss.movie_log or the calibrated
+# scoring engine, so this is a real, visible pipeline/cash-flow mechanic
+# the student manages, not an official-score input. Zero-effect baseline:
+# a student who never opens/bids in this section changes nothing else.
+FESTIVALS = {
+    "sundance": {
+        "name": "Sundance", "genres": ["Drama", "Horror", "Comedy"],
+        "concept_types": ["New IP", "Indie-Horror"], "budget_range": (2.0, 15.0),
+    },
+    "cannes": {
+        "name": "Cannes", "genres": ["Drama", "Awards/Prestige"],
+        "concept_types": ["New IP"], "budget_range": (10.0, 40.0),
+    },
+    "tiff": {
+        "name": "TIFF", "genres": GENRES,   # broader/international -- no genre lean
+        "concept_types": ["New IP", "Sequel", "Family/Kids", "Indie-Horror"], "budget_range": (5.0, 25.0),
+    },
+}
+FESTIVAL_CURATION_BONUS       = 10.0   # additive critical_score bump, capped at 100 -- these are
+                                         # pre-selected/juried films, not a random slate
+FESTIVAL_ACQUISITION_BASE_MULT = 1.4    # asking-price markup over the film's own nominal budget_m --
+                                         # a distribution-rights premium on top of what it cost to make
+FESTIVAL_RECEPTION_ANCHOR_RANGE = (0.7, 1.5)   # asking-price multiplier at critical_score 0 -> 100 --
+                                                 # "everyone in the room already knows this one's good"
+FESTIVAL_MARKETING_PCT_OF_BUDGET = 0.6   # the ACQUIRER's own distribution/marketing spend, sized off
+                                          # the film's nominal budget_m -- no production budget applies,
+                                          # only distribution/marketing (see resolve_festival_acquisition)
+FESTIVAL_SCREENS_BY_FESTIVAL = {"sundance": 600, "cannes": 900, "tiff": 750}   # platform-scale
+                                                                                 # releases, not a wide
+                                                                                 # tentpole rollout
+
+
+def festival_acquisition_anchor_m(budget_m: float, critical_score: float) -> float:
+    """Real asking-price reference for a festival acquisition, sized off the
+    ALREADY-REVEALED critical reception -- a film with buzz already
+    attached costs more, the real 'everyone in the room already knows this
+    one's good' bidding-war dynamic. Feeds both the rival bid sizing (see
+    draw_festival_acquisition_bids) and the price hint shown to the
+    student before they bid."""
+    lo, hi = FESTIVAL_RECEPTION_ANCHOR_RANGE
+    frac = min(1.0, max(0.0, critical_score / 100.0))
+    mult = lo + frac * (hi - lo)
+    return round(budget_m * FESTIVAL_ACQUISITION_BASE_MULT * mult, 1)
+
+
+def generate_festival_slate(team_name: str, cycle: int) -> list[dict]:
+    """Deterministic per-(team, cycle) list of one candidate per festival
+    (see FESTIVALS). Critical reception is drawn and REVEALED right here,
+    at generation time -- via a synthetic seed_team (same "__festival__{id}"
+    pattern generate_scouted_concepts' resolve_scouted_outcome uses for
+    "__scouted__{id}") so it's independent of the team's own real draws for
+    this cycle, and stable across renders. A real curation bump
+    (FESTIVAL_CURATION_BONUS) reflects that these are pre-juried films, not
+    a random slate."""
+    seed = (abs(hash(team_name)) + cycle * 44201 + 991) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    slate = []
+    for key, fest in FESTIVALS.items():
+        genre = fest["genres"][int(rng.integers(0, len(fest["genres"])))]
+        concept_type = fest["concept_types"][int(rng.integers(0, len(fest["concept_types"])))]
+        budget = float(rng.uniform(*fest["budget_range"]))
+        film_id = f"{cycle}_{key}"
+        seed_team = f"__festival__{film_id}"
+        critical_score = min(100.0, draw_critical_reception(seed_team, cycle, genre) + FESTIVAL_CURATION_BONUS)
+        slate.append({
+            "id":              film_id,
+            "festival":        key,
+            "festival_name":   fest["name"],
+            "cycle":           cycle,
+            "title":           f"{fest['name']} Selection — {genre}",
+            "genre":           genre,
+            "concept_type":    concept_type,
+            "budget_m":        round(budget, 1),
+            "critical_score":  critical_score,
+            "logline":         SCOUTED_LOGLINE_BY_GENRE.get(genre, "A festival favorite looking for a distributor."),
+            "asking_anchor_m": festival_acquisition_anchor_m(budget, critical_score),
+        })
+    return slate
+
+
+def draw_festival_acquisition_bids(team_name: str, cycle: int, film_id: str, anchor_value_m: float,
+                                     appetite_mult: Optional[dict] = None) -> list[dict]:
+    """Rival studio bids (RIVAL_STUDIOS) for one festival film -- mirrors
+    draw_licensing_bids' exact structure/constants (LICENSING_BID_
+    PARTICIPATION_CHANCE, LICENSING_BID_MULT_RANGE -- reused directly, not
+    redefined) but keyed to a real production-studio buyer pool instead of
+    streaming platforms, and seeded per FILM (not just per cycle) since
+    multiple festival films exist in the same cycle. Own independent seed
+    offset -- never perturbs draw_licensing_bids or any other draw_*
+    sequence. appetite_mult (see draw_licensing_bidder_appetite, called
+    with bidders=RIVAL_STUDIOS) layers Phase 6's real hot/hungry game
+    theory on top, the same logic, not a parallel one."""
+    seed = (abs(hash(team_name)) + abs(hash(film_id)) % 7919 + cycle * 31607 + 251) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    lo, hi = LICENSING_BID_MULT_RANGE
+    bids = []
+    for bidder in RIVAL_STUDIOS:
+        if rng.random() < LICENSING_BID_PARTICIPATION_CHANCE:
+            mult = float(rng.uniform(lo, hi))
+            if appetite_mult:
+                mult *= appetite_mult.get(bidder, 1.0)
+            bids.append({"bidder": bidder, "bid_m": round(max(0.0, anchor_value_m) * mult, 1)})
+    return bids
+
+
+def resolve_festival_acquisition(team_bid_m: float, rival_bids: list[dict]) -> dict:
+    """The team is a BUYER here, competing against real rival bids -- same
+    structural shape as utils/sports_models.py's Sports Rights
+    resolve_auction (highest bid wins and pays its OWN bid, a real
+    winner's-curse risk), NOT resolve_licensing_auction's shape (team as
+    passive seller). team_bid_m=0.0 is a real, valid 'pass' -- the highest
+    rival simply wins instead, same as never bidding at a real auction."""
+    all_bids = [{"bidder": "You", "bid_m": team_bid_m}] + list(rival_bids)
+    ranked = sorted(all_bids, key=lambda b: -b["bid_m"])
+    winner = ranked[0]
+    return {
+        "winner":        winner["bidder"],
+        "team_won":      winner["bidder"] == "You",
+        "winning_bid_m": winner["bid_m"],
+        "all_bids":      ranked,
+    }
+
+
+def resolve_festival_acquisition_outcome(film: dict, winner_label: str, acquirer_bid_m: float) -> dict:
+    """Resolve a won festival film's real financial fate with the SAME
+    engine every other movie uses. critical_score is NOT re-drawn -- it's
+    already revealed on `film` (see generate_festival_slate) and stays
+    fixed regardless of who wins. Box-office multiplier draws fresh here
+    (own '__festival__{id}' seed_team, same one generate_festival_slate
+    used for critical_score, so it's stable across a re-render for the
+    SAME winner) -- this is the real "hasn't opened wide yet" variance the
+    student is buying into.
+
+    No production budget applies -- MovieProject.budget_m is set to the
+    acquirer's actual acquisition cost (acquirer_bid_m), the real cost
+    basis to whoever bought it, exactly mirroring how a self-financed
+    original production's budget_m represents its own upfront cost. Only
+    real distribution/marketing spend (FESTIVAL_MARKETING_PCT_OF_BUDGET of
+    the film's nominal production budget) applies on top -- star_power and
+    source-material acquisition cost are deliberately left at their true
+    zero-effect defaults so the acquirer never double-pays for casting or
+    rights already priced into the winning bid (a disclosed simplification,
+    same posture as Talent Partnership spend being excluded from
+    compute_movie_score). release_strategy defaults to "platform" -- a
+    limited, awards-style rollout, the real-world norm for a festival
+    acquisition, not a wide tentpole release."""
+    project = MovieProject(
+        title=film["title"], genre=film["genre"], budget_m=round(acquirer_bid_m, 1),
+        pa_spend_m=round(film["budget_m"] * FESTIVAL_MARKETING_PCT_OF_BUDGET, 1),
+        star_power=0, screens=FESTIVAL_SCREENS_BY_FESTIVAL.get(film["festival"], 700),
+        cycle=film["cycle"], release_strategy="platform", concept_type=film["concept_type"],
+    )
+    seed_team = f"__festival__{film['id']}"
+    multiplier = draw_actual_multiplier(seed_team, film["cycle"], film["genre"], film["concept_type"])
+    critical_score = film["critical_score"]
+    return {
+        "film_id":       film["id"],
+        "festival":      film["festival"],
+        "festival_name": film["festival_name"],
+        "winner":        winner_label,
+        "cycle":         film["cycle"],
+        "title":         project.title,
+        "genre":         film["genre"],
+        "concept_type":  film["concept_type"],
+        "critical_score": critical_score,
+        "acquisition_cost_m": round(acquirer_bid_m, 1),
+        "multiplier":    multiplier,
+        "npv":           project.npv(multiplier, critical_score),
+        "theme_park":    project.theme_park_value(multiplier, critical_score),
+        "window_days":   project.window_days(),
+        "project_kwargs": dict(project.__dict__),
     }

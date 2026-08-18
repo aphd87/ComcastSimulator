@@ -42,6 +42,8 @@ from utils.movie_models import (
     AI_TOOLS_BUDGET_SAVINGS_PCT, AI_TOOLS_TIMELINE_SHIFT_MO, AI_TOOLS_CRITICAL_CEILING_MULT,
     draw_ai_tooling_setback, multiplier_to_stars, draw_ewom_piracy_swing,
     DEBUT_SEASONS, SEASON_OPENING_MULT, SEASON_GENRE_SYNERGY, SEASON_AWARDS_RECALL,
+    FESTIVALS, generate_festival_slate, festival_acquisition_anchor_m,
+    draw_festival_acquisition_bids, resolve_festival_acquisition, resolve_festival_acquisition_outcome,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -135,6 +137,22 @@ def _init(ss):
     # ss.movie_licensing_auction: {cycle: {"bids": [...], "accepted": bool}}
     if not isinstance(ss.get("movie_licensing_auction"), dict):
         ss.movie_licensing_auction = {}
+    # Film Festival Acquisitions (2026-08-18) -- ss.movie_festival_log:
+    # {film_id: resolve_festival_acquisition_outcome() dict} for films the
+    # TEAM won -- a real, visible pipeline addition, deliberately kept out
+    # of ss.movie_log (never touches compute_movie_score, see the
+    # utils/movie_models.py module comment above FESTIVALS). ss.movie_
+    # festival_rival_log: {film_id: ...} for films a rival won instead
+    # (either outbid, or the team never bid at all). ss.movie_festival_
+    # resolved_through: last PAST cycle whose un-bid festival films have
+    # already auto-resolved (team_bid_m=0, "passed") -- see
+    # _resolve_festival_transitions.
+    if not isinstance(ss.get("movie_festival_log"), dict):
+        ss.movie_festival_log = {}
+    if not isinstance(ss.get("movie_festival_rival_log"), dict):
+        ss.movie_festival_rival_log = {}
+    if "movie_festival_resolved_through" not in ss:
+        ss.movie_festival_resolved_through = 0
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -460,6 +478,39 @@ def _section_distribution_pipeline(ss):
             "Sequel Potential":  "—",
         }))
 
+    # Film Festival Acquisitions (2026-08-18) -- won films are a real
+    # pipeline addition ("Festival" slate), shown with their own real
+    # distribution window same as "Yours" rows. Deliberately excluded from
+    # compute_movie_score (see the FESTIVALS module comment in
+    # utils/movie_models.py) -- this scorecard is context, not the score.
+    for outcome in ss.movie_festival_log.values():
+        months_elapsed = (ss.movie_cycle - outcome["cycle"]) * YEARS_PER_CYCLE * 12.0
+        rows.append((outcome["cycle"], {
+            "Slate":             "Festival",
+            "Year":              _cycle_years_label(outcome["cycle"]),
+            "Title":             f"{outcome['title']} ({outcome['festival_name']})",
+            "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
+            "Current Window":    _current_distribution_window(outcome["window_days"], months_elapsed),
+            "NPV":               _fmt_money(outcome["npv"]),
+            "Theme Park / Merch": f"${outcome['theme_park']:.1f}M" if outcome.get("theme_park", 0) > 0 else "—",
+            "Pay-1":             "—",
+            "Pay-2":             "—",
+            "Sequel Potential":  "—",
+        }))
+    for outcome in ss.movie_festival_rival_log.values():
+        rows.append((outcome["cycle"], {
+            "Slate":             "Festival Rival",
+            "Year":              _cycle_years_label(outcome["cycle"]),
+            "Title":             f"{outcome['title']} ({outcome['winner']}, {outcome['festival_name']})",
+            "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
+            "Current Window":    "🏆 Rival Release",
+            "NPV":               _fmt_money(outcome["npv"]),
+            "Theme Park / Merch": f"${outcome['theme_park']:.1f}M" if outcome.get("theme_park", 0) > 0 else "—",
+            "Pay-1":             "—",
+            "Pay-2":             "—",
+            "Sequel Potential":  "—",
+        }))
+
     rows.sort(key=lambda cr: (cr[0], cr[1]["Slate"]))
     st.dataframe(pd.DataFrame([r for _, r in rows]), use_container_width=True, hide_index=True,
                  height=min(400, 40 + 35 * len(rows)))
@@ -628,6 +679,124 @@ def _section_scouted_concepts(ss, newly_poached: dict):
                     "screens": concept["screens"],
                 }
                 st.rerun()
+
+    st.divider()
+
+
+def _resolve_festival_transitions(ss) -> dict:
+    """Auto-resolve every PAST cycle's un-bid festival films as a real
+    'passed' outcome -- team_bid_m=0.0 fed straight into the SAME
+    resolve_festival_acquisition auction rivals bid into, no separate
+    poach-chance roll needed (unlike Scouted Concepts, this is already a
+    live competitive auction every cycle, so 'passing' just means the
+    highest rival bid wins on its own -- the real thing that happens at an
+    actual festival if a studio never shows up to bid). Deliberately
+    excludes the CURRENT cycle's own freshly-shown films (range stops
+    before ss.movie_cycle) -- same one-full-cycle grace period Scouted
+    Concepts gives. Idempotent via movie_festival_resolved_through.
+    Returns {film_id: outcome dict} for films resolved THIS render, for
+    the caller to show as fresh notices."""
+    newly_resolved = {}
+    checked_through = ss.movie_festival_resolved_through
+    if ss.movie_cycle > checked_through:
+        for cyc in range(checked_through + 1, ss.movie_cycle):
+            for film in generate_festival_slate(ss.team_name, cyc):
+                fid = film["id"]
+                if fid in ss.movie_festival_log or fid in ss.movie_festival_rival_log:
+                    continue
+                bg = generate_background_slate(ss.team_name, cyc, studio_budget_m=ss.movie_studio_budget_m)
+                appetite = draw_licensing_bidder_appetite(ss.team_name, cyc, bg, bidders=RIVAL_STUDIOS)
+                appetite_mult = {b: v["mult"] for b, v in appetite.items()}
+                rival_bids = draw_festival_acquisition_bids(ss.team_name, cyc, fid,
+                                                              film["asking_anchor_m"], appetite_mult)
+                auction = resolve_festival_acquisition(0.0, rival_bids)
+                outcome = resolve_festival_acquisition_outcome(film, auction["winner"], auction["winning_bid_m"])
+                if auction["team_won"]:
+                    ss.movie_festival_log[fid] = outcome
+                else:
+                    ss.movie_festival_rival_log[fid] = outcome
+                newly_resolved[fid] = outcome
+        ss.movie_festival_resolved_through = ss.movie_cycle - 1
+    return newly_resolved
+
+
+def _section_festival_acquisitions(ss, newly_resolved: dict):
+    """This cycle's 3 real festival acquisition targets (Sundance/TIFF/
+    Cannes) -- 2026-08-18, per explicit user request ("is it possible to
+    build in Sundance, TIFF and Cannes... as a way to find movies to
+    buy?"). Unlike Scouted Concepts (a starting point to Greenlight
+    yourself), these are ALREADY-PRODUCED films with critical reception
+    ALREADY REVEALED -- real post-screening buzz -- and rival studios are
+    real live bidders every cycle, not a deferred poach risk. A won film
+    adds real NPV to the studio's pipeline (shown on the Distribution
+    Pipeline scorecard as its own Festival row) but is deliberately kept
+    out of ss.movie_log / compute_movie_score -- see the FESTIVALS module
+    comment in utils/movie_models.py for why."""
+    st.markdown('<a id="festivals"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Film Festival Acquisitions '
+                '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each bring one real acquisition '
+        'target every cycle — already made, already screened, critical reception already known. Real '
+        'studios are bidding too (sealed-bid — you can\'t see their offers before yours), and the '
+        'highest bid wins and pays exactly what it bid. A film you don\'t bid on (or get outbid on) goes '
+        'to a rival by next cycle.</p>', unsafe_allow_html=True)
+
+    for fid, outcome in newly_resolved.items():
+        team_won = fid in ss.movie_festival_log
+        if team_won:
+            continue   # a team win from a past cycle's late auto-resolve is shown by the scorecard, not a notice
+        npv_ok = outcome["npv"] >= 0
+        st.markdown(f"""
+        <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
+          <div class="text-sm font-semibold" style="color:{WARN};">🚨 {outcome['winner']} acquired
+          "{outcome['title']}" ({outcome['festival_name']}) — you didn't place a winning bid.</div>
+          <div class="text-xs text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
+          {_fmt_money(outcome['npv'])} NPV for them{' — a real one that got away.' if npv_ok else '.'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    films = generate_festival_slate(ss.team_name, ss.movie_cycle)
+    bg = generate_background_slate(ss.team_name, ss.movie_cycle, studio_budget_m=ss.movie_studio_budget_m)
+    appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg, bidders=RIVAL_STUDIOS)
+    appetite_mult = {b: v["mult"] for b, v in appetite.items()}
+
+    cols = st.columns(len(films))
+    for col, film in zip(cols, films):
+        with col:
+            fid = film["id"]
+            resolved = ss.movie_festival_log.get(fid) or ss.movie_festival_rival_log.get(fid)
+            cs = film["critical_score"]
+            cs_tier = "Acclaimed" if cs >= 75 else ("Well Reviewed" if cs >= 55 else ("Mixed" if cs >= 35 else "Panned"))
+            st.markdown(f"""
+            <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+              <div class="text-[10px] text-muted font-mono mb-1">{film['festival_name']} · {film['genre']} · {film['concept_type']}</div>
+              <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
+              <div class="text-[10px] text-muted font-mono">Critical Reception: {cs:.0f}/100 ({cs_tier}) — already screened, already known</div>
+              <div class="text-[10px] text-muted font-mono">Est. Asking Value: ${film['asking_anchor_m']:.1f}M</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if resolved is not None:
+                won = fid in ss.movie_festival_log
+                if won:
+                    st.success(f"✅ Acquired for ${resolved['acquisition_cost_m']:.1f}M.")
+                else:
+                    st.error(f"❌ {resolved['winner']} won at ${resolved['acquisition_cost_m']:.1f}M.")
+            else:
+                bid = st.number_input(f"Your bid ($M)", min_value=0.0, value=float(film["asking_anchor_m"]),
+                                       step=0.5, key=f"festival_bid_{fid}",
+                                       help="Sealed-bid — you can't see rival offers before submitting your own. "
+                                            "Highest bid wins and pays exactly what it bid.")
+                if st.button("Submit Bid", key=f"festival_submit_{fid}", use_container_width=True):
+                    rival_bids = draw_festival_acquisition_bids(ss.team_name, ss.movie_cycle, fid,
+                                                                  film["asking_anchor_m"], appetite_mult)
+                    auction = resolve_festival_acquisition(bid, rival_bids)
+                    outcome = resolve_festival_acquisition_outcome(film, auction["winner"], auction["winning_bid_m"])
+                    if auction["team_won"]:
+                        ss.movie_festival_log[fid] = outcome
+                    else:
+                        ss.movie_festival_rival_log[fid] = outcome
+                    st.rerun()
 
     st.divider()
 
@@ -963,6 +1132,7 @@ def _decisions(ss):
     # doesn't see state mutated later in the same script run).
     resolved_hold_key, newly_poached = _resolve_talent_cycle_transitions(ss)
     newly_poached_concepts = _resolve_scouted_concept_transitions(ss)
+    newly_resolved_festivals = _resolve_festival_transitions(ss)
 
     _section_distribution_pipeline(ss)
 
@@ -976,6 +1146,12 @@ def _decisions(ss):
     # Scouted Concepts render right before Greenlight -- optioning one
     # pre-fills the Greenlight fields directly below it.
     _section_scouted_concepts(ss, newly_poached_concepts)
+
+    # Film Festival Acquisitions -- a real alternative source for the
+    # studio's pipeline, distinct from Greenlight-from-scratch, so it
+    # renders alongside Scouted Concepts rather than feeding into the
+    # Greenlight draft below it.
+    _section_festival_acquisitions(ss, newly_resolved_festivals)
 
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">2 · Greenlight the Concept</div>', unsafe_allow_html=True)
