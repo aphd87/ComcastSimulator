@@ -25,6 +25,7 @@ import utils.game_state as gs
 from utils.movie_models import (
     MovieProject, THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
     RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, run_days_box_office_mult,
+    PVOD_PRICE, pvod_price_band, PVOD_BAND_FLOOR_RANGE, PVOD_BAND_CEIL_RANGE,
 )
 from app_pages.movies import _resolve_movie_outcome
 
@@ -173,3 +174,49 @@ def test_running_the_mini_run_locks_in_a_result_and_unlocks_simulate():
     assert resolved is not None
     assert "multiplier" in resolved and "critical_score" in resolved
     assert _simulate_button(at).disabled is False
+
+
+# ── PVOD Price Band (Phase 2) ────────────────────────────────────────────────
+def test_pvod_price_band_matches_flat_baseline_at_reference_price():
+    """A project with pvod_chosen_price == PVOD_PRICE must reproduce the
+    original flat-price revenue exactly -- the new banded-pricing path
+    should never silently drift for a student who happens to land there."""
+    default = MovieProject(title="A", genre="Drama", budget_m=40, pa_spend_m=30,
+                            star_power=50, screens=3000, cycle=1)
+    at_ref = MovieProject(title="A", genre="Drama", budget_m=40, pa_spend_m=30,
+                           star_power=50, screens=3000, cycle=1, pvod_chosen_price=PVOD_PRICE)
+    assert default.pvod_revenue_tiers("base") == pytest.approx(at_ref.pvod_revenue_tiers("base"))
+
+
+def test_pvod_price_band_ceiling_exceeds_floor_across_full_multiplier_range():
+    bounds_probe = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, -0.5]   # includes out-of-band multipliers (clamped)
+    for m in bounds_probe:
+        lo, hi = pvod_price_band(m, "Drama")
+        assert lo < hi
+        assert PVOD_BAND_FLOOR_RANGE[0] <= lo <= PVOD_BAND_FLOOR_RANGE[1]
+        assert PVOD_BAND_CEIL_RANGE[0] <= hi <= PVOD_BAND_CEIL_RANGE[1]
+
+
+def test_pvod_price_band_widens_and_shifts_up_for_stronger_performance():
+    from utils.movie_models import scenario_multipliers_for
+    b = scenario_multipliers_for("Drama")
+    lo_weak, hi_weak = pvod_price_band(b["bear"], "Drama")
+    lo_strong, hi_strong = pvod_price_band(b["bull"], "Drama")
+    assert lo_strong > lo_weak
+    assert hi_strong > hi_weak
+
+
+def test_pvod_chosen_price_higher_than_default_none_is_zero_effect():
+    p = MovieProject(title="A", genre="Drama", budget_m=40, pa_spend_m=30,
+                      star_power=50, screens=3000, cycle=1, pvod_chosen_price=None)
+    p_explicit_default = MovieProject(title="A", genre="Drama", budget_m=40, pa_spend_m=30,
+                                       star_power=50, screens=3000, cycle=1)
+    assert p.pvod_revenue_tiers("base") == p_explicit_default.pvod_revenue_tiers("base")
+
+
+def test_pvod_slider_appears_only_after_mini_run_resolves():
+    at = _movies_app()
+    assert not any("PVOD Rental Price" in s.label for s in at.slider)
+    _mini_run_button(at).click().run()
+    assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
+    assert any("PVOD Rental Price" in s.label for s in at.slider)

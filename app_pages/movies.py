@@ -26,6 +26,7 @@ from utils.movie_models import (
     PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
     THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
     run_days_box_office_mult, RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX,
+    pvod_price_band,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
@@ -274,6 +275,7 @@ def _current_project(ss) -> MovieProject:
         theatrical_run_length=d.get("theatrical_run_length"),
         theatrical_run_days=d.get("theatrical_run_days"),
         pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
+        pvod_chosen_price=d.get("pvod_chosen_price"),
     )
 
 
@@ -1248,7 +1250,8 @@ def _decisions(ss):
                  pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
                  theatrical_run_length=d.get("theatrical_run_length"),
                  theatrical_run_days=d.get("theatrical_run_days"),
-                 pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False))
+                 pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
+                 pvod_chosen_price=d.get("pvod_chosen_price"))
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -1563,19 +1566,41 @@ def _decisions(ss):
         </div>
         """, unsafe_allow_html=True)
 
-    # ── PVOD Dynamic Pricing ──────────────────────────────────────────────────
-    # 2026-08-18, per explicit user request and the S-0410 case's own real
-    # example: Universal's The Invisible Man opened PVOD at full price, then
-    # dropped to $5.99 later in the same window.
-    pvod_dynamic = st.checkbox(
-        "📉 PVOD Dynamic Pricing (premium → discount stage)",
-        value=bool(ss.movie_draft.get("pvod_dynamic_pricing", False)),
-        help=f"Premium stage at ${PVOD_PRICE_PREMIUM:.2f} captures early demand; a later discount stage "
-             f"at ${PVOD_PRICE_DISCOUNT:.2f} captures price-sensitive holdouts the premium price left on "
-             f"the table — real price discrimination, captures more of the demand curve than one flat "
-             f"price, but some revenue arrives later.",
-    )
-    ss.movie_draft["pvod_dynamic_pricing"] = pvod_dynamic
+    # ── PVOD Pricing ──────────────────────────────────────────────────────────
+    # 2026-08-18: replaces the old pvod_dynamic_pricing on/off toggle with a
+    # real price-point choice, per explicit user request ("based on how
+    # this performs, they have lower/upper bounds for how much they can
+    # charge for PVOD"). Only computable once the Theatrical Mini-Run has
+    # resolved -- the band is sized off the REAL resolved multiplier, not a
+    # planning-stage guess (see pvod_price_band's docstring). day_and_date
+    # skips this window entirely, same as every other PVOD/licensing
+    # section (subscribers get it on Peacock instead).
+    if chosen != "day_and_date":
+        st.markdown('<div class="section-title mt-3">PVOD Pricing</div>', unsafe_allow_html=True)
+        if resolved_entry is None:
+            st.caption("Run the Theatrical Simulation above to see your real PVOD price band, sized off "
+                       "how this movie actually performed.")
+            ss.movie_draft["pvod_chosen_price"] = None
+        else:
+            lo, hi = pvod_price_band(resolved_entry["multiplier"], genre, concept_type)
+            existing_price = ss.movie_draft.get("pvod_chosen_price")
+            default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
+                else round((lo + hi) / 2, 2)
+            pvod_price = st.slider(
+                f"PVOD Rental Price — band ${lo:.2f} to ${hi:.2f}, sized off your theatrical performance",
+                lo, hi, float(default_price), step=0.50,
+                help="A stronger theatrical run supports a higher PVOD price ceiling — real demand can "
+                     "absorb a premium; a weaker one needs a lower price to move volume. Higher prices "
+                     "earn more per transaction but convert fewer of them (real price elasticity) — and "
+                     "pricing too aggressively carries its own real risk once the market gets a chance to "
+                     "weigh in (see the periodic Market Acceptance checks below).",
+            )
+            ss.movie_draft["pvod_chosen_price"] = pvod_price
+            st.caption(f"Band sized off your theatrical result: "
+                       f"{'a strong opening supports pricing toward the top of the band' if hi - pvod_price < pvod_price - lo else 'a softer opening means pricing toward the top of the band is a real gamble'}.")
+    else:
+        ss.movie_draft["pvod_chosen_price"] = None
+    ss.movie_draft["pvod_dynamic_pricing"] = False   # superseded by the banded price choice above
 
     st.divider()
 

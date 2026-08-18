@@ -43,6 +43,45 @@ PVOD_PRICE_DISCOUNT             = 5.99
 PVOD_PREMIUM_CONVERSION         = 0.22
 PVOD_DISCOUNT_CONVERSION        = 0.20
 PVOD_DISCOUNT_STAGE_OFFSET_MONTHS = 1.5   # how much later the discount stage lands vs. the premium stage
+
+# ── PVOD Price Band — real pricing power, sized off theatrical performance ──
+# 2026-08-18, per explicit user request: "based on how this performs, they
+# have lower/upper bounds for how much they can charge for PVOD." Only
+# meaningful once the Theatrical Mini-Run has actually resolved (see
+# app_pages/movies.py) -- a movie that landed near its genre-adjusted bear
+# case can't sustain premium pricing (needs to move volume cheap to
+# recover anything); one that landed near its bull case has real pricing
+# power. MovieProject.pvod_chosen_price=None (default) leaves
+# pvod_revenue_tiers() entirely governed by pvod_dynamic_pricing/the flat
+# PVOD_PRICE -- a true zero-effect baseline for every project not built
+# through the new banded-price UI (background slate, scouted concepts,
+# legacy log entries). PVOD_BASE_CONVERSION/PVOD_PRICE_ELASTICITY define a
+# real constant-elasticity demand curve -- at exactly PVOD_PRICE, the
+# formula reproduces the original flat-price conversion rate (0.35)
+# exactly, so the calibration doesn't silently drift for anyone who
+# happens to land on the reference price.
+PVOD_BAND_FLOOR_RANGE  = (9.99, 19.99)    # lower bound: weak (bear) -> strong (bull) performance
+PVOD_BAND_CEIL_RANGE   = (14.99, 29.99)   # upper bound: weak (bear) -> strong (bull) performance
+PVOD_BASE_CONVERSION   = 0.35             # matches the original flat single-price conversion rate exactly
+PVOD_PRICE_ELASTICITY  = 0.85             # >0 real demand curve (higher price, fewer transactions);
+                                            # <1.0 = inelastic-ish -- real moviegoers have some brand
+                                            # loyalty, but price still matters, a real teachable tradeoff
+
+
+def pvod_price_band(multiplier: float, genre: str, concept_type: str = "New IP") -> tuple[float, float]:
+    """Lower/upper PVOD price bounds a student can choose within, sized off
+    how the movie's REAL (resolved) theatrical performance landed -- frac
+    is this project's own genre-adjusted bear-bull position (the same 0-1
+    scale multiplier_to_stars already uses), not a planning-stage guess.
+    Both bounds are real, teachable numbers, not the full possible PVOD
+    price universe -- the floor never goes below a real observed PVOD
+    discount price, the ceiling never exceeds a real observed PVOD
+    premium price."""
+    bounds = scenario_multipliers_for(genre, concept_type)
+    frac = min(1.0, max(0.0, (multiplier - bounds["bear"]) / (bounds["bull"] - bounds["bear"])))
+    lo = PVOD_BAND_FLOOR_RANGE[0] + frac * (PVOD_BAND_FLOOR_RANGE[1] - PVOD_BAND_FLOOR_RANGE[0])
+    hi = PVOD_BAND_CEIL_RANGE[0]  + frac * (PVOD_BAND_CEIL_RANGE[1]  - PVOD_BAND_CEIL_RANGE[0])
+    return round(lo, 2), round(hi, 2)
 SVOD_SUB_LTV_MO       = 8.0    # matches utils/models.py's SVOD_SUB_LTV_MO for consistency with Day 1
 SVOD_MARGIN           = 0.15
 BASE_PER_SCREEN_M     = 0.010  # $M ($10K) per screen — blockbuster-average opening baseline
@@ -981,6 +1020,8 @@ class MovieProject:
     theatrical_run_days: Optional[int] = None         # see run_days_box_office_mult above -- set by the
                                                        # Theatrical Mini-Run step; overrides theatrical_run_length
     pvod_dynamic_pricing: bool = False               # see PVOD_PRICE_PREMIUM/DISCOUNT above
+    pvod_chosen_price: Optional[float] = None         # see pvod_price_band above -- takes priority
+                                                       # over pvod_dynamic_pricing when set
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -1161,10 +1202,21 @@ class MovieProject:
         own comment for the full rationale), or (total, 0.0) reproducing
         the original single-price behavior exactly when False (default).
         day-and-date skips this window entirely either way (subscribers
-        get it on Peacock instead, no separate rental transaction)."""
+        get it on Peacock instead, no separate rental transaction).
+        pvod_chosen_price (2026-08-18, set by the banded PVOD pricing step
+        after the Theatrical Mini-Run resolves) takes priority over
+        pvod_dynamic_pricing when set -- a real constant-elasticity demand
+        curve (see PVOD_PRICE_ELASTICITY) instead of a fixed conversion
+        rate, so a higher chosen price earns more per transaction but
+        converts fewer of them."""
         if self.release_strategy == "day_and_date":
             return 0.0, 0.0
         dom = self.domestic_box_office(scenario)
+        if self.pvod_chosen_price is not None:
+            price = self.pvod_chosen_price
+            transactions_m = ((dom / PVOD_PRICE) * PVOD_BASE_CONVERSION
+                               * (PVOD_PRICE / price) ** PVOD_PRICE_ELASTICITY)
+            return transactions_m * price * PVOD_STUDIO_SHARE, 0.0
         if not self.pvod_dynamic_pricing:
             est_transactions_m = (dom / PVOD_PRICE) * 0.35   # ~35% of theatrical audience converts to a rental
             return est_transactions_m * PVOD_PRICE * PVOD_STUDIO_SHARE, 0.0
