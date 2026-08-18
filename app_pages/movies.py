@@ -1410,42 +1410,11 @@ def _decisions(ss):
     st.markdown(f'<p class="text-sm text-ink2">Currently selected: <b class="text-ink">{RELEASE_LABELS[chosen]}</b></p>',
                 unsafe_allow_html=True)
 
-    # ── Pay-1 Window Licensing — now a real marketplace, not one flat rate ──────
-    # 2026-08-18, per explicit user question ("maybe the issue is desirable
-    # streaming platforms want different cuts?"). Doesn't apply to
-    # Day-and-Date -- that strategy already commits the title to Peacock
-    # exclusivity as its core premise, so licensing the same window away
-    # would contradict the choice just made (enforced defensively in
-    # MovieProject.is_licensing_out() too, not just here).
+    # Pay-1 Window Licensing (2026-08-18) moved below -- see "Early Licensing
+    # Decision" after the Theatrical Mini-Run resolves. platform_labels is
+    # still defined here, ahead of Pay-2 immediately below, which also uses it.
     platform_labels = {k: f"{v['name']} (~{v['fee_pct']:.0%} of base-case subscriber value)"
                         for k, v in LICENSING_PLATFORMS.items()}
-    if chosen != "day_and_date":
-        st.markdown('<div class="section-title mt-3">Pay-1 Window Licensing</div>', unsafe_allow_html=True)
-        pay1_labels = {
-            "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
-            "license_out": "License to Another Platform — flat, guaranteed fee, paid sooner",
-        }
-        pay1_choice = st.selectbox(
-            "Pay-1 SVOD Window", PAY1_LICENSING_OPTIONS,
-            index=PAY1_LICENSING_OPTIONS.index(ss.movie_draft.get("pay1_licensing", "keep")),
-            format_func=lambda k: pay1_labels[k],
-            help="A real Pay-1 licensing deal, negotiated before release — cash now and sooner, but "
-                 "you give up the subscriber-value upside and the strategic value of owning the "
-                 "streaming relationship.",
-        )
-        ss.movie_draft["pay1_licensing"] = pay1_choice
-        if pay1_choice == "license_out":
-            pay1_platform = st.selectbox(
-                "Which Platform (Pay-1)", list(LICENSING_PLATFORMS.keys()),
-                index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay1_platform", DEFAULT_LICENSING_PLATFORM)),
-                format_func=lambda k: platform_labels[k],
-                help="Different platforms pay different cuts — a real negotiation choice, not one flat rate.",
-            )
-            ss.movie_draft["pay1_platform"] = pay1_platform
-    else:
-        ss.movie_draft["pay1_licensing"] = "keep"
-        st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
-                   "commits this title to Peacock exclusivity.")
 
     # ── Pay-2 Window Licensing ───────────────────────────────────────────────
     # 2026-08-18, per explicit user question ("where is pay 2 window...and
@@ -1565,6 +1534,49 @@ def _decisions(ss):
           {events_html}
         </div>
         """, unsafe_allow_html=True)
+
+    # ── Early Licensing Decision (Pay-1) ─────────────────────────────────────
+    # 2026-08-18: moved here from its old spot right after the release-
+    # strategy cards, per explicit user request ("even during first year,
+    # after theater run... they may need to think about licensing and such
+    # for following year") -- a real studio watches how a movie actually
+    # opened before deciding whether to keep it on Peacock or license it
+    # away, not before. Gated on the Theatrical Mini-Run having resolved,
+    # same posture as PVOD Pricing below. Doesn't apply to Day-and-Date --
+    # that strategy already commits the title to Peacock exclusivity as
+    # its core premise (enforced defensively in MovieProject.
+    # is_licensing_out() too, not just here).
+    if chosen != "day_and_date":
+        st.markdown('<div class="section-title mt-3">Pay-1 Window Licensing</div>', unsafe_allow_html=True)
+        if resolved_entry is None:
+            st.caption("Run the Theatrical Simulation above to make this call with a real result in hand.")
+        else:
+            pay1_labels = {
+                "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
+                "license_out": "License to Another Platform — flat, guaranteed fee, paid sooner",
+            }
+            pay1_choice = st.selectbox(
+                "Pay-1 SVOD Window", PAY1_LICENSING_OPTIONS,
+                index=PAY1_LICENSING_OPTIONS.index(ss.movie_draft.get("pay1_licensing", "keep")),
+                format_func=lambda k: pay1_labels[k],
+                help="A real Pay-1 licensing deal, negotiated before release — cash now and sooner, but "
+                     "you give up the subscriber-value upside and the strategic value of owning the "
+                     "streaming relationship. You're making this call with your real theatrical result "
+                     "in hand, not a bear/base/bull guess.",
+            )
+            ss.movie_draft["pay1_licensing"] = pay1_choice
+            if pay1_choice == "license_out":
+                pay1_platform = st.selectbox(
+                    "Which Platform (Pay-1)", list(LICENSING_PLATFORMS.keys()),
+                    index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay1_platform", DEFAULT_LICENSING_PLATFORM)),
+                    format_func=lambda k: platform_labels[k],
+                    help="Different platforms pay different cuts — a real negotiation choice, not one flat rate.",
+                )
+                ss.movie_draft["pay1_platform"] = pay1_platform
+    else:
+        ss.movie_draft["pay1_licensing"] = "keep"
+        st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
+                   "commits this title to Peacock exclusivity.")
 
     # ── PVOD Pricing ──────────────────────────────────────────────────────────
     # 2026-08-18: replaces the old pvod_dynamic_pricing on/off toggle with a

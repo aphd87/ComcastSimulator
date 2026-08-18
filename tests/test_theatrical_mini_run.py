@@ -220,3 +220,12 @@ def test_pvod_slider_appears_only_after_mini_run_resolves():
     _mini_run_button(at).click().run()
     assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
     assert any("PVOD Rental Price" in s.label for s in at.slider)
+
+
+# ── Early Licensing Decision (Phase 3) ──────────────────────────────────────
+def test_pay1_licensing_selectbox_appears_only_after_mini_run_resolves():
+    at = _movies_app()
+    assert not any("Pay-1 SVOD Window" in sb.label for sb in at.selectbox)
+    _mini_run_button(at).click().run()
+    assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
+    assert any("Pay-1 SVOD Window" in sb.label for sb in at.selectbox)
