@@ -814,6 +814,60 @@ LICENSING_PLATFORMS = {
 }
 DEFAULT_LICENSING_PLATFORM = "streamco"
 
+# ── Licensing Marketplace — Competitive Bidding ─────────────────────────────
+# 2026-08-18, per explicit user request: "competition streaming services
+# should bid for licensing." Adds a SECOND path to the Pay-1 decision,
+# alongside (not replacing) the flat-fee LICENSING_PLATFORMS picker above,
+# per explicit user decision. The two paths are deliberately different in
+# kind, not just in name: the static picker prices off the BASE-case
+# subscriber value (a real pre-negotiated flat deal, priced before anyone
+# knows how the movie actually does -- see pay1_license_fee's own
+# docstring); competitive bidding prices off the REAL resolved theatrical
+# performance (see app_pages/movies.py's Theatrical Mini-Run) -- these are
+# real buyers who've already seen how the movie opened, bidding
+# accordingly. A distinct fictional bidder set (not the same two named
+# platforms) keeps the two paths visually unambiguous in the UI.
+LICENSING_BIDDERS = ["Horizon+", "Nimbus Stream", "Vantage Play", "Aurora Screen"]
+LICENSING_BID_PARTICIPATION_CHANCE = 0.7
+LICENSING_BID_MULT_RANGE = (0.7, 1.3)   # relative to the project's REAL resolved subscriber value
+
+
+def draw_licensing_bids(team_name: str, cycle: int, anchor_value_m: float,
+                          appetite_mult: Optional[dict] = None) -> list[dict]:
+    """Sealed-bid competitive licensing offers for this project's Pay-1
+    window, sized off anchor_value_m -- the REAL resolved subscriber value
+    (project.subscriber_value(actual_multiplier), not a bear/base/bull
+    guess). Own independent seed (team+cycle hash offset) -- never
+    perturbs any other draw_* sequence in this file. Not every bidder
+    participates every cycle (LICENSING_BID_PARTICIPATION_CHANCE).
+    appetite_mult (2026-08-18, Phase 6 game theory), when given, is an
+    extra per-bidder multiplier layered on top of the base random spread --
+    see draw_licensing_bidder_appetite below."""
+    seed = (abs(hash(team_name)) + cycle * 52711 + 977) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    lo, hi = LICENSING_BID_MULT_RANGE
+    bids = []
+    for bidder in LICENSING_BIDDERS:
+        if rng.random() < LICENSING_BID_PARTICIPATION_CHANCE:
+            mult = float(rng.uniform(lo, hi))
+            if appetite_mult:
+                mult *= appetite_mult.get(bidder, 1.0)
+            bids.append({"bidder": bidder, "bid_m": round(max(0.0, anchor_value_m) * mult, 1)})
+    return bids
+
+
+def resolve_licensing_auction(rival_bids: list[dict]) -> dict:
+    """The team is the SELLER here (licensing its own movie out), not a
+    bidder competing against rivals the way Sports Rights' resolve_auction
+    is -- so this just finds the best of the offers on the table. Returns
+    winner=None when nobody participated this cycle (a real, visible
+    possibility given LICENSING_BID_PARTICIPATION_CHANCE < 1)."""
+    if not rival_bids:
+        return {"winner": None, "winning_bid_m": 0.0, "all_bids": []}
+    ranked = sorted(rival_bids, key=lambda b: -b["bid_m"])
+    return {"winner": ranked[0]["bidder"], "winning_bid_m": ranked[0]["bid_m"], "all_bids": ranked}
+
+
 # ── Pay-2 Window ──────────────────────────────────────────────────────────
 # 2026-08-18, per explicit user question ("where is pay 2 window...and the
 # full windowing for each of the movies?") -- the teaching note's own
@@ -1054,6 +1108,10 @@ class MovieProject:
     imax_release: bool = False                     # see IMAX_* above
     pay1_platform: str = DEFAULT_LICENSING_PLATFORM  # see LICENSING_PLATFORMS above -- only
                                                        # matters when pay1_licensing == "license_out"
+    pay1_auction_fee_m: Optional[float] = None        # see resolve_licensing_auction above -- when set,
+                                                       # takes priority over the LICENSING_PLATFORMS fee_pct
+                                                       # formula entirely (a real accepted competitive bid)
+    pay1_auction_winner: Optional[str] = None          # display-only: which LICENSING_BIDDERS name won
     pay2_licensing: str = "keep"                    # see PAY2_LICENSING_OPTIONS above
     pay2_platform: str = DEFAULT_LICENSING_PLATFORM  # only matters when pay2_licensing == "license_out"
     theatrical_run_length: Optional[str] = None      # see THEATRICAL_RUN_LENGTHS above --
@@ -1307,9 +1365,15 @@ class MovieProject:
         LICENSING_PLATFORMS) -- different platforms pay different cuts, a
         real choice instead of one flat rate. Default platform's rate
         equals the original PAY1_LICENSE_DISCOUNT exactly, so a project
-        that never touches pay1_platform reproduces prior behavior."""
+        that never touches pay1_platform reproduces prior behavior.
+        2026-08-18: pay1_auction_fee_m (see resolve_licensing_auction),
+        when set, takes priority over the flat fee_pct formula entirely --
+        a real accepted competitive bid, sized off actual performance
+        rather than the base-case guess the flat-fee formula uses."""
         if not self.is_licensing_out():
             return 0.0
+        if self.pay1_auction_fee_m is not None:
+            return self.pay1_auction_fee_m
         fee_pct = LICENSING_PLATFORMS.get(self.pay1_platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
         return self.subscriber_value("base") * fee_pct
 

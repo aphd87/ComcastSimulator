@@ -28,6 +28,7 @@ from utils.movie_models import (
     run_days_box_office_mult, RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX,
     pvod_price_band, PVOD_MARKET_CHECK_MONTHS, PVOD_CUT_STEP_FRAC,
     PVOD_HOLD_THROUGH_REJECTION_MULT, PVOD_CUT_RESPONSE_MULT, draw_pvod_market_rejection,
+    LICENSING_BIDDERS, draw_licensing_bids, resolve_licensing_auction,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
@@ -128,6 +129,10 @@ def _init(ss):
         ss.movie_pvod_checkpoints = {}
     if not isinstance(ss.get("movie_pvod_pending_rejection"), dict):
         ss.movie_pvod_pending_rejection = {}
+    # Licensing Marketplace — Competitive Bidding (2026-08-18) --
+    # ss.movie_licensing_auction: {cycle: {"bids": [...], "accepted": bool}}
+    if not isinstance(ss.get("movie_licensing_auction"), dict):
+        ss.movie_licensing_auction = {}
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -280,6 +285,8 @@ def _current_project(ss) -> MovieProject:
         source_material=d.get("source_material", SOURCE_MATERIALS[0]),
         imax_release=d.get("imax_release", False),
         pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
+        pay1_auction_fee_m=d.get("pay1_auction_fee_m"),
+        pay1_auction_winner=d.get("pay1_auction_winner"),
         pay2_licensing=d.get("pay2_licensing", "keep"),
         pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
         theatrical_run_length=d.get("theatrical_run_length"),
@@ -386,6 +393,12 @@ def _section_distribution_pipeline(ss):
     def _platform_label(project_kwargs: dict, licensing_key: str, platform_key: str) -> str:
         if project_kwargs.get(licensing_key, "keep") != "license_out":
             return "Keep In-House"
+        # 2026-08-18: an accepted competitive bid (Pay-1 only) carries its
+        # own winner name, not a LICENSING_PLATFORMS key -- check it first
+        # so it isn't silently mislabeled via LICENSING_PLATFORMS' fallback.
+        auction_winner = project_kwargs.get("pay1_auction_winner")
+        if licensing_key == "pay1_licensing" and auction_winner:
+            return f"{auction_winner} (bid)"
         platform = project_kwargs.get(platform_key, DEFAULT_LICENSING_PLATFORM)
         return LICENSING_PLATFORMS.get(platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["name"]
 
@@ -1256,6 +1269,8 @@ def _decisions(ss):
                  debut_season=d.get("debut_season", "Off-Peak"), source_material=source_material,
                  imax_release=imax_release,
                  pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
+                 pay1_auction_fee_m=d.get("pay1_auction_fee_m"),
+                 pay1_auction_winner=d.get("pay1_auction_winner"),
                  pay2_licensing=d.get("pay2_licensing", "keep"),
                  pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
                  theatrical_run_length=d.get("theatrical_run_length"),
@@ -1561,6 +1576,15 @@ def _decisions(ss):
         if resolved_entry is None:
             st.caption("Run the Theatrical Simulation above to make this call with a real result in hand.")
         else:
+            def _clear_pay1_auction():
+                # Fires only on a real user interaction with the static
+                # picker below (Streamlit on_change semantics) -- an
+                # accepted competitive bid is a real, different deal, and
+                # touching the flat-fee picker means the student is
+                # choosing to walk away from it.
+                ss.movie_draft["pay1_auction_fee_m"] = None
+                ss.movie_draft["pay1_auction_winner"] = None
+
             pay1_labels = {
                 "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
                 "license_out": "License to Another Platform — flat, guaranteed fee, paid sooner",
@@ -1573,6 +1597,7 @@ def _decisions(ss):
                      "you give up the subscriber-value upside and the strategic value of owning the "
                      "streaming relationship. You're making this call with your real theatrical result "
                      "in hand, not a bear/base/bull guess.",
+                on_change=_clear_pay1_auction,
             )
             ss.movie_draft["pay1_licensing"] = pay1_choice
             if pay1_choice == "license_out":
@@ -1581,8 +1606,52 @@ def _decisions(ss):
                     index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay1_platform", DEFAULT_LICENSING_PLATFORM)),
                     format_func=lambda k: platform_labels[k],
                     help="Different platforms pay different cuts — a real negotiation choice, not one flat rate.",
+                    on_change=_clear_pay1_auction,
                 )
                 ss.movie_draft["pay1_platform"] = pay1_platform
+
+            # ── Competitive Bidding — a second, alternative Pay-1 path ────────
+            # 2026-08-18, per explicit user request: "competition streaming
+            # services should bid for licensing." Sits alongside (not
+            # replacing) the flat-fee picker above, per explicit user
+            # decision. Bids are sized off the REAL resolved subscriber
+            # value (this project's actual theatrical result), not the
+            # flat picker's base-case guess -- real buyers who've already
+            # seen how the movie opened.
+            st.markdown('<div class="text-xs text-ink2 mt-3 mb-1">— or —</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-title mt-1" style="font-size:13px;">🏷️ Competitive Bidding</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                '<p class="text-xs text-ink2 mb-2">Shop this window to rival platforms instead — unlike the '
+                'flat-fee deal above, these bids are sized off your ACTUAL theatrical result. Not every '
+                'platform bids every cycle.</p>', unsafe_allow_html=True)
+            auction = ss.movie_licensing_auction.get(ss.movie_cycle)
+            if auction is None:
+                if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
+                             use_container_width=True):
+                    anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
+                    bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value)
+                    ss.movie_licensing_auction[ss.movie_cycle] = {"bids": bids, "result": resolve_licensing_auction(bids)}
+                    st.rerun()
+            else:
+                result = auction["result"]
+                if not result["all_bids"]:
+                    st.caption("No platforms made an offer this cycle — the flat-fee deal above is your only "
+                               "licensing option.")
+                else:
+                    rows = "".join(f'<div class="flex justify-between text-xs py-1"><span>{b["bidder"]}</span>'
+                                    f'<span class="font-mono">${b["bid_m"]:.1f}M</span></div>'
+                                    for b in result["all_bids"])
+                    st.markdown(f'<div class="rounded-lg border border-line bg-surface2 p-3 mb-2">{rows}</div>',
+                                unsafe_allow_html=True)
+                    if ss.movie_draft.get("pay1_auction_winner") == result["winner"]:
+                        st.success(f"✅ Accepted {result['winner']}'s ${result['winning_bid_m']:.1f}M bid.")
+                    elif st.button(f"Accept {result['winner']}'s ${result['winning_bid_m']:.1f}M Bid",
+                                    key=f"accept_bid_{ss.movie_cycle}", use_container_width=True, type="primary"):
+                        ss.movie_draft["pay1_licensing"] = "license_out"
+                        ss.movie_draft["pay1_auction_fee_m"] = result["winning_bid_m"]
+                        ss.movie_draft["pay1_auction_winner"] = result["winner"]
+                        st.rerun()
     else:
         ss.movie_draft["pay1_licensing"] = "keep"
         st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
@@ -1963,6 +2032,7 @@ def _results(ss):
             ss.movie_theatrical_resolved.pop(ss.movie_cycle, None)   # redo re-opens the theatrical mini-run too
             ss.movie_pvod_checkpoints.pop(ss.movie_cycle, None)
             ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
+            ss.movie_licensing_auction.pop(ss.movie_cycle, None)
             ss.movie_phase = "decisions"
             st.rerun()
     with nav2:
@@ -2179,6 +2249,7 @@ def _complete(ss):
             ss.movie_theatrical_resolved = {}
             ss.movie_pvod_checkpoints = {}
             ss.movie_pvod_pending_rejection = {}
+            ss.movie_licensing_auction = {}
             ss.movie_submitted = False
             ss.movie_last_score = None
             st.rerun()

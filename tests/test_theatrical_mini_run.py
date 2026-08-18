@@ -28,6 +28,7 @@ from utils.movie_models import (
     PVOD_PRICE, pvod_price_band, PVOD_BAND_FLOOR_RANGE, PVOD_BAND_CEIL_RANGE,
     PVOD_MARKET_CHECK_MONTHS, PVOD_REJECT_CHANCE_AT_FLOOR, PVOD_REJECT_CHANCE_AT_CEILING,
     pvod_reject_chance, draw_pvod_market_rejection,
+    LICENSING_BIDDERS, LICENSING_BID_MULT_RANGE, draw_licensing_bids, resolve_licensing_auction,
 )
 from app_pages.movies import _resolve_movie_outcome
 
@@ -319,3 +320,96 @@ def test_cutting_at_a_rejection_lowers_the_price_toward_the_floor():
     assert cut_cp["price_after"] == pytest.approx(cut_price)
     assert cut_cp["price_after"] < cut_cp["price_before"]
     assert _simulate_button(at).disabled is False
+
+
+# ── Licensing Marketplace — Competitive Bidding (Phase 5) ──────────────────
+def test_draw_licensing_bids_only_uses_the_curated_bidder_set():
+    bids = draw_licensing_bids("SomeTeam", 1, anchor_value_m=10.0)
+    assert all(b["bidder"] in LICENSING_BIDDERS for b in bids)
+    assert all(b["bid_m"] >= 0 for b in bids)
+
+
+def test_draw_licensing_bids_scales_with_the_real_resolved_anchor_value():
+    lo_bids = draw_licensing_bids("ScaleTeam", 1, anchor_value_m=5.0)
+    hi_bids = draw_licensing_bids("ScaleTeam", 1, anchor_value_m=50.0)
+    lo_by_bidder = {b["bidder"]: b["bid_m"] for b in lo_bids}
+    hi_by_bidder = {b["bidder"]: b["bid_m"] for b in hi_bids}
+    for bidder in lo_by_bidder:
+        if bidder in hi_by_bidder:
+            assert hi_by_bidder[bidder] > lo_by_bidder[bidder]
+
+
+def test_resolve_licensing_auction_picks_the_highest_bid():
+    bids = [{"bidder": "A", "bid_m": 5.0}, {"bidder": "B", "bid_m": 8.2}, {"bidder": "C", "bid_m": 3.1}]
+    result = resolve_licensing_auction(bids)
+    assert result["winner"] == "B"
+    assert result["winning_bid_m"] == 8.2
+
+
+def test_resolve_licensing_auction_handles_no_participants():
+    result = resolve_licensing_auction([])
+    assert result["winner"] is None
+    assert result["all_bids"] == []
+
+
+def test_pay1_auction_fee_overrides_flat_fee_formula():
+    p_flat = MovieProject(title="T", genre="Drama", budget_m=40, pa_spend_m=30, star_power=50,
+                           screens=3000, cycle=1, pay1_licensing="license_out")
+    p_auction = MovieProject(title="T", genre="Drama", budget_m=40, pa_spend_m=30, star_power=50,
+                              screens=3000, cycle=1, pay1_licensing="license_out", pay1_auction_fee_m=99.0)
+    assert p_flat.pay1_license_fee() != 99.0
+    assert p_auction.pay1_license_fee() == 99.0
+
+
+def test_pay1_auction_fee_default_none_is_zero_effect():
+    p = MovieProject(title="T", genre="Drama", budget_m=40, pa_spend_m=30, star_power=50,
+                      screens=3000, cycle=1, pay1_licensing="license_out")
+    p_explicit = MovieProject(title="T", genre="Drama", budget_m=40, pa_spend_m=30, star_power=50,
+                               screens=3000, cycle=1, pay1_licensing="license_out", pay1_auction_fee_m=None)
+    assert p.pay1_license_fee() == p_explicit.pay1_license_fee()
+
+
+def _shop_button(at):
+    return next(b for b in at.button if "Shop This Window" in b.label)
+
+
+def test_shopping_bids_reveals_the_auction_and_leaves_flat_picker_untouched():
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    assert not at.exception, f"Shop-bids click raised: {list(at.exception)}"
+    auction = at.session_state["movie_licensing_auction"][1]
+    assert auction["result"]["winner"] in LICENSING_BIDDERS or auction["result"]["winner"] is None
+    assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"   # unaffected until explicitly accepted
+
+
+def test_accepting_a_bid_sets_license_out_with_the_auction_fee():
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    winner = at.session_state["movie_licensing_auction"][1]["result"]["winner"]
+    assert winner is not None, "test team must produce at least one bidder"
+    accept_btn = next(b for b in at.button if b.label.startswith("Accept "))
+    accept_btn.click().run()
+    assert not at.exception, f"Accept click raised: {list(at.exception)}"
+    draft = at.session_state["movie_draft"]
+    assert draft["pay1_licensing"] == "license_out"
+    assert draft["pay1_auction_winner"] == winner
+    assert draft["pay1_auction_fee_m"] == at.session_state["movie_licensing_auction"][1]["result"]["winning_bid_m"]
+
+
+def test_changing_the_flat_picker_after_accepting_a_bid_clears_the_auction():
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    accept_btn = next(b for b in at.button if b.label.startswith("Accept "))
+    accept_btn.click().run()
+    assert at.session_state["movie_draft"]["pay1_licensing"] == "license_out"
+
+    pay1_sb = next(sb for sb in at.selectbox if sb.label == "Pay-1 SVOD Window")
+    pay1_sb.set_value("keep").run()
+    assert not at.exception, f"Switching back to Keep raised: {list(at.exception)}"
+    draft = at.session_state["movie_draft"]
+    assert draft["pay1_licensing"] == "keep"
+    assert draft["pay1_auction_fee_m"] is None
+    assert draft["pay1_auction_winner"] is None
