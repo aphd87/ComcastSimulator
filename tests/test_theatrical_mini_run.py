@@ -26,6 +26,8 @@ from utils.movie_models import (
     MovieProject, THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
     RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, run_days_box_office_mult,
     PVOD_PRICE, pvod_price_band, PVOD_BAND_FLOOR_RANGE, PVOD_BAND_CEIL_RANGE,
+    PVOD_MARKET_CHECK_MONTHS, PVOD_REJECT_CHANCE_AT_FLOOR, PVOD_REJECT_CHANCE_AT_CEILING,
+    pvod_reject_chance, draw_pvod_market_rejection,
 )
 from app_pages.movies import _resolve_movie_outcome
 
@@ -137,16 +139,17 @@ def test_resolve_movie_outcome_differs_across_different_teams():
 
 # ── AppTest: the actual UI gate (single-interaction, per this file's own
 # documented AppTest limitation -- see module docstring) ───────────────────
-def _movies_app() -> AppTest:
-    def script():
-        import streamlit as st
-        import sys
-        sys.path.insert(0, ".")
-        st.session_state.team_name = "MiniRun AppTest Team"
-        import app_pages.movies as movies
-        movies.render()
+def _movies_app_script(team_name):
+    import streamlit as st
+    import sys
+    sys.path.insert(0, ".")
+    st.session_state.team_name = team_name
+    import app_pages.movies as movies
+    movies.render()
 
-    at = AppTest.from_function(script, default_timeout=30)
+
+def _movies_app(team_name="MiniRun AppTest Team") -> AppTest:
+    at = AppTest.from_function(_movies_app_script, default_timeout=30, args=(team_name,))
     at.run()
     assert not at.exception, f"Decisions phase raised: {list(at.exception)}"
     return at
@@ -229,3 +232,90 @@ def test_pay1_licensing_selectbox_appears_only_after_mini_run_resolves():
     _mini_run_button(at).click().run()
     assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
     assert any("Pay-1 SVOD Window" in sb.label for sb in at.selectbox)
+
+
+# ── PVOD Market Acceptance Checks (Phase 4) ─────────────────────────────────
+def test_pvod_reject_chance_matches_calibrated_endpoints():
+    assert pvod_reject_chance(0.0) == pytest.approx(PVOD_REJECT_CHANCE_AT_FLOOR)
+    assert pvod_reject_chance(1.0) == pytest.approx(PVOD_REJECT_CHANCE_AT_CEILING)
+    assert pvod_reject_chance(0.5) == pytest.approx(
+        (PVOD_REJECT_CHANCE_AT_FLOOR + PVOD_REJECT_CHANCE_AT_CEILING) / 2)
+
+
+def test_draw_pvod_market_rejection_rate_is_higher_near_ceiling():
+    n = 2000
+    lo_rate = sum(draw_pvod_market_rejection(f"LoTeam{i}", 1, 0, 0.0) for i in range(n)) / n
+    hi_rate = sum(draw_pvod_market_rejection(f"HiTeam{i}", 1, 0, 1.0) for i in range(n)) / n
+    assert lo_rate < 0.10
+    assert hi_rate > 0.45
+    assert hi_rate > lo_rate
+
+
+def test_draw_pvod_market_rejection_deterministic_and_checkpoint_independent():
+    a1 = draw_pvod_market_rejection("Team", 1, 0, 0.7)
+    a2 = draw_pvod_market_rejection("Team", 1, 0, 0.7)
+    assert a1 == a2   # deterministic
+    # Not asserting the two checkpoints differ (they're independent rolls,
+    # could coincidentally match) -- just that the function accepts a
+    # distinct checkpoint_idx without erroring and stays deterministic.
+    b1 = draw_pvod_market_rejection("Team", 1, 1, 0.7)
+    b2 = draw_pvod_market_rejection("Team", 1, 1, 0.7)
+    assert b1 == b2
+
+
+def test_pvod_market_checks_accept_both_and_leave_simulate_enabled():
+    """MiniRun AppTest Team is a verified deterministic double-accept case
+    at this project's default (band-midpoint) starting price."""
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
+    cps = at.session_state["movie_pvod_checkpoints"][1]
+    assert len(cps) == len(PVOD_MARKET_CHECK_MONTHS)
+    assert all(not cp["rejected"] for cp in cps)
+    assert at.session_state["movie_pvod_pending_rejection"].get(1) is None
+    assert _simulate_button(at).disabled is False
+
+
+def test_pvod_market_checks_pause_and_gate_simulate_on_rejection():
+    """PVODRejectTeam4 is a verified deterministic rejection case at this
+    project's default (band-midpoint) starting price."""
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
+    pending = at.session_state["movie_pvod_pending_rejection"].get(1)
+    assert pending is not None
+    assert _simulate_button(at).disabled is True
+    assert any(b.label.startswith("Hold at") for b in at.button)
+    assert any(b.label.startswith("Cut to") for b in at.button)
+
+
+def test_holding_through_a_rejection_unlocks_simulate_and_keeps_original_price():
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    pending_price = at.session_state["movie_pvod_pending_rejection"][1]["price_before"]
+    hold_btn = next(b for b in at.button if b.label == f"Hold at ${pending_price:.2f}")
+    hold_btn.click().run()
+    assert not at.exception, f"Hold click raised: {list(at.exception)}"
+    assert at.session_state["movie_pvod_pending_rejection"].get(1) is None
+    cps = at.session_state["movie_pvod_checkpoints"][1]
+    held_cp = next(cp for cp in cps if cp["rejected"])
+    assert held_cp["response"] == "hold"
+    assert held_cp["price_after"] == pending_price   # holding never changes the price
+    assert _simulate_button(at).disabled is False
+
+
+def test_cutting_at_a_rejection_lowers_the_price_toward_the_floor():
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    pending_price = at.session_state["movie_pvod_pending_rejection"][1]["price_before"]
+    cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
+    cut_price = float(cut_btn.label.replace("Cut to $", ""))
+    assert cut_price < pending_price   # a cut must actually lower the price
+    cut_btn.click().run()
+    assert not at.exception, f"Cut click raised: {list(at.exception)}"
+    cps = at.session_state["movie_pvod_checkpoints"][1]
+    cut_cp = next(cp for cp in cps if cp["rejected"])
+    assert cut_cp["response"] == "cut"
+    assert cut_cp["price_after"] == pytest.approx(cut_price)
+    assert cut_cp["price_after"] < cut_cp["price_before"]
+    assert _simulate_button(at).disabled is False

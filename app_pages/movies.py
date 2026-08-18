@@ -26,7 +26,8 @@ from utils.movie_models import (
     PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
     THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
     run_days_box_office_mult, RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX,
-    pvod_price_band,
+    pvod_price_band, PVOD_MARKET_CHECK_MONTHS, PVOD_CUT_STEP_FRAC,
+    PVOD_HOLD_THROUGH_REJECTION_MULT, PVOD_CUT_RESPONSE_MULT, draw_pvod_market_rejection,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
@@ -118,6 +119,15 @@ def _init(ss):
     # before PVOD/licensing decisions exist.
     if not isinstance(ss.get("movie_theatrical_resolved"), dict):
         ss.movie_theatrical_resolved = {}
+    # PVOD Market Acceptance Checks (2026-08-18) -- ss.movie_pvod_checkpoints:
+    # {cycle: [{"month", "price_before", "rejected", "response", "price_after"}, ...]},
+    # resolved in order, at most len(PVOD_MARKET_CHECK_MONTHS) per cycle.
+    # ss.movie_pvod_pending_rejection: {cycle: {"month", "price_before"}} when
+    # a checkpoint just rejected and is awaiting the student's hold/cut choice.
+    if not isinstance(ss.get("movie_pvod_checkpoints"), dict):
+        ss.movie_pvod_checkpoints = {}
+    if not isinstance(ss.get("movie_pvod_pending_rejection"), dict):
+        ss.movie_pvod_pending_rejection = {}
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -1614,6 +1624,88 @@ def _decisions(ss):
         ss.movie_draft["pvod_chosen_price"] = None
     ss.movie_draft["pvod_dynamic_pricing"] = False   # superseded by the banded price choice above
 
+    # ── PVOD Market Acceptance Checks ────────────────────────────────────────
+    # 2026-08-18, per explicit user request: "the market may or may not
+    # accept it every 6 months, let's say." Accepted checkpoints resolve
+    # silently in sequence (own independent seed, see draw_pvod_market_
+    # rejection) -- the FIRST rejection pauses here and requires a real
+    # choice (per explicit user decision: hold vs. cut, not a passive
+    # automatic haircut) before Simulate unlocks again. No rejection at
+    # all across both checkpoints leaves pvod_market_mult at its true
+    # 1.0 zero-effect default.
+    ss.movie_draft["pvod_market_mult"] = 1.0
+    if chosen != "day_and_date" and resolved_entry is not None and pvod_price is not None:
+        st.markdown('<div class="section-title mt-3">PVOD Market Acceptance Checks</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="text-xs text-ink2 mb-2">Every 6 months the market gets a real chance to reject '
+            'your PVOD price — pricing near the top of your band is a real gamble, pricing near the '
+            'floor is nearly always accepted. A rejection is a real choice: hold the price (an ongoing '
+            'conversion cost) or cut it toward the floor (a one-time disruption cost, but the lower '
+            'price sticks for the rest of the window).</p>', unsafe_allow_html=True)
+
+        cps = ss.movie_pvod_checkpoints.get(ss.movie_cycle, [])
+        # A changed price after checkpoints started invalidates the sequence --
+        # same "changed the inputs, redo it" posture as the mini-run/Pay-1 locks.
+        if cps and cps[0]["price_before"] != pvod_price:
+            cps = []
+            ss.movie_pvod_checkpoints[ss.movie_cycle] = []
+            ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
+
+        pending = ss.movie_pvod_pending_rejection.get(ss.movie_cycle)
+        current_price = cps[-1]["price_after"] if cps else pvod_price
+
+        # Silently auto-resolve every accepted checkpoint in order; stop at
+        # the first rejection, which needs a real response before continuing.
+        if pending is None:
+            while len(cps) < len(PVOD_MARKET_CHECK_MONTHS):
+                next_month = PVOD_MARKET_CHECK_MONTHS[len(cps)]
+                price_frac = (current_price - lo) / (hi - lo) if hi > lo else 0.0
+                if draw_pvod_market_rejection(ss.team_name, ss.movie_cycle, len(cps), price_frac):
+                    pending = {"month": next_month, "price_before": current_price}
+                    ss.movie_pvod_pending_rejection[ss.movie_cycle] = pending
+                    break
+                cps.append({"month": next_month, "price_before": current_price, "rejected": False,
+                            "response": None, "price_after": current_price})
+                ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
+                current_price = cps[-1]["price_after"]
+
+        for cp in cps:
+            if not cp["rejected"]:
+                st.caption(f"✅ Month {cp['month']:.0f}: market accepted your ${cp['price_before']:.2f} price.")
+            else:
+                resp_txt = f"held at ${cp['price_after']:.2f}" if cp["response"] == "hold" else f"cut to ${cp['price_after']:.2f}"
+                st.caption(f"⚠ Month {cp['month']:.0f}: market rejected ${cp['price_before']:.2f} — you {resp_txt}.")
+
+        if pending is not None:
+            st.warning(f"⚠ Month {pending['month']:.0f}: the market rejected your "
+                       f"${pending['price_before']:.2f} PVOD price. How do you respond?")
+            cut_price = round(pending["price_before"] - (pending["price_before"] - lo) * PVOD_CUT_STEP_FRAC, 2)
+            hcol1, hcol2 = st.columns(2)
+            checkpoint_key = f"{ss.movie_cycle}_{len(cps)}"
+            with hcol1:
+                if st.button(f"Hold at ${pending['price_before']:.2f}", key=f"pvod_hold_{checkpoint_key}", use_container_width=True):
+                    cps.append({"month": pending["month"], "price_before": pending["price_before"],
+                                "rejected": True, "response": "hold", "price_after": pending["price_before"]})
+                    ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
+                    ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
+                    st.rerun()
+            with hcol2:
+                if st.button(f"Cut to ${cut_price:.2f}", key=f"pvod_cut_{checkpoint_key}", use_container_width=True):
+                    cps.append({"month": pending["month"], "price_before": pending["price_before"],
+                                "rejected": True, "response": "cut", "price_after": cut_price})
+                    ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
+                    ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
+                    st.rerun()
+
+        cps = ss.movie_pvod_checkpoints.get(ss.movie_cycle, [])
+        if cps:
+            ss.movie_draft["pvod_chosen_price"] = cps[-1]["price_after"]
+            mult = 1.0
+            for cp in cps:
+                if cp["rejected"]:
+                    mult *= PVOD_HOLD_THROUGH_REJECTION_MULT if cp["response"] == "hold" else PVOD_CUT_RESPONSE_MULT
+            ss.movie_draft["pvod_market_mult"] = mult
+
     st.divider()
 
     # ── Simulate ───────────────────────────────────────────────────────────────
@@ -1624,9 +1716,12 @@ def _decisions(ss):
     # is ever violated (e.g. a legacy/malformed session) -- normal play
     # never exercises it.
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
-    can_simulate = resolved_entry is not None
-    if not can_simulate:
+    pending_pvod_response = ss.movie_pvod_pending_rejection.get(ss.movie_cycle) is not None
+    can_simulate = resolved_entry is not None and not pending_pvod_response
+    if resolved_entry is None:
         st.caption("⚠ Run the Theatrical Simulation above before you can Simulate the full year.")
+    elif pending_pvod_response:
+        st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
         project = _current_project(ss)
         current_inputs = {"genre": project.genre, "concept_type": project.concept_type,
@@ -1641,10 +1736,15 @@ def _decisions(ss):
         trouble_reason        = resolved["trouble_reason"]
         ai_setback_reason     = resolved["ai_setback_reason"]
         ancillary_reason      = resolved["ancillary_reason"]
-        pvod_mult             = resolved["pvod_mult"]
         theme_park_mult       = resolved["theme_park_mult"]
         ewom_reason           = resolved["ewom_reason"]
         ewom_mult             = resolved["ewom_mult"]
+        # PVOD Market Acceptance Checks (2026-08-18): folds the resolved
+        # hold/cut journey's multiplier into the SAME pvod_mult slot
+        # Ancillary Surprise already uses -- no movie_models.py signature
+        # changes needed. 1.0 (true no-op) if the student never hit a
+        # rejection, or never opened the PVOD section at all (day_and_date).
+        pvod_mult = resolved["pvod_mult"] * ss.movie_draft.get("pvod_market_mult", 1.0)
 
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
         waterfall = participation_waterfall(project, multiplier, critical_score,
@@ -1861,6 +1961,8 @@ def _results(ss):
         if st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True):
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle]
             ss.movie_theatrical_resolved.pop(ss.movie_cycle, None)   # redo re-opens the theatrical mini-run too
+            ss.movie_pvod_checkpoints.pop(ss.movie_cycle, None)
+            ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
             ss.movie_phase = "decisions"
             st.rerun()
     with nav2:
@@ -2075,6 +2177,8 @@ def _complete(ss):
             ss.movie_draft = {}
             ss.movie_research_paid = {}
             ss.movie_theatrical_resolved = {}
+            ss.movie_pvod_checkpoints = {}
+            ss.movie_pvod_pending_rejection = {}
             ss.movie_submitted = False
             ss.movie_last_score = None
             st.rerun()

@@ -68,6 +68,47 @@ PVOD_PRICE_ELASTICITY  = 0.85             # >0 real demand curve (higher price, 
                                             # loyalty, but price still matters, a real teachable tradeoff
 
 
+# ── PVOD Market Acceptance Checks ───────────────────────────────────────────
+# 2026-08-18, per explicit user request: "the market may or may not accept
+# it every 6 months, let's say." Two checkpoints (6mo/12mo into the PVOD
+# pricing window) -- own independent seed namespace (draw_pvod_market_
+# rejection), never perturbs any other draw_* sequence in this file.
+# Rejection chance scales with how aggressively the chosen price sits in
+# its own band (pvod_price_band) -- pricing right at the floor is nearly
+# always accepted, pricing at the ceiling is a real coin flip. Per
+# explicit user decision, a rejection is NOT a passive automatic haircut
+# -- the student gets a real choice each time (see app_pages/movies.py):
+# hold the price (a real, if milder, ongoing conversion cost) or cut it
+# toward the floor (a real one-time disruption cost, but the lower price
+# then sticks for the rest of the window). No rejection at all across
+# both checkpoints means pvod_market_mult stays 1.0 -- a true zero-effect
+# outcome for a student who priced conservatively, not a tax on playing at all.
+PVOD_MARKET_CHECK_MONTHS         = (6.0, 12.0)
+PVOD_REJECT_CHANCE_AT_FLOOR      = 0.05
+PVOD_REJECT_CHANCE_AT_CEILING    = 0.55
+PVOD_HOLD_THROUGH_REJECTION_MULT = 0.85   # per rejected checkpoint the student chooses to hold through
+PVOD_CUT_RESPONSE_MULT           = 0.95   # per rejected checkpoint the student chooses to cut at --
+                                            # a smaller one-time haircut than holding, but the lower
+                                            # price sticks going forward (see PVOD_CUT_STEP_FRAC)
+PVOD_CUT_STEP_FRAC = 0.5   # a "cut" moves the price 50% of the way from its current level to the band floor
+
+
+def pvod_reject_chance(price_frac: float) -> float:
+    """price_frac is 0.0 (band floor) to 1.0 (band ceiling) -- linear
+    interpolation between the two calibrated rejection-chance endpoints."""
+    frac = min(1.0, max(0.0, price_frac))
+    return PVOD_REJECT_CHANCE_AT_FLOOR + frac * (PVOD_REJECT_CHANCE_AT_CEILING - PVOD_REJECT_CHANCE_AT_FLOOR)
+
+
+def draw_pvod_market_rejection(team_name: str, cycle: int, checkpoint_idx: int, price_frac: float) -> bool:
+    """Own independent seeded axis (own hash offset -- never perturbs any
+    other draw_* sequence in this file). checkpoint_idx (0, 1, ...)
+    distinguishes the 6mo vs. 12mo check so they aren't the same roll."""
+    seed = (abs(hash(team_name)) + cycle * 15013 + checkpoint_idx * 733 + 89) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    return bool(rng.random() < pvod_reject_chance(price_frac))
+
+
 def pvod_price_band(multiplier: float, genre: str, concept_type: str = "New IP") -> tuple[float, float]:
     """Lower/upper PVOD price bounds a student can choose within, sized off
     how the movie's REAL (resolved) theatrical performance landed -- frac
