@@ -88,12 +88,15 @@ def test_decisions_phase_has_expected_widgets():
     at = _movies_app()
     assert len(at.number_input) == 3   # budget, P&A, screens
     # genre, concept type, source material, financing structure, exhibitor
-    # posture (Greenlight) + debut season, Pay-1 licensing, Pay-2 licensing,
-    # Theatrical Run Length (Release Strategy -- shown even at Cycle 1 since
-    # "wide_theatrical" != "day_and_date"; Pay-1/Pay-2 platform pickers only
-    # render once "license_out" is actually chosen, not at the "keep" default)
-    assert len(at.selectbox) == 9
-    assert len(at.slider) == 1         # star power
+    # posture (Greenlight) + debut season, Pay-1 licensing, Pay-2 licensing
+    # (Release Strategy -- shown even at Cycle 1 since "wide_theatrical" !=
+    # "day_and_date"; Pay-1/Pay-2 platform pickers only render once
+    # "license_out" is actually chosen, not at the "keep" default).
+    # 2026-08-18: Theatrical Run Length's old Auto/Short/Standard/Extended
+    # selectbox was replaced by the Theatrical Mini-Run's day-count slider
+    # (see test_theatrical_mini_run.py) -- one fewer selectbox, one more slider.
+    assert len(at.selectbox) == 8
+    assert len(at.slider) == 2         # star power, theatrical run length (days)
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
 

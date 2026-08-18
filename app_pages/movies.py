@@ -25,6 +25,7 @@ from utils.movie_models import (
     LICENSING_PLATFORMS, DEFAULT_LICENSING_PLATFORM,
     PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
     THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
+    run_days_box_office_mult, RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
@@ -109,6 +110,13 @@ def _init(ss):
         ss.movie_studio_budget_m = STUDIO_ANNUAL_BUDGET_START_M
     if "movie_studio_budget_updated_through" not in ss:
         ss.movie_studio_budget_updated_through = 0
+    # Theatrical Mini-Run (2026-08-18) -- ss.movie_theatrical_resolved:
+    # {cycle: {..resolved outcome.., "locked_inputs": {...}}} once the
+    # student clicks "Run Theatrical Simulation" for that cycle. See
+    # _resolve_movie_outcome()'s docstring for why this is safe to resolve
+    # before PVOD/licensing decisions exist.
+    if not isinstance(ss.get("movie_theatrical_resolved"), dict):
+        ss.movie_theatrical_resolved = {}
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
@@ -264,6 +272,7 @@ def _current_project(ss) -> MovieProject:
         pay2_licensing=d.get("pay2_licensing", "keep"),
         pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
         theatrical_run_length=d.get("theatrical_run_length"),
+        theatrical_run_days=d.get("theatrical_run_days"),
         pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
     )
 
@@ -823,6 +832,74 @@ def _progress_chart(ss):
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+def _resolve_movie_outcome(ss, project) -> dict:
+    """The single source of truth for resolving a movie's stochastic fate --
+    used by BOTH the Theatrical Mini-Run button (resolves early, before
+    PVOD/licensing decisions exist) and the final Simulate button (which
+    reuses the mini-run's locked result when present, only resolving fresh
+    itself as a defensive fallback). Every draw here is a pure function of
+    (team, cycle, genre, concept_type, ai_production_tools, source_material)
+    -- see draw_actual_multiplier/draw_critical_reception's own docstrings
+    -- so calling it early and again later for the same locked Greenlight
+    inputs is guaranteed to return identical numbers. That guarantee is
+    what makes the two-stage Theatrical Mini-Run -> Simulate flow safe
+    (2026-08-18) -- it isn't "probably the same," it's structurally the
+    same function call. locked_inputs captures exactly the fields this
+    resolution depends on, so the caller can detect if the student changed
+    Greenlight after resolving and needs to re-run the mini-sim."""
+    multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre, project.concept_type)
+    critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre,
+                                              ai_production_tools=project.ai_production_tools)
+    talent_bonus = _active_talent_bonus(ss, project.genre, project.source_material)
+    if "critical_score_bonus" in talent_bonus:
+        critical_score = min(100.0, critical_score + talent_bonus["critical_score_bonus"])
+
+    trouble = draw_production_trouble(ss.team_name, ss.movie_cycle)
+    trouble_reason = None
+    if trouble:
+        trouble_reason, haircut = trouble
+        multiplier *= haircut
+
+    ai_setback_reason = None
+    if project.ai_production_tools:
+        ai_setback = draw_ai_tooling_setback(ss.team_name, ss.movie_cycle)
+        if ai_setback:
+            ai_setback_reason, ai_haircut = ai_setback
+            multiplier *= ai_haircut
+
+    ancillary = draw_ancillary_surprise(ss.team_name, ss.movie_cycle)
+    ancillary_reason = None
+    pvod_mult = theme_park_mult = 1.0
+    if ancillary:
+        ancillary_reason, ancillary_mult = ancillary
+        pvod_mult = theme_park_mult = ancillary_mult
+
+    ewom = draw_ewom_piracy_swing(ss.team_name, ss.movie_cycle)
+    ewom_reason = None
+    ewom_mult = 1.0
+    if ewom:
+        ewom_reason, ewom_mult = ewom
+
+    return {
+        "multiplier":          multiplier,
+        "critical_score":      critical_score,
+        "talent_bonus":        talent_bonus,
+        "trouble_reason":      trouble_reason,
+        "ai_setback_reason":   ai_setback_reason,
+        "ancillary_reason":    ancillary_reason,
+        "pvod_mult":           pvod_mult,
+        "theme_park_mult":     theme_park_mult,
+        "ewom_reason":         ewom_reason,
+        "ewom_mult":           ewom_mult,
+        "locked_inputs": {
+            "genre":                project.genre,
+            "concept_type":         project.concept_type,
+            "ai_production_tools":  project.ai_production_tools,
+            "source_material":      project.source_material,
+        },
+    }
+
+
 # ── Phase 1: Decisions (Greenlight + Release Strategy) ───────────────────────
 def _decisions(ss):
     """Single scrolling page (redesigned 2026-07-27, replacing the old
@@ -1170,6 +1247,7 @@ def _decisions(ss):
                  pay2_licensing=d.get("pay2_licensing", "keep"),
                  pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
                  theatrical_run_length=d.get("theatrical_run_length"),
+                 theatrical_run_days=d.get("theatrical_run_days"),
                  pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False))
     ss.movie_draft = draft
     project = _current_project(ss)
@@ -1400,27 +1478,90 @@ def _decisions(ss):
     else:
         ss.movie_draft["pay2_licensing"] = "keep"
 
-    # ── Theatrical Run Length ────────────────────────────────────────────────
-    # 2026-08-18, per explicit user question ("we should also think about
-    # how many days in theater too"). None (Auto) preserves the original
-    # automatic cycle-based window -- a real, valid choice, not just a
-    # placeholder default.
-    st.markdown('<div class="section-title mt-3">Theatrical Run Length</div>', unsafe_allow_html=True)
-    run_options = ["Auto"] + list(THEATRICAL_RUN_LENGTHS.keys())
-    run_labels = {
-        "Auto": "Auto — matches this cycle's industry-standard window compression",
-        **{k: f"{k} (~{v} days) — {'more legs, delays digital windows' if k == 'Extended' else 'faster to digital, less cumulative box office' if k == 'Short' else 'the real 45-day industry benchmark'}"
-           for k, v in THEATRICAL_RUN_LENGTHS.items()},
-    }
-    current_run = ss.movie_draft.get("theatrical_run_length") or "Auto"
-    run_choice = st.selectbox(
-        "Run Length", run_options, index=run_options.index(current_run) if current_run in run_options else 0,
-        format_func=lambda k: run_labels[k],
-        help="Longer runs capture more cumulative box office (diminishing returns, not linear) but "
-             "delay every downstream window — costing real NPV through discounting. Shorter runs trade "
-             "the reverse. Universal's own real benchmark: at least 30 days if a film opens above $50M.",
+    # ── Theatrical Mini-Run ──────────────────────────────────────────────────
+    # 2026-08-18: real two-stage resolution -- instead of every draw
+    # resolving together at the final Simulate button, the theatrical
+    # outcome (box office, critical reception, and every independent risk
+    # axis -- Production Trouble, AI Tooling Setback, Ancillary Surprise,
+    # eWOM & Piracy) locks in HERE, before PVOD pricing or Pay-1 licensing
+    # exist as decisions -- per explicit user request ("we need a button
+    # for mini simulation for theatrical run"). Safe to resolve this early
+    # because every draw involved is a pure function of (team, cycle,
+    # genre, concept_type, ai_production_tools, source_material) -- see
+    # _resolve_movie_outcome's docstring. The Simulate button below reuses
+    # this exact locked result rather than re-rolling, so the two stages
+    # are provably consistent, not just "probably" -- same function, same
+    # inputs, same output (see tests/test_movies_page.py). Replaces the
+    # old Short/Standard/Extended tier picker with an exact day count (per
+    # explicit user request: "students can determine run based on # of
+    # days") -- run_days_box_office_mult() reproduces the tier picker's
+    # own calibrated multiplier exactly at the three anchor day counts.
+    st.markdown('<a id="theatrical"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title mt-3">🎬 Run Theatrical Simulation</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">Pick exactly how many days this movie stays in theaters, then '
+        'run the mini-simulation to lock in its real opening — before you decide PVOD pricing or Pay-1 '
+        'licensing, the same way a real studio watches opening weekend before making those calls.</p>',
+        unsafe_allow_html=True)
+    default_days = ss.movie_draft.get("theatrical_run_days") or THEATRICAL_RUN_LENGTHS["Standard"]
+    theatrical_run_days = st.slider(
+        "Theatrical Run Length (days)", RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, int(default_days), step=1,
+        help=f"Short≈{THEATRICAL_RUN_LENGTHS['Short']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Short']:.2f}x) · "
+             f"Standard≈{THEATRICAL_RUN_LENGTHS['Standard']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Standard']:.2f}x) · "
+             f"Extended≈{THEATRICAL_RUN_LENGTHS['Extended']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Extended']:.2f}x) — "
+             "longer runs capture more cumulative box office (diminishing returns, not linear) but delay "
+             "every downstream window, costing real NPV through discounting. Universal's own real "
+             "benchmark: at least 30 days if a film opens above $50M.",
     )
-    ss.movie_draft["theatrical_run_length"] = None if run_choice == "Auto" else run_choice
+    ss.movie_draft["theatrical_run_days"] = theatrical_run_days
+    ss.movie_draft["theatrical_run_length"] = None   # superseded by the exact day count above
+    st.caption(f"Box-office multiplier at {theatrical_run_days} days: {run_days_box_office_mult(theatrical_run_days):.2f}x")
+
+    current_lock_inputs = {"genre": genre, "concept_type": concept_type,
+                            "ai_production_tools": ai_production_tools, "source_material": source_material}
+    resolved_entry = ss.movie_theatrical_resolved.get(ss.movie_cycle)
+    if resolved_entry is not None and resolved_entry["locked_inputs"] != current_lock_inputs:
+        st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) "
+                "changed since you last ran the Theatrical Simulation — run it again to lock in a fresh result.")
+        resolved_entry = None
+
+    if resolved_entry is None:
+        if st.button("🎬 Run Theatrical Simulation", key=f"run_theatrical_{ss.movie_cycle}", use_container_width=True):
+            live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen,
+                                            "theatrical_run_days": theatrical_run_days,
+                                            "theatrical_run_length": None})
+            ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
+            st.rerun()
+        st.caption("Run the Theatrical Simulation above to unlock PVOD pricing and Pay-1 licensing decisions below.")
+    else:
+        r = resolved_entry
+        live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen,
+                                        "theatrical_run_days": theatrical_run_days,
+                                        "theatrical_run_length": None})
+        dom_bo = live_project.domestic_box_office(r["multiplier"])
+        stars = multiplier_to_stars(r["multiplier"], genre, concept_type)
+        star_str = "⭐" * stars + "☆" * (5 - stars)
+        bo_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
+        cs_c = SUCCESS if r["critical_score"] >= 55 else (WARN if r["critical_score"] >= 35 else DANGER)
+        event_notes = [n for n in (r["trouble_reason"], r["ai_setback_reason"],
+                                    r["ancillary_reason"], r["ewom_reason"]) if n]
+        events_html = "".join(f'<div class="text-[10px] text-muted mt-1">⚡ {e}</div>' for e in event_notes)
+        st.markdown(f"""
+        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="border-left:3px solid {SUCCESS};">
+          <div class="text-xs" style="color:{SUCCESS};font-weight:600;margin-bottom:4px;">✅ Theatrical Simulation Locked In</div>
+          <div class="flex gap-6 flex-wrap">
+            <div><div class="text-[9px] text-muted font-mono">DOMESTIC BOX OFFICE</div>
+              <div class="text-sm text-ink">${dom_bo:.1f}M</div></div>
+            <div><div class="text-[9px] text-muted font-mono">BOX-OFFICE SIGNAL</div>
+              <div class="text-sm" style="color:{bo_c};">{star_str}</div></div>
+            <div><div class="text-[9px] text-muted font-mono">CRITICAL RECEPTION</div>
+              <div class="text-sm" style="color:{cs_c};">{r['critical_score']:.0f}/100</div></div>
+            <div><div class="text-[9px] text-muted font-mono">RUN LENGTH</div>
+              <div class="text-sm text-ink">{theatrical_run_days}d</div></div>
+          </div>
+          {events_html}
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── PVOD Dynamic Pricing ──────────────────────────────────────────────────
     # 2026-08-18, per explicit user request and the S-0410 case's own real
@@ -1439,64 +1580,34 @@ def _decisions(ss):
     st.divider()
 
     # ── Simulate ───────────────────────────────────────────────────────────────
+    # 2026-08-18: Simulate no longer rolls the theatrical outcome itself --
+    # it reuses the Theatrical Mini-Run's locked result (see
+    # _resolve_movie_outcome), so the button is disabled until that step is
+    # done. The fresh-resolve fallback below only fires if that invariant
+    # is ever violated (e.g. a legacy/malformed session) -- normal play
+    # never exercises it.
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
-    if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True):
+    can_simulate = resolved_entry is not None
+    if not can_simulate:
+        st.caption("⚠ Run the Theatrical Simulation above before you can Simulate the full year.")
+    if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
         project = _current_project(ss)
-        multiplier = draw_actual_multiplier(ss.team_name, ss.movie_cycle, project.genre, project.concept_type)
-        # Critical reception is drawn independently of box-office
-        # performance — a movie can open huge and get panned, or open
-        # modestly and find acclaim. Neither draw is known to the
-        # student until this exact moment. ai_production_tools caps the
-        # ceiling of this draw (see utils/movie_models.py).
-        critical_score = draw_critical_reception(ss.team_name, ss.movie_cycle, project.genre,
-                                                  ai_production_tools=project.ai_production_tools)
-        talent_bonus = _active_talent_bonus(ss, project.genre, project.source_material)
-        if "critical_score_bonus" in talent_bonus:
-            critical_score = min(100.0, critical_score + talent_bonus["critical_score_bonus"])
-
-        # Production Trouble — a real, independent creative/talent risk axis
-        # (director/actor/VFX/producer setbacks), rare (~5%), applied as a
-        # haircut on the resolved box-office multiplier rather than zeroing
-        # the cycle outright — a movie IS the whole bet, unlike a TV show
-        # inside a 20-show portfolio. See utils/movie_models.py.
-        trouble = draw_production_trouble(ss.team_name, ss.movie_cycle)
-        trouble_reason = None
-        if trouble:
-            trouble_reason, haircut = trouble
-            multiplier *= haircut
-
-        # AI Tooling Setback — own independent risk axis, only ever rolled
-        # for projects that opted into AI Production Tools (see
-        # utils/movie_models.py::draw_ai_tooling_setback). Stacks
-        # multiplicatively with Production Trouble's haircut if both fire
-        # in the same cycle — two unrelated real-world setbacks can both
-        # happen to the same movie.
-        ai_setback_reason = None
-        if project.ai_production_tools:
-            ai_setback = draw_ai_tooling_setback(ss.team_name, ss.movie_cycle)
-            if ai_setback:
-                ai_setback_reason, ai_haircut = ai_setback
-                multiplier *= ai_haircut
-
-        # Ancillary Markets Surprise — PVOD rentals and theme-park/merchandise
-        # licensing, genuinely movie-specific (TV has neither window at all),
-        # independent of both box office and critical reception.
-        ancillary = draw_ancillary_surprise(ss.team_name, ss.movie_cycle)
-        ancillary_reason = None
-        pvod_mult = theme_park_mult = 1.0
-        if ancillary:
-            ancillary_reason, ancillary_mult = ancillary
-            pvod_mult = theme_park_mult = ancillary_mult
-
-        # eWOM & Piracy — a separate, more-common independent swing on
-        # digital revenue (PVOD + owned Peacock subscriber value together),
-        # own seed, distinct from Ancillary Surprise's theme-park/rental
-        # licensing story. See utils/movie_models.py.
-        ewom = draw_ewom_piracy_swing(ss.team_name, ss.movie_cycle)
-        ewom_reason = None
-        ewom_mult = 1.0
-        if ewom:
-            ewom_reason, ewom_mult = ewom
+        current_inputs = {"genre": project.genre, "concept_type": project.concept_type,
+                           "ai_production_tools": project.ai_production_tools,
+                           "source_material": project.source_material}
+        resolved = ss.movie_theatrical_resolved.get(ss.movie_cycle)
+        if resolved is None or resolved["locked_inputs"] != current_inputs:
+            resolved = _resolve_movie_outcome(ss, project)
+        multiplier          = resolved["multiplier"]
+        critical_score       = resolved["critical_score"]
+        talent_bonus         = resolved["talent_bonus"]
+        trouble_reason        = resolved["trouble_reason"]
+        ai_setback_reason     = resolved["ai_setback_reason"]
+        ancillary_reason      = resolved["ancillary_reason"]
+        pvod_mult             = resolved["pvod_mult"]
+        theme_park_mult       = resolved["theme_park_mult"]
+        ewom_reason           = resolved["ewom_reason"]
+        ewom_mult             = resolved["ewom_mult"]
 
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
         waterfall = participation_waterfall(project, multiplier, critical_score,
@@ -1712,6 +1823,7 @@ def _results(ss):
     with nav1:
         if st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True):
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle]
+            ss.movie_theatrical_resolved.pop(ss.movie_cycle, None)   # redo re-opens the theatrical mini-run too
             ss.movie_phase = "decisions"
             st.rerun()
     with nav2:
@@ -1925,6 +2037,7 @@ def _complete(ss):
             ss.movie_log = []
             ss.movie_draft = {}
             ss.movie_research_paid = {}
+            ss.movie_theatrical_resolved = {}
             ss.movie_submitted = False
             ss.movie_last_score = None
             st.rerun()

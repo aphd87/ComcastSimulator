@@ -770,6 +770,44 @@ PAY2_VALUE_PCT_OF_PAY1   = 0.30   # Pay-2 deals are real but materially smaller 
 THEATRICAL_RUN_LENGTHS = {"Short": 21, "Standard": 45, "Extended": 75}
 RUN_LENGTH_BOX_OFFICE_MULT = {"Short": 0.92, "Standard": 1.0, "Extended": 1.06}
 
+# ── Continuous Theatrical Run Length (Mini-Run) ─────────────────────────────
+# 2026-08-18, per explicit user request: "students can determine run based
+# on # of days" -- the Short/Standard/Extended tiers above stay as the
+# calibration anchors, but the new Theatrical Mini-Run step (app_pages/
+# movies.py) lets the student dial in an exact day count instead of picking
+# a tier. theatrical_run_days=None (default, see MovieProject below) leaves
+# window_days()/domestic_box_office() entirely governed by
+# theatrical_run_length/the automatic cycle formula, unchanged -- a true
+# zero-effect baseline. When set, it overrides theatrical_run_length
+# outright (same override relationship theatrical_run_length already has
+# over the automatic formula), and run_days_box_office_mult() replaces the
+# tier lookup with a continuous interpolation through the SAME three
+# calibrated anchor points -- a student who dials in exactly 21/45/75 days
+# gets the identical multiplier the tier picker already gave. Flat beyond
+# both ends (no extra reward for going past Extended, no extra penalty for
+# going shorter than Short) -- diminishing returns at both edges, not a cliff.
+RUN_LENGTH_DAYS_MIN = 10
+RUN_LENGTH_DAYS_MAX = 120
+
+
+def run_days_box_office_mult(days: int) -> float:
+    """Continuous version of RUN_LENGTH_BOX_OFFICE_MULT, piecewise-linear
+    through its own three anchor points (21d/0.92x, 45d/1.0x, 75d/1.06x),
+    flat beyond both ends."""
+    anchors = sorted((THEATRICAL_RUN_LENGTHS[k], RUN_LENGTH_BOX_OFFICE_MULT[k])
+                      for k in THEATRICAL_RUN_LENGTHS)
+    d = max(RUN_LENGTH_DAYS_MIN, min(RUN_LENGTH_DAYS_MAX, days))
+    if d <= anchors[0][0]:
+        return anchors[0][1]
+    if d >= anchors[-1][0]:
+        return anchors[-1][1]
+    for (d0, m0), (d1, m1) in zip(anchors, anchors[1:]):
+        if d0 <= d <= d1:
+            frac = (d - d0) / (d1 - d0)
+            return m0 + frac * (m1 - m0)
+    return anchors[-1][1]   # unreachable, defensive
+
+
 # ── Wide-Release Screen Cost — a real penalty for going wide, not just a
 # soft UI warning ────────────────────────────────────────────────────────────
 # 2026-08-18, per explicit user question ("are there penalties if we have
@@ -940,6 +978,8 @@ class MovieProject:
     pay2_platform: str = DEFAULT_LICENSING_PLATFORM  # only matters when pay2_licensing == "license_out"
     theatrical_run_length: Optional[str] = None      # see THEATRICAL_RUN_LENGTHS above --
                                                        # None = original automatic cycle-based window_days()
+    theatrical_run_days: Optional[int] = None         # see run_days_box_office_mult above -- set by the
+                                                       # Theatrical Mini-Run step; overrides theatrical_run_length
     pvod_dynamic_pricing: bool = False               # see PVOD_PRICE_PREMIUM/DISCOUNT above
 
     def capital_at_risk(self) -> float:
@@ -997,7 +1037,14 @@ class MovieProject:
         default None) overrides this outright when the student has chosen a
         real run length (see THEATRICAL_RUN_LENGTHS) -- otherwise falls back
         to the original automatic behavior: shrinks each cycle, matching the
-        real post-2012 compression (Universal/AMC 2020 deal, etc.)."""
+        real post-2012 compression (Universal/AMC 2020 deal, etc.).
+        theatrical_run_days (2026-08-18, set by the Theatrical Mini-Run)
+        overrides theatrical_run_length outright when present -- an exact
+        day count from a real mini-run takes priority over the coarser
+        tier picker, which in turn takes priority over the automatic
+        formula."""
+        if self.theatrical_run_days is not None:
+            return max(RUN_LENGTH_DAYS_MIN, min(RUN_LENGTH_DAYS_MAX, int(self.theatrical_run_days)))
         if self.theatrical_run_length is not None:
             return THEATRICAL_RUN_LENGTHS.get(self.theatrical_run_length, THEATRICAL_RUN_LENGTHS["Standard"])
         shrink = WINDOW_SHRINK_PER_CYCLE_DAYS * (self.cycle - 1)
@@ -1071,13 +1118,20 @@ class MovieProject:
         theatrical_run_length (2026-08-18, default None) applies a real,
         modest RUN_LENGTH_BOX_OFFICE_MULT on top -- a longer run captures
         more cumulative box office (diminishing returns, not linear), a
-        shorter run less. None means 1.0x, exact original behavior."""
+        shorter run less. None means 1.0x, exact original behavior.
+        theatrical_run_days (2026-08-18, set by the Theatrical Mini-Run)
+        takes priority and uses the continuous run_days_box_office_mult()
+        interpolation instead of the coarser tier lookup."""
         if isinstance(scenario, str):
             multiplier = scenario_multipliers_for(self.genre, self.concept_type)[scenario]
         else:
             multiplier = scenario
-        run_mult = (RUN_LENGTH_BOX_OFFICE_MULT.get(self.theatrical_run_length, 1.0)
-                    if self.theatrical_run_length is not None else 1.0)
+        if self.theatrical_run_days is not None:
+            run_mult = run_days_box_office_mult(self.theatrical_run_days)
+        elif self.theatrical_run_length is not None:
+            run_mult = RUN_LENGTH_BOX_OFFICE_MULT.get(self.theatrical_run_length, 1.0)
+        else:
+            run_mult = 1.0
         return self.opening_weekend() * multiplier * self.cannibalization_factor() * run_mult
 
     def international_box_office(self, domestic_gross: float) -> float:
