@@ -29,6 +29,7 @@ from utils.movie_models import (
     pvod_price_band, PVOD_MARKET_CHECK_MONTHS, PVOD_CUT_STEP_FRAC,
     PVOD_HOLD_THROUGH_REJECTION_MULT, PVOD_CUT_RESPONSE_MULT, draw_pvod_market_rejection,
     LICENSING_BIDDERS, draw_licensing_bids, resolve_licensing_auction,
+    draw_licensing_bidder_appetite, licensing_appetite_flavor,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
@@ -1630,8 +1631,19 @@ def _decisions(ss):
                 if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
                              use_container_width=True):
                     anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
-                    bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value)
-                    ss.movie_licensing_auction[ss.movie_cycle] = {"bids": bids, "result": resolve_licensing_auction(bids)}
+                    # Game theory (2026-08-18): each bidder's appetite ties
+                    # into the REAL background-slate data already generated
+                    # for this team+cycle -- a strong slate makes "hot"
+                    # (momentum) eligible to fire, a weak one makes "hungry"
+                    # (scarcity) eligible -- see draw_licensing_bidder_appetite.
+                    bg_slate = generate_background_slate(ss.team_name, ss.movie_cycle,
+                                                          studio_budget_m=ss.movie_studio_budget_m)
+                    appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg_slate)
+                    appetite_mult = {b: v["mult"] for b, v in appetite.items()}
+                    bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value, appetite_mult=appetite_mult)
+                    ss.movie_licensing_auction[ss.movie_cycle] = {
+                        "bids": bids, "result": resolve_licensing_auction(bids), "appetite": appetite,
+                    }
                     st.rerun()
             else:
                 result = auction["result"]
@@ -1639,10 +1651,19 @@ def _decisions(ss):
                     st.caption("No platforms made an offer this cycle — the flat-fee deal above is your only "
                                "licensing option.")
                 else:
-                    rows = "".join(f'<div class="flex justify-between text-xs py-1"><span>{b["bidder"]}</span>'
-                                    f'<span class="font-mono">${b["bid_m"]:.1f}M</span></div>'
-                                    for b in result["all_bids"])
-                    st.markdown(f'<div class="rounded-lg border border-line bg-surface2 p-3 mb-2">{rows}</div>',
+                    appetite = auction.get("appetite", {})
+                    row_parts = []
+                    for b in result["all_bids"]:
+                        state = appetite.get(b["bidder"], {}).get("state")
+                        flavor = licensing_appetite_flavor(b["bidder"], state)
+                        icon = "🔥" if state == "hot" else ("⚠" if state == "hungry" else "")
+                        flavor_html = f'<div class="text-[10px] text-muted">{icon} {flavor}</div>' if flavor else ""
+                        row_parts.append(
+                            f'<div class="text-xs py-1"><div class="flex justify-between">'
+                            f'<span>{b["bidder"]}</span><span class="font-mono">${b["bid_m"]:.1f}M</span></div>'
+                            f'{flavor_html}</div>'
+                        )
+                    st.markdown(f'<div class="rounded-lg border border-line bg-surface2 p-3 mb-2">{"".join(row_parts)}</div>',
                                 unsafe_allow_html=True)
                     if ss.movie_draft.get("pay1_auction_winner") == result["winner"]:
                         st.success(f"✅ Accepted {result['winner']}'s ${result['winning_bid_m']:.1f}M bid.")

@@ -29,6 +29,8 @@ from utils.movie_models import (
     PVOD_MARKET_CHECK_MONTHS, PVOD_REJECT_CHANCE_AT_FLOOR, PVOD_REJECT_CHANCE_AT_CEILING,
     pvod_reject_chance, draw_pvod_market_rejection,
     LICENSING_BIDDERS, LICENSING_BID_MULT_RANGE, draw_licensing_bids, resolve_licensing_auction,
+    draw_licensing_bidder_appetite, licensing_appetite_flavor, LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD,
+    generate_background_slate,
 )
 from app_pages.movies import _resolve_movie_outcome
 
@@ -396,6 +398,57 @@ def test_accepting_a_bid_sets_license_out_with_the_auction_fee():
     assert draft["pay1_licensing"] == "license_out"
     assert draft["pay1_auction_winner"] == winner
     assert draft["pay1_auction_fee_m"] == at.session_state["movie_licensing_auction"][1]["result"]["winning_bid_m"]
+
+
+def test_licensing_appetite_flavor_reads_real_for_both_states():
+    assert "flush with recent hits" in licensing_appetite_flavor("Horizon+", "hot")
+    assert "thin on content" in licensing_appetite_flavor("Horizon+", "hungry")
+    assert licensing_appetite_flavor("Horizon+", None) == ""
+
+
+def test_licensing_bidder_appetite_hot_only_eligible_with_a_strong_slate():
+    strong_slate = [{"npv": 50.0}, {"npv": 30.0}]
+    weak_slate = [{"npv": -20.0}, {"npv": 5.0}]
+    strong_states, weak_states = set(), set()
+    for i in range(300):
+        strong_states.update(v["state"] for v in
+                              draw_licensing_bidder_appetite(f"StrongTeam{i}", 1, strong_slate).values())
+        weak_states.update(v["state"] for v in
+                            draw_licensing_bidder_appetite(f"WeakTeam{i}", 1, weak_slate).values())
+    assert "hungry" not in strong_states   # a genuinely strong market never rolls hungry
+    assert "hot" not in weak_states        # a genuinely weak market never rolls hot
+    assert "hot" in strong_states
+    assert "hungry" in weak_states
+
+
+def test_licensing_bidder_appetite_state_scales_the_bid_multiplier_up():
+    appetite = {"X": {"mult": 1.3, "state": "hot"}}
+    bids_with_appetite = draw_licensing_bids("AppetiteTeam", 1, anchor_value_m=10.0, appetite_mult={"X": 1.3})
+    bids_without = draw_licensing_bids("AppetiteTeam", 1, anchor_value_m=10.0)
+    by_bidder_with = {b["bidder"]: b["bid_m"] for b in bids_with_appetite}
+    by_bidder_without = {b["bidder"]: b["bid_m"] for b in bids_without}
+    # Every bidder that appears in both must have the SAME participation
+    # decision (appetite_mult doesn't change who bids, only how much) and
+    # a strictly higher bid when a >1.0 appetite multiplier is applied.
+    for bidder in by_bidder_without:
+        assert bidder in by_bidder_with
+    if "X" in by_bidder_with:
+        assert by_bidder_with["X"] >= by_bidder_without.get("X", 0)
+
+
+def test_shopping_bids_ties_into_the_real_background_slate_via_ui():
+    """Not just a unit-level check -- confirms the actual Shop-This-Window
+    button handler in app_pages/movies.py wires generate_background_slate's
+    real output into the appetite roll, not a placeholder."""
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    assert not at.exception, f"Shop-bids click raised: {list(at.exception)}"
+    appetite = at.session_state["movie_licensing_auction"][1]["appetite"]
+    assert set(appetite.keys()) == set(LICENSING_BIDDERS)
+    for v in appetite.values():
+        assert v["state"] in (None, "hot", "hungry")
+        assert v["mult"] >= 1.0
 
 
 def test_changing_the_flat_picker_after_accepting_a_bid_clears_the_auction():

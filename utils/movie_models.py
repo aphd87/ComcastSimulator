@@ -856,6 +856,67 @@ def draw_licensing_bids(team_name: str, cycle: int, anchor_value_m: float,
     return bids
 
 
+# ── Game Theory: Rival Bidder Appetite ──────────────────────────────────────
+# 2026-08-18, per explicit user question ("is there game theory here, where
+# they may get other movies to license and do well?") and locked design
+# decision: "Both, randomized per platform" -- each cycle, each of
+# LICENSING_BIDDERS independently rolls "hot" (momentum -- ties into the
+# REAL generate_background_slate() data for this team+cycle: a strong
+# background slate this cycle means real hits are out there to chase) or
+# "hungry" (scarcity -- a weak/thin background slate means platforms are
+# scrambling for content) -- both pull a bid UP for a different in-fiction
+# reason, shown as real flavor text (see licensing_appetite_flavor).
+# Most rolls land at neutral (no premium) -- hot/hungry are each a real
+# but modest independent chance, not a certainty, same zero-effect-
+# baseline discipline as every other lever in this file. "Hot" can only
+# actually fire when the background slate's average NPV this cycle is
+# genuinely positive, and "hungry" only when it's genuinely weak -- a real
+# gate on the existing data, not just decorative text.
+LICENSING_APPETITE_HOT_CHANCE           = 0.20
+LICENSING_APPETITE_HUNGRY_CHANCE        = 0.20
+LICENSING_APPETITE_PREMIUM_RANGE        = (1.15, 1.45)
+LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD = 10.0   # $M avg background-slate NPV at/below which "hungry" can fire
+
+
+def draw_licensing_bidder_appetite(team_name: str, cycle: int, background_slate: list[dict]) -> dict:
+    """Per-bidder hot/hungry/neutral roll for this cycle's licensing
+    auction -- own independent seed (team+cycle hash offset), never
+    perturbs any other draw_* sequence. background_slate is this cycle's
+    REAL generate_background_slate() output (reused, not re-derived) --
+    its average NPV gates which states are even eligible to fire this
+    cycle (see the constants block above). Returns
+    {bidder: {"mult": float, "state": "hot"|"hungry"|None}}."""
+    avg_npv = (sum(m["npv"] for m in background_slate) / len(background_slate)) if background_slate else 0.0
+    hot_eligible = avg_npv > 0
+    hungry_eligible = avg_npv <= LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD
+    seed = (abs(hash(team_name)) + cycle * 8123 + 5501) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    lo, hi = LICENSING_APPETITE_PREMIUM_RANGE
+    out = {}
+    for bidder in LICENSING_BIDDERS:
+        roll = rng.random()
+        if roll < LICENSING_APPETITE_HOT_CHANCE and hot_eligible:
+            state = "hot"
+        elif roll < LICENSING_APPETITE_HOT_CHANCE + LICENSING_APPETITE_HUNGRY_CHANCE and hungry_eligible:
+            state = "hungry"
+        else:
+            state = None
+        mult = float(rng.uniform(lo, hi)) if state else 1.0
+        out[bidder] = {"mult": mult, "state": state}
+    return out
+
+
+def licensing_appetite_flavor(bidder: str, state: Optional[str]) -> str:
+    """Real, teachable in-fiction reason a bidder's offer came in higher
+    than the base spread -- both directions genuinely mean 'bidding
+    aggressively,' just for opposite real-world reasons."""
+    if state == "hot":
+        return f"{bidder} is flush with recent hits and bidding aggressively."
+    if state == "hungry":
+        return f"{bidder} is thin on content and bidding aggressively to catch up."
+    return ""
+
+
 def resolve_licensing_auction(rival_bids: list[dict]) -> dict:
     """The team is the SELLER here (licensing its own movie out), not a
     bidder competing against rivals the way Sports Rights' resolve_auction
