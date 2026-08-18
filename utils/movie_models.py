@@ -109,6 +109,42 @@ def draw_pvod_market_rejection(team_name: str, cycle: int, checkpoint_idx: int, 
     return bool(rng.random() < pvod_reject_chance(price_frac))
 
 
+# ── PVOD Cut-Response Buzz ───────────────────────────────────────────────────
+# 2026-08-18, per explicit user request: "if students cut price, it could be
+# that greater volume of people see it, more buzz, more potential for awards
+# OR sequel, maybe... this should be built in... of course randomized." A
+# real upside layered on TOP of the existing PVOD_CUT_RESPONSE_MULT haircut
+# -- own independent seed namespace (draw_pvod_cut_buzz), never perturbs
+# draw_pvod_market_rejection or any other draw_* sequence in this file.
+# Fires a real minority of the time (PVOD_CUT_BUZZ_CHANCE) -- most cuts are
+# just a cut, a true zero-effect outcome for the majority path, matching
+# this repo's convention that new randomness is a real chance, not a
+# guarantee stacked onto an already-chosen action. When it fires, a coin
+# flip decides which axis it feeds: a critical-reception bump (small,
+# additive, capped at 100 -- same mechanism as a Talent Partner's
+# critical_score_bonus) or a Sequel Potential spark (see app_pages/movies.py's
+# cut_buzz_sequel flag, OR'd into the existing NPV>0 gate on that column, not
+# replacing it). This is a genuine trade-off axis, not a pure consolation
+# prize: the student still eats the PVOD_CUT_RESPONSE_MULT haircut on this
+# cycle's own revenue either way -- buzz is a real, randomized chance at a
+# LATER payoff (awards rerelease bump, or a future sequel's opening bonus),
+# not a same-cycle refund.
+PVOD_CUT_BUZZ_CHANCE       = 0.35
+PVOD_CUT_BUZZ_AWARDS_BONUS = 4.0   # critical_score points, additive, capped at 100 same as talent bonus
+
+
+def draw_pvod_cut_buzz(team_name: str, cycle: int, checkpoint_idx: int) -> Optional[str]:
+    """Own independent seeded axis (own hash offset). Returns "awards",
+    "sequel", or None (no buzz -- the common case, ~65% of cuts).
+    checkpoint_idx keeps a second cut in the same cycle from drawing the
+    same outcome as the first."""
+    seed = (abs(hash(team_name)) + cycle * 30469 + checkpoint_idx * 2081 + 577) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() >= PVOD_CUT_BUZZ_CHANCE:
+        return None
+    return "awards" if rng.random() < 0.5 else "sequel"
+
+
 def pvod_price_band(multiplier: float, genre: str, concept_type: str = "New IP") -> tuple[float, float]:
     """Lower/upper PVOD price bounds a student can choose within, sized off
     how the movie's REAL (resolved) theatrical performance landed -- frac

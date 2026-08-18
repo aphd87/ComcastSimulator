@@ -27,7 +27,8 @@ from utils.movie_models import (
     RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, run_days_box_office_mult,
     PVOD_PRICE, pvod_price_band, PVOD_BAND_FLOOR_RANGE, PVOD_BAND_CEIL_RANGE,
     PVOD_MARKET_CHECK_MONTHS, PVOD_REJECT_CHANCE_AT_FLOOR, PVOD_REJECT_CHANCE_AT_CEILING,
-    pvod_reject_chance, draw_pvod_market_rejection,
+    pvod_reject_chance, draw_pvod_market_rejection, PVOD_CUT_RESPONSE_MULT,
+    draw_pvod_cut_buzz, PVOD_CUT_BUZZ_CHANCE, PVOD_CUT_BUZZ_AWARDS_BONUS,
     LICENSING_BIDDERS, LICENSING_BID_MULT_RANGE, draw_licensing_bids, resolve_licensing_auction,
     draw_licensing_bidder_appetite, licensing_appetite_flavor, LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD,
     generate_background_slate,
@@ -322,6 +323,123 @@ def test_cutting_at_a_rejection_lowers_the_price_toward_the_floor():
     assert cut_cp["price_after"] == pytest.approx(cut_price)
     assert cut_cp["price_after"] < cut_cp["price_before"]
     assert _simulate_button(at).disabled is False
+
+
+def test_holding_through_a_rejection_never_draws_buzz():
+    """Buzz is only ever rolled on a Cut response -- Hold is a pure
+    conversion-cost concession with no upside, per explicit user framing
+    ("if students cut price... more buzz... of course randomized")."""
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    pending_price = at.session_state["movie_pvod_pending_rejection"][1]["price_before"]
+    hold_btn = next(b for b in at.button if b.label == f"Hold at ${pending_price:.2f}")
+    hold_btn.click().run()
+    cps = at.session_state["movie_pvod_checkpoints"][1]
+    held_cp = next(cp for cp in cps if cp["rejected"])
+    assert held_cp["buzz"] is None
+
+
+def test_a_cut_does_not_spuriously_invalidate_the_checkpoint_sequence_on_rerun():
+    """Real bug caught and fixed 2026-08-18: the PVOD price slider used to
+    default from ss.movie_draft["pvod_chosen_price"] -- the SAME field the
+    Market Acceptance Checks block overwrites with the post-cut EFFECTIVE
+    price. That fed a cut's own price change back into the slider, which
+    then tripped the "did the student change their price?" invalidation
+    check on the very next render, silently wiping the just-resolved
+    checkpoint history (and the pvod_market_mult haircut) even though the
+    student never touched the slider. Fixed by giving the slider its own
+    stable pvod_selected_price field, independent of the checkpoint-driven
+    effective price. This test proves a checkpoint sequence survives an
+    additional rerun (clicking Simulate causes exactly this kind of extra
+    render) instead of silently resetting to a fresh single-entry list."""
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
+    cut_btn.click().run()
+    cps_before = at.session_state["movie_pvod_checkpoints"][1]
+    assert any(cp["rejected"] for cp in cps_before)
+    mult_before = at.session_state["movie_draft"]["pvod_market_mult"]
+    assert mult_before == pytest.approx(PVOD_CUT_RESPONSE_MULT)   # the real economic haircut is live
+
+    _simulate_button(at).click().run()   # an unrelated extra render/interaction
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    result = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    # The checkpoint sequence that was live when Simulate was clicked must be
+    # what actually got used -- not silently reset to a fresh, un-rejected one.
+    assert result["cut_buzz_awards"] == any(cp.get("buzz") == "awards" for cp in cps_before)
+    assert result["cut_buzz_sequel"] == any(cp.get("buzz") == "sequel" for cp in cps_before)
+
+
+# ── PVOD Cut-Response Buzz ──────────────────────────────────────────────────
+def test_draw_pvod_cut_buzz_fires_at_the_calibrated_rate_and_splits_evenly():
+    n = 3000
+    outcomes = [draw_pvod_cut_buzz(f"BuzzRateTeam{i}", 1, 0) for i in range(n)]
+    fire_rate = sum(1 for o in outcomes if o is not None) / n
+    assert fire_rate == pytest.approx(PVOD_CUT_BUZZ_CHANCE, abs=0.03)
+    awards_n = sum(1 for o in outcomes if o == "awards")
+    sequel_n = sum(1 for o in outcomes if o == "sequel")
+    assert awards_n + sequel_n == sum(1 for o in outcomes if o is not None)
+    assert abs(awards_n - sequel_n) / max(awards_n + sequel_n, 1) < 0.15   # roughly an even split
+
+
+def test_draw_pvod_cut_buzz_deterministic_and_checkpoint_independent():
+    a1 = draw_pvod_cut_buzz("Team", 1, 0)
+    a2 = draw_pvod_cut_buzz("Team", 1, 0)
+    assert a1 == a2
+    # Not asserting checkpoint 0 vs 1 differ (independent rolls, could
+    # coincidentally match) -- just that a distinct checkpoint_idx is
+    # accepted without error and stays deterministic on its own.
+    b1 = draw_pvod_cut_buzz("Team", 1, 1)
+    b2 = draw_pvod_cut_buzz("Team", 1, 1)
+    assert b1 == b2
+
+
+def test_cutting_with_no_buzz_leaves_critical_score_untouched():
+    """PVODRejectTeam4 is a verified deterministic no-buzz cut at this
+    project's default starting price."""
+    at = _movies_app("PVODRejectTeam4")
+    _mini_run_button(at).click().run()
+    resolved_cs = at.session_state["movie_theatrical_resolved"][1]["critical_score"]
+    cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
+    cut_btn.click().run()
+    assert all(cp.get("buzz") is None for cp in at.session_state["movie_pvod_checkpoints"][1])
+    _simulate_button(at).click().run()
+    result = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    assert result["critical_score"] == pytest.approx(resolved_cs)
+    assert result["cut_buzz_awards"] is False
+    assert result["cut_buzz_sequel"] is False
+
+
+def test_cutting_with_awards_buzz_bumps_critical_score_by_the_calibrated_bonus():
+    """AwardsBuzzHunt4 is a verified deterministic awards-buzz cut."""
+    at = _movies_app("AwardsBuzzHunt4")
+    _mini_run_button(at).click().run()
+    resolved_cs = at.session_state["movie_theatrical_resolved"][1]["critical_score"]
+    cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
+    cut_btn.click().run()
+    assert any(cp.get("buzz") == "awards" for cp in at.session_state["movie_pvod_checkpoints"][1])
+    _simulate_button(at).click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    result = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    assert result["critical_score"] == pytest.approx(min(100.0, resolved_cs + PVOD_CUT_BUZZ_AWARDS_BONUS))
+    assert result["cut_buzz_awards"] is True
+    assert result["cut_buzz_sequel"] is False
+
+
+def test_cutting_with_sequel_buzz_flags_the_outcome_without_touching_critical_score():
+    """BuzzHunt12 is a verified deterministic sequel-buzz cut."""
+    at = _movies_app("BuzzHunt12")
+    _mini_run_button(at).click().run()
+    resolved_cs = at.session_state["movie_theatrical_resolved"][1]["critical_score"]
+    cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
+    cut_btn.click().run()
+    assert any(cp.get("buzz") == "sequel" for cp in at.session_state["movie_pvod_checkpoints"][1])
+    _simulate_button(at).click().run()
+    assert not at.exception, f"Simulate click raised: {list(at.exception)}"
+    result = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    assert result["critical_score"] == pytest.approx(resolved_cs)   # sequel buzz never touches critical_score
+    assert result["cut_buzz_awards"] is False
+    assert result["cut_buzz_sequel"] is True
 
 
 # ── Licensing Marketplace — Competitive Bidding (Phase 5) ──────────────────

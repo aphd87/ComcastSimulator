@@ -28,6 +28,7 @@ from utils.movie_models import (
     run_days_box_office_mult, RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX,
     pvod_price_band, PVOD_MARKET_CHECK_MONTHS, PVOD_CUT_STEP_FRAC,
     PVOD_HOLD_THROUGH_REJECTION_MULT, PVOD_CUT_RESPONSE_MULT, draw_pvod_market_rejection,
+    draw_pvod_cut_buzz, PVOD_CUT_BUZZ_AWARDS_BONUS,
     LICENSING_BIDDERS, draw_licensing_bids, resolve_licensing_auction,
     draw_licensing_bidder_appetite, licensing_appetite_flavor,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
@@ -410,7 +411,8 @@ def _section_distribution_pipeline(ss):
         project = MovieProject(**entry["project_kwargs"])
         months_elapsed = (ss.movie_cycle - entry["cycle"]) * YEARS_PER_CYCLE * 12.0
         sequel_potential = (
-            "🎬 Yes" if (project.concept_type != "Sequel" and entry["npv"] > 0
+            "🎬 Yes" if (project.concept_type != "Sequel"
+                         and (entry["npv"] > 0 or entry.get("cut_buzz_sequel"))
                          and project.genre not in seen_genres_with_sequel)
             else "—"
         )
@@ -1693,9 +1695,21 @@ def _decisions(ss):
             st.caption("Run the Theatrical Simulation above to see your real PVOD price band, sized off "
                        "how this movie actually performed.")
             ss.movie_draft["pvod_chosen_price"] = None
+            ss.movie_draft["pvod_selected_price"] = None
         else:
             lo, hi = pvod_price_band(resolved_entry["multiplier"], genre, concept_type)
-            existing_price = ss.movie_draft.get("pvod_chosen_price")
+            # 2026-08-18, real bug fix: the slider MUST default from a price
+            # the student actually picked (pvod_selected_price), never from
+            # pvod_chosen_price -- that field also carries the Market
+            # Acceptance Checks' post-cut EFFECTIVE price (see below), and
+            # reading it back here created a circular loop where a cut's own
+            # price change fed back into the slider, which then fed the
+            # invalidation check below on the very next render, silently
+            # wiping the just-resolved checkpoint history (and its
+            # pvod_market_mult haircut) as if the student had manually
+            # changed their price. Caught by direct AppTest verification of
+            # the Cut -> Simulate flow, not just pytest-green.
+            existing_price = ss.movie_draft.get("pvod_selected_price")
             default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
                 else round((lo + hi) / 2, 2)
             pvod_price = st.slider(
@@ -1708,10 +1722,12 @@ def _decisions(ss):
                      "weigh in (see the periodic Market Acceptance checks below).",
             )
             ss.movie_draft["pvod_chosen_price"] = pvod_price
+            ss.movie_draft["pvod_selected_price"] = pvod_price
             st.caption(f"Band sized off your theatrical result: "
                        f"{'a strong opening supports pricing toward the top of the band' if hi - pvod_price < pvod_price - lo else 'a softer opening means pricing toward the top of the band is a real gamble'}.")
     else:
         ss.movie_draft["pvod_chosen_price"] = None
+        ss.movie_draft["pvod_selected_price"] = None
     ss.movie_draft["pvod_dynamic_pricing"] = False   # superseded by the banded price choice above
 
     # ── PVOD Market Acceptance Checks ────────────────────────────────────────
@@ -1755,7 +1771,7 @@ def _decisions(ss):
                     ss.movie_pvod_pending_rejection[ss.movie_cycle] = pending
                     break
                 cps.append({"month": next_month, "price_before": current_price, "rejected": False,
-                            "response": None, "price_after": current_price})
+                            "response": None, "price_after": current_price, "buzz": None})
                 ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
                 current_price = cps[-1]["price_after"]
 
@@ -1764,7 +1780,12 @@ def _decisions(ss):
                 st.caption(f"✅ Month {cp['month']:.0f}: market accepted your ${cp['price_before']:.2f} price.")
             else:
                 resp_txt = f"held at ${cp['price_after']:.2f}" if cp["response"] == "hold" else f"cut to ${cp['price_after']:.2f}"
-                st.caption(f"⚠ Month {cp['month']:.0f}: market rejected ${cp['price_before']:.2f} — you {resp_txt}.")
+                buzz_txt = ""
+                if cp.get("buzz") == "awards":
+                    buzz_txt = " — the wider audience sparked real buzz, a critical-reception boost."
+                elif cp.get("buzz") == "sequel":
+                    buzz_txt = " — the wider audience sparked real buzz, a Sequel Potential spark."
+                st.caption(f"⚠ Month {cp['month']:.0f}: market rejected ${cp['price_before']:.2f} — you {resp_txt}.{buzz_txt}")
 
         if pending is not None:
             st.warning(f"⚠ Month {pending['month']:.0f}: the market rejected your "
@@ -1775,14 +1796,20 @@ def _decisions(ss):
             with hcol1:
                 if st.button(f"Hold at ${pending['price_before']:.2f}", key=f"pvod_hold_{checkpoint_key}", use_container_width=True):
                     cps.append({"month": pending["month"], "price_before": pending["price_before"],
-                                "rejected": True, "response": "hold", "price_after": pending["price_before"]})
+                                "rejected": True, "response": "hold", "price_after": pending["price_before"],
+                                "buzz": None})
                     ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
                     ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
                     st.rerun()
             with hcol2:
                 if st.button(f"Cut to ${cut_price:.2f}", key=f"pvod_cut_{checkpoint_key}", use_container_width=True):
+                    # 2026-08-18, per explicit user request: a price cut carries a
+                    # real, randomized chance of buzz feeding awards momentum or
+                    # Sequel Potential -- see draw_pvod_cut_buzz's docstring.
+                    buzz = draw_pvod_cut_buzz(ss.team_name, ss.movie_cycle, len(cps))
                     cps.append({"month": pending["month"], "price_before": pending["price_before"],
-                                "rejected": True, "response": "cut", "price_after": cut_price})
+                                "rejected": True, "response": "cut", "price_after": cut_price,
+                                "buzz": buzz})
                     ss.movie_pvod_checkpoints[ss.movie_cycle] = cps
                     ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
                     st.rerun()
@@ -1836,6 +1863,16 @@ def _decisions(ss):
         # rejection, or never opened the PVOD section at all (day_and_date).
         pvod_mult = resolved["pvod_mult"] * ss.movie_draft.get("pvod_market_mult", 1.0)
 
+        # PVOD Cut-Response Buzz (2026-08-18): aggregate any buzz drawn when
+        # the student chose to cut price in response to a market rejection
+        # (see draw_pvod_cut_buzz). 1.0-no-op-equivalent (empty/None) for a
+        # student who never triggered a rejection or never cut.
+        this_cycle_checkpoints = ss.movie_pvod_checkpoints.get(ss.movie_cycle, [])
+        cut_buzz_awards_hits = sum(1 for cp in this_cycle_checkpoints if cp.get("buzz") == "awards")
+        cut_buzz_sequel = any(cp.get("buzz") == "sequel" for cp in this_cycle_checkpoints)
+        if cut_buzz_awards_hits:
+            critical_score = min(100.0, critical_score + PVOD_CUT_BUZZ_AWARDS_BONUS * cut_buzz_awards_hits)
+
         awards_eligible = project.genre in AWARDS_ELIGIBLE_GENRES
         waterfall = participation_waterfall(project, multiplier, critical_score,
                                              pvod_mult=pvod_mult, theme_park_mult=theme_park_mult,
@@ -1853,6 +1890,8 @@ def _decisions(ss):
             "ai_tooling_setback": ai_setback_reason,
             "ewom_piracy_swing": ewom_reason,
             "ewom_mult":         ewom_mult,
+            "cut_buzz_awards":   cut_buzz_awards_hits > 0,
+            "cut_buzz_sequel":   cut_buzz_sequel,
             "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
             "irr":              project.irr(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
             "total_revenue":    project.total_revenue(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),
@@ -1961,6 +2000,21 @@ def _results(ss):
           <div class="text-sm" style="color:{ewom_c};font-weight:600;">📱 eWOM &amp; Piracy</div>
           <div class="text-xs text-ink2 mt-1">{ewom_reason} — this moved PVOD and Peacock subscriber value
           together, independently of box office, reviews, and Ancillary Markets.</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── PVOD Cut-Response Buzz — a real upside from choosing to cut price ─────
+    if result.get("cut_buzz_awards") or result.get("cut_buzz_sequel"):
+        buzz_bits = []
+        if result.get("cut_buzz_awards"):
+            buzz_bits.append("a critical-reception boost")
+        if result.get("cut_buzz_sequel"):
+            buzz_bits.append("a Sequel Potential spark")
+        st.markdown(f"""
+        <div class="rounded-lg p-4 mb-3" style="background:rgba(102,187,106,.08);border:1px solid rgba(102,187,106,.3);">
+          <div class="text-sm" style="color:{SUCCESS};font-weight:600;">📣 Price-Cut Buzz</div>
+          <div class="text-xs text-ink2 mt-1">Cutting your PVOD price reached a wider audience — the
+          real, randomized payoff landed: {' and '.join(buzz_bits)}.</div>
         </div>
         """, unsafe_allow_html=True)
 
