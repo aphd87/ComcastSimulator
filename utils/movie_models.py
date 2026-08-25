@@ -623,7 +623,7 @@ STUDIO_PARTNERS = {
 # continuity, not a mechanical link between the two entity types.
 TALENT_PARTNERS = {
     "vance": {
-        "name": "Jordan Vance", "gender": "actor", "age": 41,
+        "name": "Jordan Vance", "gender": "actor", "age": 41, "ethnicity": "White",
         "specialty": "Action/Tentpole", "best_genres": ["Action/Tentpole", "Sci-Fi/Fantasy"],
         "origin_medium": "Film",
         "bio": "A two-decade theatrical-franchise lead with three $500M+ openings on his résumé — "
@@ -633,7 +633,7 @@ TALENT_PARTNERS = {
         "hold_cost_m": 4.0, "multi_picture_cost_m": 16.0, "star_power_bonus": 15,
     },
     "okonkwo": {
-        "name": "Adaeze Okonkwo", "gender": "actress", "age": 52,
+        "name": "Adaeze Okonkwo", "gender": "actress", "age": 52, "ethnicity": "Black",
         "specialty": "Awards/Prestige", "best_genres": ["Awards/Prestige", "Drama"],
         "origin_medium": "Television",
         "bio": "Built her name on a decade of acclaimed prestige-TV lead roles before crossing "
@@ -644,7 +644,7 @@ TALENT_PARTNERS = {
         "hold_cost_m": 3.0, "multi_picture_cost_m": 12.0, "critical_score_bonus": 8.0,
     },
     "marsh": {
-        "name": "Casey Marsh", "gender": "actor", "age": 29,
+        "name": "Casey Marsh", "gender": "actor", "age": 29, "ethnicity": "White",
         "specialty": "Animated", "best_genres": ["Animated", "Comedy"],
         "origin_medium": "Video Games",
         "bio": "Broke out as the motion-capture lead and voice of a hit video-game franchise before "
@@ -654,7 +654,7 @@ TALENT_PARTNERS = {
         "hold_cost_m": 2.5, "multi_picture_cost_m": 10.0, "star_power_bonus": 10,
     },
     "kade": {
-        "name": "Reyna Kade", "gender": "actress", "age": 26,
+        "name": "Reyna Kade", "gender": "actress", "age": 26, "ethnicity": "Latina",
         "specialty": "Horror", "best_genres": ["Horror", "Comedy"],
         "origin_medium": "Social Media",
         "bio": "A social-first creator with a massive, highly engaged following — cheap, with huge "
@@ -662,6 +662,50 @@ TALENT_PARTNERS = {
                "following is a bet on staying relevant, not a guarantee.",
         "lifetime_box_office_m": 45.0, "social_followers_m": 38.0,
         "hold_cost_m": 2.0, "multi_picture_cost_m": 8.0, "star_power_bonus": 8,
+    },
+    # Four more added 2026-08-24 (per user request: roster was too thin at
+    # 4, and had no ethnicity field) -- fills the remaining genre-lead gaps
+    # (standalone Sci-Fi/Fantasy, Comedy, and Drama leads) and adds two more
+    # origin_medium values (Theater, Music) alongside the original four.
+    "delgado": {
+        "name": "Camila Delgado", "gender": "actress", "age": 34, "ethnicity": "Latina",
+        "specialty": "Sci-Fi/Fantasy", "best_genres": ["Sci-Fi/Fantasy", "Action/Tentpole"],
+        "origin_medium": "Streaming Originals",
+        "bio": "Made her name leading a streaming-native genre franchise to three straight renewals — "
+               "a built-in fanbase that shows up day one, but she's never opened a film theatrically, "
+               "so the crossover is unproven.",
+        "lifetime_box_office_m": 85.0, "social_followers_m": 15.0,
+        "hold_cost_m": 2.5, "multi_picture_cost_m": 10.0, "star_power_bonus": 9,
+    },
+    "osei": {
+        "name": "Kwame Osei", "gender": "actor", "age": 37, "ethnicity": "Black",
+        "specialty": "Comedy", "best_genres": ["Comedy", "Drama"],
+        "origin_medium": "Theater",
+        "bio": "A stage-trained comedic and dramatic actor with real range and critical respect, but "
+               "a mainstream box-office footprint well short of his reviews — the bet is that comedy "
+               "chops finally translate to a wide theatrical audience.",
+        "lifetime_box_office_m": 220.0, "social_followers_m": 4.0,
+        "hold_cost_m": 2.5, "multi_picture_cost_m": 10.0, "critical_score_bonus": 6.0,
+    },
+    "nakamura": {
+        "name": "Aiko Nakamura", "gender": "actress", "age": 45, "ethnicity": "East Asian",
+        "specialty": "Drama", "best_genres": ["Drama", "Awards/Prestige"],
+        "origin_medium": "Film",
+        "bio": "An international arthouse lead who crossed over to English-language prestige drama — "
+               "real awards-season credibility and critical pull, but modest U.S. box office outside "
+               "of that window.",
+        "lifetime_box_office_m": 180.0, "social_followers_m": 3.2,
+        "hold_cost_m": 3.0, "multi_picture_cost_m": 12.0, "critical_score_bonus": 9.0,
+    },
+    "haddad": {
+        "name": "Samir Haddad", "gender": "actor", "age": 33, "ethnicity": "Middle Eastern",
+        "specialty": "Action/Tentpole", "best_genres": ["Action/Tentpole", "Horror"],
+        "origin_medium": "Music",
+        "bio": "A chart-topping musician turned action lead, with a massive built-in global following "
+               "and strong international box office pull — still unproven carrying a film as its sole "
+               "dramatic lead.",
+        "lifetime_box_office_m": 310.0, "social_followers_m": 42.0,
+        "hold_cost_m": 3.0, "multi_picture_cost_m": 12.0, "star_power_bonus": 11,
     },
 }
 

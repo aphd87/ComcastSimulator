@@ -52,10 +52,21 @@ class TestFreeNavigation:
     """FREE_NAVIGATION (2026-08-07): an instructor secret that lets a team
     open Bravo/Peacock without having earned it via the normal
     pass-or-retry gate — see DESIGN_NOTES.md's "Homework/in-class split"
-    entry. Defaults off; these tests toggle it via monkeypatch the same
-    way isolated_leaderboard toggles LEADERBOARD_FILE above."""
+    entry. Default flipped to on 2026-08-24 (per explicit product decision:
+    this tool is instructor-directed, so the sequential gate mostly just
+    added friction) — these tests toggle it via monkeypatch the same way
+    isolated_leaderboard toggles LEADERBOARD_FILE above, to cover both the
+    new default and the opt-back-in-to-gating path."""
 
-    def test_bravo_locked_by_default_with_no_oxygen_attempts(self):
+    def test_bravo_unlocked_by_default_with_no_oxygen_attempts(self):
+        status = gs.get_team_network_status("Team Alpha", "Kellogg", "Sec A")
+        assert status["bravo"]["locked"] is False
+        assert status["peacock"]["locked"] is False
+
+    def test_bravo_locked_when_free_navigation_explicitly_disabled(self, monkeypatch):
+        # An instructor who wants the old sequential-gating behavior back
+        # can still opt into it per deployment (FREE_NAVIGATION = false).
+        monkeypatch.setattr(gs, "FREE_NAVIGATION", False)
         status = gs.get_team_network_status("Team Alpha", "Kellogg", "Sec A")
         assert status["bravo"]["locked"] is True
 

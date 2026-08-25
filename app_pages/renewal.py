@@ -10,10 +10,10 @@ from utils.models import (
     distribution_revenue, renewal_decision, CONTENT_COST_ESC,
     performance_linked_growth, genre_demo,
     PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
-    slot_rating_multiplier,
+    slot_rating_multiplier, MONTHS,
 )
 from utils.game_state import NETWORK_INFO
-from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, queue_supplement, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 
 def render():
@@ -27,6 +27,18 @@ def render():
         shows += ss.bravo_shows
     if net == "peacock":
         shows += ss.get("peacock_shows", [])
+    # Filter out already-cancelled shows right at the source (2026-08-24 fix,
+    # found in a QA pass) -- this page previously built its whole working set
+    # (the per-show decision cards, the IP-Value-vs-OCF scatter, the Full
+    # Renewal Analysis Table, and the Primetime Scheduling dropdown) from the
+    # UNFILTERED roster, so a show cancelled in an earlier year kept showing
+    # a full interactive Renew/Cancel card and a scatter point every
+    # year for the rest of the level -- indistinguishable from a live show.
+    # app_pages/simulation.py's Financing section already filters correctly
+    # (see its own "already cancelled" list); this brings Renewal in line.
+    # Since the roster is deliberately cumulative across networks, this was
+    # worst by Peacock (up to ~50 shows/year, many long dead).
+    shows = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
 
     next_year   = year + 1
     threshold   = NETWORK_INFO[net]["pass_threshold"]
@@ -68,42 +80,46 @@ def render():
     # so decay was fully invisible to students. Surfacing it here, grouped by
     # genre, answers "how visible should decay curves be?" from Zach
     # Schlessel's feedback (DESIGN_NOTES.md) without changing the formula.
-    st.markdown('<div class="section-title">Genre Decay Curves — Rating Trajectory</div>',
-                unsafe_allow_html=True)
-    st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
-        'Every show\'s rating drifts year over year based on its IP score — high-IP genres '
-        'compound upward (franchise value), low-IP genres decay. This is the same math behind '
-        'the "Proj Rating" column below, plotted forward so the trend is visible before you decide.</div>',
-        unsafe_allow_html=True)
-
+    # Explanatory, not a decision input — deferred (2026-08-25) to the single
+    # consolidated "Supplementary Insights" expander in simulation.py instead
+    # of rendering inline, so it doesn't add another full chart to the main
+    # decision scroll. See utils/charts.py::queue_supplement.
     active_for_decay = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
     if active_for_decay:
-        genre_groups = {}
-        for s in active_for_decay:
-            genre_groups.setdefault(s.genre, []).append(s)
+        def _render_genre_decay(active_for_decay=active_for_decay, year=year):
+            st.markdown(
+                '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+                'Every show\'s rating drifts year over year based on its IP score — high-IP genres '
+                'compound upward (franchise value), low-IP genres decay. This is the same math behind '
+                'the "Proj Rating" column in the Renewal table, plotted forward so the trend is visible.</div>',
+                unsafe_allow_html=True)
+            genre_groups = {}
+            for s in active_for_decay:
+                genre_groups.setdefault(s.genre, []).append(s)
 
-        horizon = list(range(year, year + 6))
-        fig_decay = go.Figure()
-        palette = [ACCENT, ACCENT2, SUCCESS, WARN, DANGER, "#f2c200", "#8e44ad", "#1a6bb5"]
-        for i, (genre, gshows) in enumerate(sorted(genre_groups.items())):
-            avg_rating   = sum(s.rating for s in gshows) / len(gshows)
-            avg_ip       = sum(s.ip_score for s in gshows) / len(gshows)
-            maturation   = 1 + (avg_ip / 100) * 0.06 - 0.02
-            trajectory   = [avg_rating * (maturation ** (y - year)) for y in horizon]
-            fig_decay.add_trace(go.Scatter(
-                x=horizon, y=[round(v, 2) for v in trajectory],
-                name=f"{genre} (avg IP {avg_ip:.0f})",
-                mode="lines+markers",
-                line=dict(color=palette[i % len(palette)], width=2),
-                marker=dict(size=6),
-            ))
-        fig_decay.add_vline(x=year, line_dash="dot", line_color=TEXT2, opacity=0.4,
-                            annotation_text="You are here", annotation_font_color=TEXT2)
-        fig_decay.update_layout(**base_layout("Projected Rating by Genre — 6-Year Trajectory", height=280))
-        fig_decay.update_xaxes(title_text="Year", dtick=1)
-        st.plotly_chart(fig_decay, use_container_width=True, config={"displayModeBar": False})
-        st.caption("Maturation = 1 + (avg IP score / 100) × 0.06 − 0.02 per year — genres above ~33 avg IP grow, below decay. Same formula as Show.projected_rating().")
+            horizon = list(range(year, year + 6))
+            fig_decay = go.Figure()
+            palette = [ACCENT, ACCENT2, SUCCESS, WARN, DANGER, "#f2c200", "#8e44ad", "#1a6bb5"]
+            for i, (genre, gshows) in enumerate(sorted(genre_groups.items())):
+                avg_rating   = sum(s.rating for s in gshows) / len(gshows)
+                avg_ip       = sum(s.ip_score for s in gshows) / len(gshows)
+                maturation   = 1 + (avg_ip / 100) * 0.06 - 0.02
+                trajectory   = [avg_rating * (maturation ** (y - year)) for y in horizon]
+                fig_decay.add_trace(go.Scatter(
+                    x=horizon, y=[round(v, 2) for v in trajectory],
+                    name=f"{genre} (avg IP {avg_ip:.0f})",
+                    mode="lines+markers",
+                    line=dict(color=palette[i % len(palette)], width=2),
+                    marker=dict(size=6),
+                ))
+            fig_decay.add_vline(x=year, line_dash="dot", line_color=TEXT2, opacity=0.4,
+                                annotation_text="You are here", annotation_font_color=TEXT2)
+            fig_decay.update_layout(**base_layout("Projected Rating by Genre — 6-Year Trajectory", height=280))
+            fig_decay.update_xaxes(title_text="Year", dtick=1)
+            st.plotly_chart(fig_decay, use_container_width=True, config={"displayModeBar": False})
+            st.caption("Maturation = 1 + (avg IP score / 100) × 0.06 − 0.02 per year — genres above ~33 avg IP grow, below decay. Same formula as Show.projected_rating().")
+
+        queue_supplement("Genre Decay Curves — Rating Trajectory", _render_genre_decay)
 
     st.divider()
 
@@ -221,7 +237,7 @@ def render():
     # ── IP Value vs. OCF Scatter ──────────────────────────────────────────────
     # Moved up (2026-08-03, per user request) to sit right before the Renewal
     # Decision Matrix — a franchise-value read on the whole slate before
-    # making individual Renew/Watch/Cancel calls is meant to inform those
+    # making individual Renew/Cancel calls is meant to inform those
     # calls, not just recap them afterward.
     st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
     st.markdown('<span style="font-size:14px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
@@ -236,7 +252,15 @@ def render():
         "Genre": r["Genre"],
     } for r in rows])
 
-    dec_colors = {"Renew": SUCCESS, "Watch": WARN, "Cancel": DANGER}
+    # Dropdown to spotlight one show's point on the scatter (2026-08-24, per
+    # user request) -- purely a visual highlight layered on top, hover still
+    # works normally on every point including the highlighted one.
+    highlight_show = st.selectbox(
+        "Highlight a show on the chart", ["— none —"] + scatter_data["Show"].tolist(),
+        key="ip_ocf_highlight_show",
+    )
+
+    dec_colors = {"Renew": SUCCESS, "Cancel": DANGER}
     fig_ip = px.scatter(scatter_data, x="IP Score", y="Projected OCF",
                          size="Cost $M", color="Decision", hover_name="Show",
                          color_discrete_map=dec_colors, size_max=28)
@@ -245,6 +269,19 @@ def render():
                      annotation_text="IP threshold", annotation_font_color=TEXT2)
     fig_ip.update_layout(**base_layout("IP Score vs. Projected OCF — Bubble = Cost", height=360))
     fig_ip.update_traces(marker=dict(line=dict(width=1, color="#12141a")))
+
+    if highlight_show != "— none —":
+        hl = scatter_data.loc[scatter_data["Show"] == highlight_show].iloc[0]
+        fig_ip.add_trace(go.Scatter(
+            x=[hl["IP Score"]], y=[hl["Projected OCF"]],
+            mode="markers+text",
+            marker=dict(size=max(hl["Cost $M"], 10) * 1.6, symbol="circle-open",
+                        line=dict(width=3, color=ACCENT)),
+            text=[hl["Show"]], textposition="top center",
+            textfont=dict(color=ACCENT, size=13),
+            hoverinfo="skip", showlegend=False,
+        ))
+
     st.plotly_chart(fig_ip, use_container_width=True, config={"displayModeBar":False})
 
     st.divider()
@@ -255,7 +292,7 @@ def render():
     # ── Show slate — click-to-decide cards ────────────────────────────────────
     # Replaces the old column-of-selectboxes table (2026-07-24, per user
     # feedback: "click each show, make a decision, see a schedule populate").
-    # Each card carries its Renew/Watch/Cancel decision (same
+    # Each card carries its Renew/Cancel decision (same
     # ss.renewal_decisions mechanism as before) plus a premiere-month
     # control that writes directly to the Show object's air_month — these
     # are the same objects living in ss.oxygen_shows/etc., so the change
@@ -264,8 +301,12 @@ def render():
     st.markdown('<div class="section-title">Your Slate — Decide & Schedule Each Show</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
-        'For each show: Renew, Watch, or Cancel, and confirm which month it premieres. '
-        'The schedule below updates live as you set premiere months.</div>',
+        'For each show: Renew or Cancel, and confirm which month it premieres. '
+        'The schedule below updates live as you set premiere months. '
+        '<b style="color:#e8eaf0;">IP Score</b> (0-100, shown in the chart above and the table below) is a '
+        'fixed franchise-strength rating set per show — how much spinoff/brand value it carries, independent '
+        'of its current rating or cost. A higher score also means the show ages a little better year to year. '
+        'It\'s the tiebreaker for a show that\'s losing money but still worth keeping for franchise value.</div>',
         unsafe_allow_html=True)
 
     show_by_id = {s.id: s for s in shows}
@@ -300,56 +341,143 @@ def render():
                     </div>
                     """, unsafe_allow_html=True)
 
+                    # Collapsed from Renew/Watch/Cancel to Renew/Cancel
+                    # (2026-08-25, per user request) -- "Watch" was always
+                    # mechanically identical to Renew (see utils/models.py::
+                    # renewal_decision's docstring); a legacy "Watch" value
+                    # already stored in session state (an older save) still
+                    # falls back to "Renew" here rather than erroring.
                     current = ss.renewal_decisions.get(r["_id"], "Renew")
+                    if current == "Watch":
+                        current = "Renew"
                     choice = st.selectbox(
-                        "Your decision", ["Renew", "Watch", "Cancel"],
-                        index=["Renew", "Watch", "Cancel"].index(current),
+                        "Your decision", ["Renew", "Cancel"],
+                        index=["Renew", "Cancel"].index(current),
                         key=f"ren_{r['_id']}",
-                        help="Renew: keep it for next year at the escalated cost. Watch: keep it "
-                             "for now, flagged for a closer look. Cancel: drop it (a 25% sunk-cost "
-                             "penalty applies if you cancel a show mid-production).",
+                        help="Renew: keep it for next year at the escalated cost. Cancel: drop it "
+                             "(a 25% sunk-cost penalty applies if you cancel a show mid-production).",
                     )
                     ss.renewal_decisions[r["_id"]] = choice
 
                     if choice != "Cancel":
-                        new_month = st.number_input(
-                            "Premiere month (1-12)", 1, 12, value=s.air_month,
+                        new_month_label = st.select_slider(
+                            "Premiere month", options=[f"{i} · {MONTHS[i-1]}" for i in range(1, 13)],
+                            value=f"{s.air_month} · {MONTHS[s.air_month-1]}",
                             key=f"premiere_{r['_id']}",
                             help="Which calendar month this show premieres — affects the amortization "
                                  "cash trough (see Scheduling): a late-month premiere means a full "
                                  "month's cost with only a few days of revenue.",
                         )
+                        new_month = int(new_month_label.split(" · ")[0])
                         if new_month != s.air_month:
                             s.air_month = new_month
+
+    # ── Live mini-schedule ────────────────────────────────────────────────────
+    # Moved here (2026-08-24, per user request) to sit right after the
+    # per-show Renewal cards and before Budget Impact -- the premiere-month
+    # calendar mirrors decisions the student just made above, so it reads
+    # naturally right after them rather than after the (unrelated) primetime
+    # day/hour grid further down.
+    # Read-only mirror of decisions already made above, not its own decision
+    # — deferred (2026-08-25) to the consolidated "Supplementary Insights"
+    # expander in simulation.py. `active_this_year` itself stays computed
+    # inline (not deferred) since the real "New this year" debut-month
+    # picker right below still needs it.
+    active_this_year = [show_by_id[r["_id"]] for r in rows
+                         if ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
+
+    def _render_premiere_calendar(active_this_year=active_this_year):
+        st.markdown(
+            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+            '📋 <b>Read-only preview, not its own decision:</b> this calendar just mirrors the premiere '
+            'months you\'ve already set above (in each show\'s Renewal card, or in "New this year" below '
+            'the calendar in the main Renewal flow) — it doesn\'t take any input of its own. '
+            'premiere month does NOT change this year\'s annual OCF or score — only the primetime day/hour '
+            'grid does that. What premiere month DOES change is the monthly cash-flow shape shown '
+            'on the Scheduling tab: a late-month premiere means a full month\'s cost with only a few days of '
+            'revenue, a real cash-trough risk even though the annual total is unaffected. This view exists so '
+            'you can spot months stacked with several premieres before you Simulate.</div>',
+            unsafe_allow_html=True)
+        month_map = {m: [] for m in range(1, 13)}
+        for s in active_this_year:
+            month_map[s.air_month].append(s.name)
+
+        sched_cols = st.columns(12)
+        for i, col in enumerate(sched_cols):
+            m = i + 1
+            names = month_map[m]
+            count = len(names)
+            bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
+            title_attr = ", ".join(names) if names else "No premieres"
+            col.markdown(f"""
+            <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
+                 padding:6px 2px;text-align:center;min-height:56px;">
+              <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
+              <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.caption("Number = shows premiering that month. Hover a column for names.")
+
+    queue_supplement("This Year's Schedule — Premiere Calendar", _render_premiere_calendar)
+
+    # New-this-year shows (greenlit this year, see app_pages/greenlight.py)
+    # get their own debut-month picker right here — they're easy to miss in
+    # the Renewal card grid above since that grid is dominated by returning
+    # shows, and their debut timing matters the same way a renewal's premiere
+    # month does (see the amortization cash-trough note in Scheduling).
+    debuting = [s for s in active_this_year if s.id in ss.get("greenlit_ids_this_year", set())]
+    if debuting:
+        st.markdown(
+            '<div style="font-size:14px;color:#e8c547;margin-top:12px;margin-bottom:6px;">'
+            '🆕 New this year — set each show\'s debut month</div>',
+            unsafe_allow_html=True)
+        nc = 4
+        chunks = [debuting[i:i+nc] for i in range(0, len(debuting), nc)]
+        for chunk in chunks:
+            cols = st.columns(nc)
+            for col, s in zip(cols, chunk):
+                with col:
+                    new_month_label = st.select_slider(
+                        f"{s.name[:20]} debut month", options=[f"{i} · {MONTHS[i-1]}" for i in range(1, 13)],
+                        value=f"{s.air_month} · {MONTHS[s.air_month-1]}",
+                        key=f"debut_month_{s.id}",
+                        help="Which calendar month this new show premieres.",
+                    )
+                    new_month = int(new_month_label.split(" · ")[0])
+                    if new_month != s.air_month:
+                        s.air_month = new_month
 
     # ── Budget Impact ─────────────────────────────────────────────────────────
     st.divider()
     st.markdown('<div class="section-title">Budget Impact of Your Decisions</div>', unsafe_allow_html=True)
 
-    renewed_shows  = [r for r in rows if ss.renewal_decisions.get(r["_id"],"Renew") == "Renew"]
+    # "Watch" removed as a decision option (2026-08-25) -- it was always
+    # mechanically identical to Renew, so a dedicated Shows-on-Watch metric
+    # and waterfall bar would only ever read zero going forward. Renew/
+    # Cancel are the only two decisions now (a legacy "Watch" value from an
+    # older save still counts as Renew here, same fallback as the selectbox
+    # above).
+    renewed_shows  = [r for r in rows if ss.renewal_decisions.get(r["_id"],"Renew") != "Cancel"]
     cancelled      = [r for r in rows if ss.renewal_decisions.get(r["_id"],"Renew") == "Cancel"]
-    watch_shows    = [r for r in rows if ss.renewal_decisions.get(r["_id"],"Renew") == "Watch"]
 
     renewed_cost  = sum(r["Renew Cost"] for r in renewed_shows)
     freed_budget  = sum(r["Renew Cost"] for r in cancelled)
-    watch_cost    = sum(r["Renew Cost"] for r in watch_shows)
-    new_show_cap  = budget_next_lo - renewed_cost - watch_cost - mkt
+    new_show_cap  = budget_next_lo - renewed_cost - mkt
     dev_shows_est = max(0, int(new_show_cap / 8))
 
-    c1,c2,c3,c4 = st.columns(4)
+    c1,c2,c3 = st.columns(3)
     c1.metric("Shows Renewed",    str(len(renewed_shows)), f"${renewed_cost:.1f}M cost")
     c2.metric("Shows Cancelled",  str(len(cancelled)),     f"${freed_budget:.1f}M freed")
-    c3.metric("Shows on Watch",   str(len(watch_shows)),   f"${watch_cost:.1f}M at risk")
-    c4.metric("New Show Capacity",f"~{dev_shows_est} shows", f"${new_show_cap:.1f}M available (worst-case budget)")
+    c3.metric("New Show Capacity",f"~{dev_shows_est} shows", f"${new_show_cap:.1f}M available (worst-case budget)")
 
     # Budget waterfall
-    wf_labels = ["Y{} Budget (worst-case)".format(next_year), "Renewed Shows", "Watch Shows",
+    wf_labels = ["Y{} Budget (worst-case)".format(next_year), "Renewed Shows",
                  "Marketing", "Available for Growth"]
-    wf_values = [budget_next_lo, -renewed_cost, -watch_cost, -mkt, new_show_cap]
+    wf_values = [budget_next_lo, -renewed_cost, -mkt, new_show_cap]
 
     fig_wf = go.Figure(go.Waterfall(
         x=wf_labels, y=[round(v,1) for v in wf_values],
-        measure=["absolute","relative","relative","relative","total"],
+        measure=["absolute","relative","relative","total"],
         connector=dict(line=dict(color="#252836")),
         increasing=dict(marker_color=SUCCESS),
         decreasing=dict(marker_color=DANGER),
@@ -372,8 +500,7 @@ def render():
     display_df["Decision"] = display_df["_id"].apply(lambda i: ss.renewal_decisions.get(i,"Renew")) if "_id" in display_df else display_df["Decision"]
 
     def style_dec(val):
-        if val=="Renew":  return "color:#81c784;font-weight:600;"
-        if val=="Watch":  return "color:#ffb74d;font-weight:600;"
+        if val in ("Renew", "Watch"):  return "color:#81c784;font-weight:600;"
         return "color:#ef9a9a;font-weight:600;"
 
     def style_ocf(val):
@@ -514,70 +641,3 @@ def render():
         names = ", ".join(sorted({lbl.rsplit(" (#", 1)[0] for lbl in double_booked}))
         st.warning(f"⚠️ {names} assigned to more than one slot — only the last slot placed "
                    f"for each show actually counts toward its rating.")
-
-    # ── Live mini-schedule ────────────────────────────────────────────────────
-    # Moved here (2026-08-03, per user request) to sit right after Primetime
-    # Scheduling now that both live in Renewal — the premiere-month calendar
-    # and the day/hour grid are the two real scheduling decisions, so they
-    # read naturally back to back.
-    st.divider()
-    st.markdown('<div class="section-title">This Year\'s Schedule — Premiere Calendar</div>',
-                unsafe_allow_html=True)
-    st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        '📋 <b>Read-only preview, not its own decision:</b> this calendar just mirrors the premiere '
-        'months you\'ve already set above (in each show\'s Renewal card, or in "New this year" below) — '
-        'it doesn\'t take any input of its own. What actually changes the math is the premiere month '
-        'on each show and the primetime day/hour grid above; this view exists so you can '
-        'spot months stacked with several premieres before you Simulate, since piled-up amortization '
-        'bills are exactly the cash-trough problem covered on the Scheduling tab — spread premieres '
-        'out if your cash cows can\'t cover the gap.</div>',
-        unsafe_allow_html=True)
-
-    month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    active_this_year = [show_by_id[r["_id"]] for r in rows
-                         if ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
-    month_map = {m: [] for m in range(1, 13)}
-    for s in active_this_year:
-        month_map[s.air_month].append(s.name)
-
-    sched_cols = st.columns(12)
-    for i, col in enumerate(sched_cols):
-        m = i + 1
-        names = month_map[m]
-        count = len(names)
-        bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
-        title_attr = ", ".join(names) if names else "No premieres"
-        col.markdown(f"""
-        <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
-             padding:6px 2px;text-align:center;min-height:56px;">
-          <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{month_names[i]}</div>
-          <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.caption("Number = shows premiering that month. Hover a column for names.")
-
-    # New-this-year shows (greenlit this year, see app_pages/greenlight.py)
-    # get their own debut-month picker right here — they're easy to miss in
-    # the Renewal card grid above since that grid is dominated by returning
-    # shows, and their debut timing matters the same way a renewal's premiere
-    # month does (see the amortization cash-trough note in Scheduling).
-    debuting = [s for s in active_this_year if s.id in ss.get("greenlit_ids_this_year", set())]
-    if debuting:
-        st.markdown(
-            '<div style="font-size:14px;color:#e8c547;margin-top:12px;margin-bottom:6px;">'
-            '🆕 New this year — set each show\'s debut month</div>',
-            unsafe_allow_html=True)
-        nc = 4
-        chunks = [debuting[i:i+nc] for i in range(0, len(debuting), nc)]
-        for chunk in chunks:
-            cols = st.columns(nc)
-            for col, s in zip(cols, chunk):
-                with col:
-                    new_month = st.number_input(
-                        f"{s.name[:20]} debut month", 1, 12, value=s.air_month,
-                        key=f"debut_month_{s.id}",
-                        help="Which calendar month this new show premieres.",
-                    )
-                    if new_month != s.air_month:
-                        s.air_month = new_month

@@ -11,6 +11,7 @@ from utils.models import (
     portfolio_ad_rev, portfolio_cost, MONTHS,
     REV_PER_RATING_POINT, SUB_RATE_PER_MONTH
 )
+from utils.sports_models import held_this_year, sports_year_pnl
 from utils.charts import (
     base_layout, bar_chart, line_chart, donut_chart,
     SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, BORDER
@@ -28,15 +29,50 @@ def render():
         shows += ss.bravo_shows
     if net == "peacock":
         shows += ss.get("peacock_shows", [])
+    # Filter out already-cancelled shows (2026-08-24 fix, same QA-pass
+    # finding as app_pages/renewal.py) -- portfolio_cost/portfolio_ad_rev
+    # don't filter internally, so the not-yet-simulated preview branch below
+    # was overstating both cost and ad revenue by including dead shows.
+    shows = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
 
-    ad_rev   = portfolio_ad_rev(shows, year, mkt)
-    dist_rev = distribution_revenue(year)
-    total_rev= ad_rev + dist_rev
-    cost     = portfolio_cost(shows, year)
-    ga       = total_rev * 0.06
-    ebitda   = total_rev - cost - mkt - ga
-    net_ocf  = ebitda
-    margin   = (net_ocf / total_rev * 100) if total_rev else 0
+    # Prefer the real, already-simulated result for this year when one
+    # exists (2026-08-24 fix) -- this page previously always recomputed its
+    # own no-variance preview even for a year that had already been
+    # simulated, which could show different numbers here than the Results
+    # tab showed for that exact same year (base rating vs. the real seeded
+    # variance actually applied). yearly_log entries are the real thing --
+    # same dict shape app_pages/simulation.py::_compute_year returns.
+    played = next((r for r in ss.get("yearly_log", []) if r["year"] == year), None)
+    if played:
+        ad_rev    = played["ad_rev"]
+        dist_rev  = played["dist_rev"]
+        total_rev = played["revenue"]
+        cost      = played["cost"]
+        ga        = played["ga"]
+        net_ocf   = played["ocf"]
+        margin    = played["margin"]
+    else:
+        ad_rev   = portfolio_ad_rev(shows, year, mkt)
+        dist_rev = distribution_revenue(year)
+        # Peacock sports rights (2026-08-24 fix): this page was omitting
+        # them entirely, unlike the real _compute_year/_preview_pnl, which
+        # fold sports revenue/cost straight into total_rev/cost -- for a
+        # Peacock team holding a contract, this page understated cost and
+        # overstated OCF relative to what Simulate actually produces.
+        sports_rev_m, sports_cost_m = 0.0, 0.0
+        if net == "peacock":
+            held = held_this_year(ss.get("sports_contracts", []), year)
+            if held:
+                peacock_shows = [s for s in shows if s.network == "Peacock"]
+                originals_spend_m = portfolio_cost(peacock_shows, year)
+                sp = sports_year_pnl(held, year, originals_spend_m)
+                sports_rev_m, sports_cost_m = sp["revenue_m"], sp["cost_m"]
+        total_rev = ad_rev + dist_rev + sports_rev_m
+        cost      = portfolio_cost(shows, year) + sports_cost_m
+        ga        = total_rev * 0.06
+        net_ocf   = total_rev - cost - mkt - ga
+        margin    = (net_ocf / total_rev * 100) if total_rev else 0
+
     subs     = cable_subs(year)
     budget   = annual_budget(year)
 
@@ -123,21 +159,51 @@ def render():
         fig_cost.update_traces(marker_colors=["#1a6bb5","#f2c200","#8e44ad"][:len(network_costs)])
         st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar":False})
 
+        # Cost-by-genre donut (2026-08-24 add, found in a QA pass) --
+        # Genre Diversity is a real, 15%-weighted score component
+        # (utils/game_state.py::SCORE_WEIGHTS, via hhi_from_genres) but had
+        # zero visualization anywhere in the app before this -- students
+        # could see an abstract 0-100 diversity score with no way to see
+        # which genres they're actually concentrated in.
+        genre_costs = {}
+        for s in shows:
+            genre_costs[s.genre] = genre_costs.get(s.genre, 0) + s.total_cost(year)
+        if genre_costs:
+            fig_genre = donut_chart(
+                list(genre_costs.keys()),
+                [round(v, 2) for v in genre_costs.values()],
+                "Content Cost by Genre", height=220)
+            st.plotly_chart(fig_genre, use_container_width=True, config={"displayModeBar": False})
+            st.caption("Feeds the Genre Diversity component of your official score — a heavily concentrated "
+                       "slate scores lower here, regardless of how any single genre performs.")
+
     st.divider()
 
     # ── Monthly P&L ───────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Revenue & Cost Trend</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
-    Ad revenue follows a seasonal curve — summer dip, fall and spring peaks.
-    The OCF bars (right axis) turn red in months where content cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
+    Ad revenue follows a seasonal curve — summer dip, fall and spring peaks. Content cost follows each
+    show's real premiere month, same curve the Scheduling tab uses. The OCF chart below turns red in
+    months where cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
     </div>
     """, unsafe_allow_html=True)
 
     monthly_ad   = [ad_rev/12*(0.8+0.4*np.sin(i*0.5)) for i in range(12)]
     monthly_dist = [dist_rev/12]*12
-    monthly_cost = [cost/12]*12
-    monthly_ocf  = [monthly_ad[i]+monthly_dist[i]-monthly_cost[i]-mkt/12 for i in range(12)]
+    # Real premiere-timed cost curve (2026-08-24 fix, found in a QA pass) --
+    # previously a flat cost/12 every month, which contradicted the
+    # Scheduling tab's own real cash_months()-based curve for the exact same
+    # shows/year (two different-shaped "monthly cost" charts with no
+    # cross-reference). Same formula app_pages/schedule.py's Monthly Cash
+    # Flow Bridge already uses.
+    monthly_cost = [sum(s.total_cost(year)/12 * (1 if i in s.cash_months(s.air_month, s.episodes) else 0)
+                        for s in shows) for i in range(12)]
+    # G&A included here too (2026-08-24 fix) -- the annual Net OCF metric
+    # above already subtracts it (net_ocf = total_rev - cost - mkt - ga),
+    # so this monthly breakdown previously wouldn't sum back to that annual
+    # figure; now it does.
+    monthly_ocf  = [monthly_ad[i]+monthly_dist[i]-monthly_cost[i]-mkt/12-ga/12 for i in range(12)]
 
     mo_df = pd.DataFrame({
         "Month":        MONTHS,
@@ -147,26 +213,32 @@ def render():
         "Monthly OCF":  [round(v,2) for v in monthly_ocf],
     })
 
-    fig_mo = go.Figure()
-    fig_mo.add_trace(go.Scatter(x=MONTHS, y=mo_df["Ad Revenue"],
+    # Split into two panels (2026-08-24 fix, found in a QA pass) -- this was
+    # one figure with 5 encodings (3 line series + a bar series + a
+    # secondary y-axis), cramming "what's the revenue/cost shape" and
+    # "which months are cash-negative" into a single chart a first-time
+    # student had to parse simultaneously across two different axis scales.
+    fig_rc = go.Figure()
+    fig_rc.add_trace(go.Scatter(x=MONTHS, y=mo_df["Ad Revenue"],
                                  name="Ad Revenue", mode="lines+markers",
                                  line=dict(color=SUCCESS,width=2), marker=dict(size=5),
                                  fill="tozeroy", fillcolor="rgba(102,187,106,0.08)"))
-    fig_mo.add_trace(go.Scatter(x=MONTHS, y=mo_df["Distribution"],
+    fig_rc.add_trace(go.Scatter(x=MONTHS, y=mo_df["Distribution"],
                                  name="Distribution", mode="lines+markers",
                                  line=dict(color=ACCENT2,width=2), marker=dict(size=5)))
-    fig_mo.add_trace(go.Scatter(x=MONTHS, y=mo_df["Content Cost"],
+    fig_rc.add_trace(go.Scatter(x=MONTHS, y=mo_df["Content Cost"],
                                  name="Content Cost", mode="lines+markers",
                                  line=dict(color=DANGER,width=2,dash="dot"), marker=dict(size=5)))
-    fig_mo.add_trace(go.Bar(x=MONTHS, y=mo_df["Monthly OCF"], name="Monthly OCF",
-                             marker_color=[SUCCESS if v>=0 else DANGER for v in monthly_ocf],
-                             opacity=0.5, yaxis="y2"))
-    fig_mo.update_layout(
-        **base_layout("Monthly P&L ($M)", height=320),
-        yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                    tickfont=dict(size=10, color=TEXT2), title="OCF ($M)"),
-    )
-    st.plotly_chart(fig_mo, use_container_width=True, config={"displayModeBar":False})
+    fig_rc.update_layout(**base_layout("Monthly Revenue & Cost ($M)", height=280))
+    st.plotly_chart(fig_rc, use_container_width=True, config={"displayModeBar":False})
+
+    fig_ocf = go.Figure(go.Bar(
+        x=MONTHS, y=mo_df["Monthly OCF"], name="Monthly OCF",
+        marker_color=[SUCCESS if v>=0 else DANGER for v in monthly_ocf],
+    ))
+    fig_ocf.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.4)
+    fig_ocf.update_layout(**base_layout("Monthly OCF ($M) — red = cash-negative month", height=220))
+    st.plotly_chart(fig_ocf, use_container_width=True, config={"displayModeBar":False})
 
     st.divider()
 

@@ -265,18 +265,28 @@ st.markdown(
 )
 
 if not ss.registered and ss.active_section != "leaderboard":
-    # Small header-row button so an anonymous visitor sees the leaderboard
-    # above the fold, without scrolling past the registration form (2026-08-17,
-    # per user request to make it more prominent than its old spot buried
-    # below the form). Secondary-styled and off to the side deliberately --
-    # registering a team is still the primary CTA on this screen.
-    _hcol1, _hcol2 = st.columns([5, 1])
+    # Full-width row between the title and the Sign In form so an anonymous
+    # visitor sees the leaderboard above the fold, without scrolling past
+    # the registration form (2026-08-17, made prominent; repositioned
+    # 2026-08-24 per user preference -- centered here between title and
+    # Sign In rather than squeezed into a narrow column beside the header).
+    # Registering a team is still the primary CTA lower on this screen.
+    _hcol1, _hcol2, _hcol3 = st.columns([1, 2, 1])
     with _hcol2:
         if st.button("🏆 Leaderboard", key="header_leaderboard_btn", use_container_width=True):
             ss.active_section = "leaderboard"
             st.rerun()
+    st.write("")
 
 if ss.registered:
+    # On the home/welcome screen, the top nav row and the 3 choice cards below
+    # duplicated each other (Leaderboard/TV/Movies appeared twice) -- per user
+    # feedback 2026-08-24, the nav row (and its Change Team neighbor) only
+    # render once a section is actually chosen; the home screen's own cards
+    # (below) are the sole way to navigate from there, with Change Team folded
+    # in as a fourth, secondary-styled function alongside them.
+    _on_home = ss.active_section in (None, "app")
+
     tcol1, tcol2 = st.columns([5, 1])
     with tcol1:
         role_badge = (
@@ -297,36 +307,38 @@ if ss.registered:
             unsafe_allow_html=True
         )
     with tcol2:
-        if st.button("Change Team", use_container_width=True):
-            ss.registered     = False
-            ss.team_name      = ""
-            ss.school         = ""
-            ss.class_section  = ""
-            ss.class_abbrev   = ""
-            ss.active_section = None   # back to the landing screen for the next team
-            st.rerun()
-
-    # ── Top-level nav ─────────────────────────────────────────────────────────
-    # Same three peer sections as before (Leaderboard, TV/Streaming, Movies,
-    # plus App/Home) — now a horizontal button row instead of a stacked
-    # sidebar list.
-    section_defs = [
-        ("app",         "🏠 App"),
-        ("leaderboard", "🏆 Leaderboard"),
-        ("tv",          "📺 TV / Streaming"),
-        ("movies",      "🎬 Movies"),
-    ]
-    nav_cols = st.columns(len(section_defs))
-    for col, (section_key, section_label) in zip(nav_cols, section_defs):
-        is_active = ss.active_section == section_key or (
-            section_key == "app" and ss.active_section is None
-        )
-        with col:
-            if st.button(f"{'🎯' if is_active else ''} {section_label}".strip(),
-                         key=f"section_{section_key}", use_container_width=True,
-                         type="primary" if is_active else "secondary"):
-                ss.active_section = section_key
+        if not _on_home:
+            if st.button("Change Team", use_container_width=True):
+                ss.registered     = False
+                ss.team_name      = ""
+                ss.school         = ""
+                ss.class_section  = ""
+                ss.class_abbrev   = ""
+                ss.active_section = None   # back to the landing screen for the next team
                 st.rerun()
+
+    if not _on_home:
+        # ── Top-level nav ─────────────────────────────────────────────────────
+        # Same three peer sections as before (Leaderboard, TV/Streaming, Movies,
+        # plus App/Home) — a horizontal button row. Hidden on the home screen
+        # itself since its own choice cards (below) cover the same links —
+        # this row exists so a team already inside a section can jump to
+        # another one or back Home, not to duplicate the home cards.
+        section_defs = [
+            ("app",         "🏠 App"),
+            ("leaderboard", "🏆 Leaderboard"),
+            ("tv",          "📺 TV / Streaming"),
+            ("movies",      "🎬 Movies"),
+        ]
+        nav_cols = st.columns(len(section_defs))
+        for col, (section_key, section_label) in zip(nav_cols, section_defs):
+            is_active = ss.active_section == section_key
+            with col:
+                if st.button(f"{'🎯' if is_active else ''} {section_label}".strip(),
+                             key=f"section_{section_key}", use_container_width=True,
+                             type="primary" if is_active else "secondary"):
+                    ss.active_section = section_key
+                    st.rerun()
 
     # ── TV network sub-selector — only shown once TV/Streaming is picked ────
     if ss.active_section == "tv":
@@ -568,6 +580,22 @@ elif ss.active_section in (None, "app"):
         """, unsafe_allow_html=True)
         if st.button("→ View Leaderboard", use_container_width=True):
             ss.active_section = "leaderboard"
+            st.rerun()
+
+    # Change Team -- folded in here as a fourth, secondary function (2026-08-24,
+    # per user feedback) rather than living in the top-right corner above,
+    # since that corner button was only reachable once a section was already
+    # picked, and this home screen is the natural place for team-level actions.
+    st.write("")
+    _chg1, _chg2, _chg3 = st.columns([1, 1, 1])
+    with _chg2:
+        if st.button("🔄 Change Team", use_container_width=True):
+            ss.registered     = False
+            ss.team_name      = ""
+            ss.school         = ""
+            ss.class_section  = ""
+            ss.class_abbrev   = ""
+            ss.active_section = None   # back to the landing screen for the next team
             st.rerun()
 
 elif ss.active_section == "leaderboard":

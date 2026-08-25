@@ -212,6 +212,22 @@ def test_festival_section_renders_three_targets_with_revealed_reception():
     assert sum(1 for b in at.button if b.label == "Submit Bid") == len(FESTIVALS)
 
 
+def test_bid_shows_live_ratio_against_the_asking_anchor():
+    # 2026-08-24 add, found in a QA pass: previously there was no feedback
+    # on how a bid compares to the asking anchor until AFTER submitting.
+    # Overwriting the default (which starts equal to the anchor, a 1.0x
+    # ratio) with a large bid should surface a live overpay signal.
+    at = _movies_app()
+    film_id = "1_sundance"
+    bid_input = next(ni for ni in at.number_input if ni.key == f"festival_bid_{film_id}")
+    anchor = bid_input.value   # default value is exactly the asking anchor
+    bid_input.set_value(anchor * 2.0).run()
+    assert not at.exception
+    text = "\n".join(md.value for md in at.markdown)
+    assert "2.0x the" in text
+    assert "winner's-curse risk" in text
+
+
 def test_submitting_a_bid_resolves_the_auction_one_way_or_the_other():
     at = _movies_app()
     film_id = "1_sundance"

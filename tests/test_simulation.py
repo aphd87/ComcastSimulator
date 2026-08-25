@@ -216,6 +216,69 @@ def test_decisions_phase_has_one_simulate_button():
     assert len(sim_buttons) == 1
 
 
+def _peacock_decisions_sim_app() -> AppTest:
+    """Peacock variant of _decisions_sim_app -- the only network that
+    renders the Sports Rights bidding section."""
+    def script():
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        from utils.models import Show
+
+        defaults = {
+            "team_name": "AppTest Team",
+            "school": "Test School",
+            "class_section": "Sec A",
+            "active_network": "peacock",
+            "oxygen_shows": [],
+            "bravo_shows": [],
+            "peacock_shows": [
+                Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                     rating=1.0, ip_score=40, air_month=1, network="Peacock"),
+            ],
+            "cancelled_shows": set(),
+            "renewal_decisions": {},
+            "research_revealed": {},
+            "yearly_log": [],
+            "year": 1,
+            "sim_phase": "decisions",
+            "level_budget": 220.0,
+            "mkt_budget": 5.0,
+            "sports_contracts": [],
+            "sports_bid_log": {},
+        }
+        for k, v in defaults.items():
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        import app_pages.simulation as simulation
+        simulation.render()
+
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Peacock decisions phase raised: {list(at.exception)}"
+    return at
+
+
+def test_sports_bid_shows_live_ratio_against_the_market_anchor():
+    # 2026-08-24 add, found in a QA pass: previously there was no feedback
+    # on how a sports-rights bid compares to the market anchor until AFTER
+    # clicking Submit and seeing the resolved auction.
+    at = _peacock_decisions_sim_app()
+    bid_inputs = [ni for ni in at.number_input if ni.key and ni.key.startswith("sports_bid_1_")]
+    assert bid_inputs, "expected at least one league up for bid in Year 1"
+    bid_input = bid_inputs[0]
+    league = bid_input.key.split("sports_bid_1_")[1]
+    from utils.sports_models import SPORTS_LEAGUES
+    anchor = SPORTS_LEAGUES[league]["base_rights_cost_m"]
+    bid_input.set_value(anchor * 2.0).run()
+    assert not at.exception
+    text = "\n".join(md.value for md in at.markdown)
+    assert "2.0x the" in text
+    assert "market anchor" in text
+    assert "a real overpay risk" in text
+
+
 def _decisions_sim_app_year3_with_two_prior_years() -> AppTest:
     """Year 3 Decisions with two real played years (1, 2) already in
     ss.yearly_log -- the multi-year _progress_chart (added 2026-08-04)

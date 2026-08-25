@@ -155,10 +155,20 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
         bg     = "rgba(232,197,71,.08)" if is_me else "#1a1d26"
         border = "border:1px solid rgba(232,197,71,.3);" if is_me else "border:1px solid #252836;"
         abbrev     = entry.get("class_abbrev", "")
+        # Bug fix, 2026-08-25: this used to fall back to "" when
+        # show_school_col is False (e.g. the "My Class" scope). An empty
+        # f-string interpolation sitting alone on its own line inside the
+        # st.markdown(f"""...""") block below produces a genuinely BLANK
+        # line mid-HTML-block — which terminates CommonMark's HTML-block
+        # parsing right there, so every div AFTER it got re-parsed as an
+        # indented code block and rendered as literal `<div>` text instead
+        # of HTML (reported by the user seeing raw markup on the Leaderboard
+        # "Full Rankings" list). An empty-but-valid <div></div> keeps the
+        # line non-blank without changing anything visually.
         school_tag = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:1px;">'
                        f'{entry.get("school","")} · {entry.get("class_section","")}'
                        f'{f" ({abbrev})" if abbrev else ""}</div>'
-                       if show_school_col else "")
+                       if show_school_col else "<div></div>")
         breakdown_badges = "".join(
             f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#b0b5c4;">'
             f'{NETWORK_INFO[net]["display_name"]}: {score:.0f}</span>'
@@ -259,10 +269,20 @@ def _render_board_tab(team: str, net: str, info: dict,
 
         details = entry.get("details", {})
         abbrev     = entry.get("class_abbrev", "")
+        # Bug fix, 2026-08-25: this used to fall back to "" when
+        # show_school_col is False (e.g. the "My Class" scope). An empty
+        # f-string interpolation sitting alone on its own line inside the
+        # st.markdown(f"""...""") block below produces a genuinely BLANK
+        # line mid-HTML-block — which terminates CommonMark's HTML-block
+        # parsing right there, so every div AFTER it got re-parsed as an
+        # indented code block and rendered as literal `<div>` text instead
+        # of HTML (reported by the user seeing raw markup on the Leaderboard
+        # "Full Rankings" list). An empty-but-valid <div></div> keeps the
+        # line non-blank without changing anything visually.
         school_tag = (f'<div style="font-size:14px;color:#b0b5c4;margin-top:1px;">'
                        f'{entry.get("school","")} · {entry.get("class_section","")}'
                        f'{f" ({abbrev})" if abbrev else ""}</div>'
-                       if show_school_col else "")
+                       if show_school_col else "<div></div>")
         # Live attempt count -- entry['attempt'] is always 1 (the official
         # first attempt is all the leaderboard ranks on), so this looks up
         # the team's *current* total including retries made since.
@@ -298,8 +318,8 @@ def _render_board_tab(team: str, net: str, info: dict,
           {'<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;">' +
            ''.join([f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#b0b5c4;">{k}: {v:.0f}</span>'
                     for k,v in details.items() if k not in ("total","passed")]) +
-           '</div>' if details else ''}
-          {notables_html}
+           '</div>' if details else '<div></div>'}
+          {notables_html or '<div></div>'}
         </div>
         """, unsafe_allow_html=True)
 

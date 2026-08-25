@@ -5,8 +5,11 @@ Student builds a show concept and compares Linear vs. SVOD P&L.
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from utils.models import greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS, Show
-from utils.charts import base_layout, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
+from utils.models import (
+    greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS, Show, MONTHS,
+    TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m, genre_demo,
+)
+from utils.charts import base_layout, queue_supplement, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR
 
@@ -40,9 +43,100 @@ def render():
     if "next_show_id" not in ss:
         ss.next_show_id = 51   # one past the highest ID in utils/data.py's original slates
 
+    if "tv_pitches_acquired" not in ss:
+        ss.tv_pitches_acquired = set()
+
     slots_used = len(ss.greenlit_ids_this_year)
     slots_left = MAX_NEW_SHOWS_PER_YEAR - slots_used
     net_display_intro = NETWORK_INFO[ss.active_network]["display_name"]
+
+    # ── Acquire a Pitched Show ───────────────────────────────────────────────
+    # 2026-08-24, per explicit user question ("where are the TV series being
+    # pitched to students...they should be able to pick up TV series too").
+    # A second, distinct way to add a show -- alongside Build From Scratch
+    # below -- for a fixed roster of already-pitched, fictional shows with
+    # real audience demos, an origin (Domestic vs. an International Format
+    # acquired from abroad), and an optional Brand Partnership. Shares the
+    # same MAX_NEW_SHOWS_PER_YEAR slot cap and roster/budget bookkeeping as
+    # Greenlight This Show below (see tv_pitch_acquisition_fee_m's docstring
+    # for the cost model), same "adding a new show is adding a new show"
+    # capacity constraint either way.
+    st.markdown('<div class="section-title">📋 Acquire a Pitched Show</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+        'A second way to add a show, alongside building one from scratch below: pick up an '
+        'already-pitched concept outright. <b style="color:#e8eaf0;">Domestic Original</b> pitches are '
+        'cheaper to acquire but unproven. <b style="color:#e8eaf0;">International Format</b> pitches are '
+        'adapted from a proven overseas hit — a real rights-licensing premium, but a higher, de-risked '
+        'rating and IP Score. A <b style="color:#e8eaf0;">Brand Partnership</b> means a sponsor already '
+        'attached, subsidizing part of the acquisition cost. Unlike Build From Scratch, an acquired '
+        'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one.</div>',
+        unsafe_allow_html=True)
+
+    available_pitches = [k for k in TV_PITCH_CATALOG if k not in ss.tv_pitches_acquired]
+    if not available_pitches:
+        st.caption("No pitches left to acquire — every show in this catalog has already been picked up.")
+    else:
+        nc = 3
+        chunks = [available_pitches[i:i+nc] for i in range(0, len(available_pitches), nc)]
+        for chunk in chunks:
+            pcols = st.columns(nc)
+            for col, key in zip(pcols, chunk):
+                pitch = TV_PITCH_CATALOG[key]
+                demo  = genre_demo(pitch["genre"])
+                fee   = tv_pitch_acquisition_fee_m(pitch)
+                season_cost = pitch["episodes"] * pitch["ep_cost_k"] / 1000
+                origin_badge = (f'🌍 International Format ({pitch["format_source"]})'
+                                if pitch["origin"] == "International Format" else "🏠 Domestic Original")
+                bp = pitch.get("brand_partner")
+                bp_line = (f'<div style="font-size:12px;color:#e8c547;margin-top:4px;">🤝 Brand Partnership: '
+                           f'{bp["name"]} (+{bp["rating_bonus"]:.2f} rating)</div>' if bp else
+                           '<div style="font-size:12px;color:#8b8fa3;margin-top:4px;">No brand partnership</div>')
+                with col:
+                    st.markdown(f"""
+                    <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
+                         padding:14px;height:100%;">
+                      <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{pitch['name']}</div>
+                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;margin:2px 0 6px;">
+                        {pitch['genre']} · {origin_badge}</div>
+                      <div style="font-size:12px;color:#c8cad4;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
+                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+                        Demo: {demo['age']} · {demo['gender']} · {demo['reach']}</div>
+                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+                        {pitch['episodes']} eps · ${pitch['ep_cost_k']}K/ep · rating {pitch['rating']:.1f} ·
+                        SVOD appeal {pitch['svod_appeal']} · IP Score {pitch['ip_score']}</div>
+                      {bp_line}
+                      <div style="font-size:13px;color:#e8eaf0;margin-top:8px;">
+                        Acquisition fee: <b>${fee:.2f}M</b> + ${season_cost:.2f}M season production cost
+                      </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if slots_left <= 0:
+                        st.caption("No greenlight slots left this year.")
+                        continue
+                    acquire_month_label = st.select_slider(
+                        "Premiere month", options=[f"{i} · {MONTHS[i-1]}" for i in range(1, 13)],
+                        value="3 · Mar", key=f"acquire_month_{key}",
+                    )
+                    if st.button(f"Acquire \"{pitch['name']}\"", key=f"acquire_{key}", use_container_width=True):
+                        bonus_rating = pitch["rating"] + (bp["rating_bonus"] if bp else 0.0)
+                        acquire_month = int(acquire_month_label.split(" · ")[0])
+                        new_show = Show(
+                            id=ss.next_show_id, name=pitch["name"], genre=pitch["genre"],
+                            episodes=pitch["episodes"], ep_cost_k=pitch["ep_cost_k"], rating=bonus_rating,
+                            ip_score=pitch["ip_score"], air_month=acquire_month, network=net_display_intro,
+                        )
+                        roster_key = f"{ss.active_network}_shows"
+                        ss[roster_key] = ss[roster_key] + [new_show]
+                        ss.level_budget = ss.get("level_budget", 0) - fee - season_cost
+                        ss.greenlit_ids_this_year.add(new_show.id)
+                        ss.greenlit_ids_this_level.add(new_show.id)
+                        ss.total_shows_greenlit += 1
+                        ss.next_show_id += 1
+                        ss.tv_pitches_acquired.add(key)
+                        st.rerun()
+
+    st.divider()
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
@@ -163,8 +257,10 @@ def render():
             appeal    = st.slider("Genre Appeal Score (SVOD)", 20, 100, 72, step=1,
                                    help="How well does this genre convert to streaming subscriptions? "
                                         "True Crime: 85. Scripted drama: 90. Reality: 60.", key="gl_appeal")
-            air_month = st.slider("Premiere Month", 1, 12, 3, step=1,
-                                   format="%d", help="Affects amortization cash trough (see Schedule tab).", key="gl_air_month")
+            air_month_label = st.select_slider(
+                "Premiere Month", options=[f"{i} · {MONTHS[i-1]}" for i in range(1, 13)],
+                value="3 · Mar", help="Affects amortization cash trough (see Schedule tab).", key="gl_air_month")
+            air_month = int(air_month_label.split(" · ")[0])
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
                                          help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
 
@@ -296,6 +392,21 @@ def render():
     # comparison reads as reference/justification for the greenlight call,
     # so it belongs after the actual action, not gating it.
     st.markdown('<div class="section-title">Platform P&L Comparison</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:13px;color:#b0b5c4;margin-bottom:10px;line-height:1.6;">'
+        '<b style="color:#e0e2ea;">What each line means:</b> '
+        '<b>Total Season Cost</b> = episode cost × episode count. '
+        '<b>Ad Revenue (Y1)</b> = what Linear earns this year from ratings. '
+        '<b>Sub Lift Est.</b> = subscribers SVOD is projected to add. '
+        '<b>LTV (3-yr)</b> = the total 3-year value of those subs, SVOD\'s real revenue pot. '
+        '<b>Y1 Revenue Share</b> = 1/3 of that LTV, booked in Year 1 so it can be compared fairly to Linear\'s Y1 number. '
+        '<b>Net OCF</b> = revenue minus cost minus marketing — the actual cash this concept nets. '
+        '<b>ROI</b> = Net OCF ÷ Total Cost. '
+        '<b>Amortization</b> = months the production cost is spread over before it\'s fully expensed. '
+        '<b>Cash Payback</b> = whether Year-1 cash alone covers the cost. '
+        '<b>Revenue ceiling</b> = the structural cap on each model (Linear: shrinking ad market as cord-cutting continues; SVOD: total addressable subscribers). '
+        '<b>Engagement Score</b> = a composite of rating and genre appeal — a rough proxy for how much a show drives usage beyond raw sub counts.'
+        '</div>', unsafe_allow_html=True)
 
     def pl_card(title, color, data, winner=False):
         border = f"border:2px solid {color};" if winner else f"border:1px solid #252836;"
@@ -357,28 +468,44 @@ def render():
     st.divider()
 
     # ── Charts ────────────────────────────────────────────────────────────────
-    c1, c2 = st.columns(2)
+    st.markdown('<div class="section-title">3-Year P&L Comparison</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+        'Same concept, extrapolated 3 years out: Linear\'s bars are Year-1 numbers × 3 (a flat '
+        'run-rate). SVOD\'s "3yr Revenue" bar is its real 3-year LTV; its "3yr OCF" bar is Year-1 OCF '
+        '× 3 for the same side-by-side comparison. SVOD often looks negative here because it only '
+        'books 1/3 of its 3-year revenue pot in Year 1, against the full production cost paid up '
+        'front — the same reason Linear usually wins the early cash race even when SVOD wins on '
+        'total value over time.</div>', unsafe_allow_html=True)
+    categories = ["Total Cost","Y1 Revenue","Y1 OCF","3yr Revenue","3yr OCF"]
+    lin_vals   = [linear["cost"], linear["revenue"], linear["ocf"],
+                  linear["revenue"]*3, linear["ocf"]*3]
+    svod_vals  = [svod["cost"],   svod["revenue"],   svod["ocf"],
+                  svod["ltv_3yr"], svod["ocf"]*3]
 
-    with c1:
-        st.markdown('<div class="section-title">3-Year P&L Comparison</div>', unsafe_allow_html=True)
-        categories = ["Total Cost","Y1 Revenue","Y1 OCF","3yr Revenue","3yr OCF"]
-        lin_vals   = [linear["cost"], linear["revenue"], linear["ocf"],
-                      linear["revenue"]*3, linear["ocf"]*3]
-        svod_vals  = [svod["cost"],   svod["revenue"],   svod["ocf"],
-                      svod["ltv_3yr"], svod["ocf"]*3]
+    fig_cmp = go.Figure()
+    fig_cmp.add_trace(go.Bar(name="📺 Linear", x=categories,
+                              y=[round(v,2) for v in lin_vals],
+                              marker_color=ACCENT, opacity=0.8))
+    fig_cmp.add_trace(go.Bar(name="📱 SVOD+",  x=categories,
+                              y=[round(v,2) for v in svod_vals],
+                              marker_color=ACCENT2, opacity=0.7))
+    fig_cmp.update_layout(**base_layout("Linear vs. SVOD — Revenue, Cost, OCF ($M)", height=300))
+    st.plotly_chart(fig_cmp, use_container_width=True, config={"displayModeBar":False})
 
-        fig_cmp = go.Figure()
-        fig_cmp.add_trace(go.Bar(name="📺 Linear", x=categories,
-                                  y=[round(v,2) for v in lin_vals],
-                                  marker_color=ACCENT, opacity=0.8))
-        fig_cmp.add_trace(go.Bar(name="📱 SVOD+",  x=categories,
-                                  y=[round(v,2) for v in svod_vals],
-                                  marker_color=ACCENT2, opacity=0.7))
-        fig_cmp.update_layout(**base_layout("Linear vs. SVOD — Revenue, Cost, OCF ($M)", height=300))
-        st.plotly_chart(fig_cmp, use_container_width=True, config={"displayModeBar":False})
-
-    with c2:
-        st.markdown('<div class="section-title">Cumulative LTV Curve (36 months)</div>', unsafe_allow_html=True)
+    # Cumulative LTV Curve — explanatory, not a decision input. Deferred
+    # (2026-08-25) to the consolidated "Supplementary Insights" expander in
+    # simulation.py instead of sitting inline next to every concept a
+    # student prices out. See utils/charts.py::queue_supplement.
+    def _render_cumulative_ltv(linear=linear, svod=svod):
+        st.markdown(
+            '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+            'Running total of revenue over time, not a single-year number. Linear\'s line spreads its '
+            'Year-1 ad revenue rate evenly across all 36 months; SVOD\'s line spreads its full 3-year LTV '
+            'evenly across the same 36 months. The dashed <b style="color:#e0e2ea;">Crossover</b> line '
+            'marks the month SVOD\'s cumulative total overtakes Linear\'s — visualizing "Linear wins early '
+            'cash, SVOD wins the long game" as an actual point in time instead of just a claim.</div>',
+            unsafe_allow_html=True)
         ltv_df = ltv_curve(linear, svod, months=36)
         fig_ltv = go.Figure()
         fig_ltv.add_trace(go.Scatter(
@@ -397,6 +524,8 @@ def render():
                                annotation_text=f"Crossover: M{crossover}", annotation_font_color=WARN)
         fig_ltv.update_layout(**base_layout("Cumulative Revenue: Linear vs. SVOD ($M)", height=300))
         st.plotly_chart(fig_ltv, use_container_width=True, config={"displayModeBar":False})
+
+    queue_supplement(f"Cumulative LTV Curve (36 months) — \"{show_name}\"", _render_cumulative_ltv)
 
     st.divider()
 
@@ -435,38 +564,49 @@ def render():
     )
     st.caption("Rows = episode cost (Ep Cost col). Columns = projected 18-49 rating. Cell = Linear OCF in $M.")
 
-    st.divider()
-
     # ── Marketing ROI ──────────────────────────────────────────────────────────
-    st.markdown('<div class="section-title">Marketing ROI: Linear vs. SVOD</div>', unsafe_allow_html=True)
-    mkt_levels = [0, 1, 2, 3, 5, 7, 10]
-    mkt_rows = []
-    for m in mkt_levels:
-        l = greenlight_linear(eps, ep_cost, rating, m, year)
-        s = greenlight_svod(eps, ep_cost, rating, appeal, m, year)
-        mkt_rows.append({
-            "Marketing ($M)": m,
-            "Linear OCF":     round(l["ocf"],2),
-            "Linear ROI %":   round(l["roi"],1),
-            "SVOD OCF":       round(s["ocf"],2),
-            "SVOD ROI %":     round(s["roi"],1),
-        })
-    mkt_df = pd.DataFrame(mkt_rows)
+    # Explanatory sensitivity tool, not a decision input on its own — deferred
+    # (2026-08-25) to the consolidated "Supplementary Insights" expander in
+    # simulation.py. See utils/charts.py::queue_supplement.
+    def _render_marketing_roi(eps=eps, ep_cost=ep_cost, rating=rating, appeal=appeal, year=year,
+                               show_name=show_name):
+        st.markdown(
+            '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+            'Holds this concept\'s rating and cost fixed and reruns both P&Ls at increasing marketing '
+            'budgets, so you can see where extra marketing dollars actually pay off. Linear OCF moves with '
+            'the ad-rating lift marketing buys; SVOD OCF moves with the extra subscriber lift (and its 3-year '
+            'LTV) that same spend buys — the two lines diverge because marketing pays back through two '
+            'different revenue mechanics.</div>', unsafe_allow_html=True)
+        mkt_levels = [0, 1, 2, 3, 5, 7, 10]
+        mkt_rows = []
+        for m in mkt_levels:
+            l = greenlight_linear(eps, ep_cost, rating, m, year)
+            s = greenlight_svod(eps, ep_cost, rating, appeal, m, year)
+            mkt_rows.append({
+                "Marketing ($M)": m,
+                "Linear OCF":     round(l["ocf"],2),
+                "Linear ROI %":   round(l["roi"],1),
+                "SVOD OCF":       round(s["ocf"],2),
+                "SVOD ROI %":     round(s["roi"],1),
+            })
+        mkt_df = pd.DataFrame(mkt_rows)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_mkt = go.Figure()
-        fig_mkt.add_trace(go.Scatter(x=mkt_df["Marketing ($M)"], y=mkt_df["Linear OCF"],
-                                      name="Linear OCF", mode="lines+markers",
-                                      line=dict(color=ACCENT,width=2),marker=dict(size=7)))
-        fig_mkt.add_trace(go.Scatter(x=mkt_df["Marketing ($M)"], y=mkt_df["SVOD OCF"],
-                                      name="SVOD OCF",   mode="lines+markers",
-                                      line=dict(color=ACCENT2,width=2),marker=dict(size=7)))
-        fig_mkt.add_hline(y=0, line_dash="dash", line_color=DANGER, opacity=0.5)
-        fig_mkt.update_layout(**base_layout("OCF vs. Marketing Spend ($M)", height=280))
-        st.plotly_chart(fig_mkt, use_container_width=True, config={"displayModeBar":False})
-    with c2:
-        st.dataframe(mkt_df.style.format({
-            "Linear OCF":"${:.2f}M","Linear ROI %":"{:.1f}%",
-            "SVOD OCF":"${:.2f}M","SVOD ROI %":"{:.1f}%"
-        }), use_container_width=True, height=280)
+        c1, c2 = st.columns(2)
+        with c1:
+            fig_mkt = go.Figure()
+            fig_mkt.add_trace(go.Scatter(x=mkt_df["Marketing ($M)"], y=mkt_df["Linear OCF"],
+                                          name="Linear OCF", mode="lines+markers",
+                                          line=dict(color=ACCENT,width=2),marker=dict(size=7)))
+            fig_mkt.add_trace(go.Scatter(x=mkt_df["Marketing ($M)"], y=mkt_df["SVOD OCF"],
+                                          name="SVOD OCF",   mode="lines+markers",
+                                          line=dict(color=ACCENT2,width=2),marker=dict(size=7)))
+            fig_mkt.add_hline(y=0, line_dash="dash", line_color=DANGER, opacity=0.5)
+            fig_mkt.update_layout(**base_layout("OCF vs. Marketing Spend ($M)", height=280))
+            st.plotly_chart(fig_mkt, use_container_width=True, config={"displayModeBar":False})
+        with c2:
+            st.dataframe(mkt_df.style.format({
+                "Linear OCF":"${:.2f}M","Linear ROI %":"{:.1f}%",
+                "SVOD OCF":"${:.2f}M","SVOD ROI %":"{:.1f}%"
+            }), use_container_width=True, height=280)
+
+    queue_supplement(f"Marketing ROI: Linear vs. SVOD — \"{show_name}\"", _render_marketing_roi)

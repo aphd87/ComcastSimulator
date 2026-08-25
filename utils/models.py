@@ -209,9 +209,14 @@ def phase_label(year: int) -> str:
     return "Phase 3 — Full Portfolio"
 
 def renewal_decision(show: Show, year: int, mkt_boost: float) -> str:
+    # Collapsed from a three-tier Renew/Watch/Cancel recommendation to two
+    # (2026-08-25, per user request/observation: "Watch" was never anything
+    # but a same-as-Renew self-flagging label everywhere it mattered — every
+    # real cost/revenue check downstream only ever tested for "Cancel" — so
+    # keeping it as a third *selectable* option was pure friction with no
+    # mechanical difference). Any positive ROI now just recommends Renew.
     r = show.roi(year, mkt_boost)
-    if r > 20: return "✅ Renew"
-    if r > 0:  return "⚠️ Watch"
+    if r > 0:  return "✅ Renew"
     return "❌ Cancel"
 
 
@@ -301,6 +306,84 @@ GENRE_DEMO_DEFAULT = {"age": "18-49", "gender": "Balanced", "reach": "National (
 
 def genre_demo(genre: str) -> dict:
     return GENRE_DEMOS.get(genre, GENRE_DEMO_DEFAULT)
+
+
+# ── TV Show Acquisition Marketplace ─────────────────────────────────────────
+# 2026-08-24, per explicit user question ("where are the TV series being
+# pitched to students here? It's good that we can create shows internally,
+# but they should be able to pick up TV series too, with audience demos,
+# appeal info, is it from abroad, does it have brand partnerships or not").
+# Movies already has this shape of decision (Scouted Concepts, Festival
+# Acquisitions) -- the TV side only ever had "build a concept from scratch"
+# (see app_pages/greenlight.py). This is the TV parallel: a fixed catalog of
+# fictional, already-pitched shows a student can acquire outright instead of
+# building one, each carrying a real origin (Domestic vs. an International
+# Format -- a genuine industry acquisition path, e.g. adapting a proven
+# overseas format) and an optional Brand Partnership (a sponsor subsidizes
+# part of the acquisition cost in exchange for integration, a real category
+# of TV deal). All fictional, same "not real people/shows" posture as
+# TALENT_PARTNERS/RIVAL_STUDIOS on the Movies side.
+TV_PITCH_CATALOG = {
+    "peak_condition": {
+        "name": "Peak Condition", "genre": "Competition",
+        "episodes": 12, "ep_cost_k": 650, "rating": 1.3, "ip_score": 55, "svod_appeal": 68,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "An elite-athlete obstacle competition with a built-in social following among its "
+               "competitors — solid, predictable performance, no format-licensing premium.",
+    },
+    "the_estate": {
+        "name": "The Estate", "genre": "Scripted",
+        "episodes": 8, "ep_cost_k": 1400, "rating": 1.6, "ip_score": 68, "svod_appeal": 82,
+        "origin": "International Format", "format_source": "United Kingdom", "brand_partner": None,
+        "bio": "A proven UK prestige-drama format already renewed twice overseas — de-risked by a real "
+               "track record, at a real rights-licensing premium.",
+    },
+    "sunset_collective": {
+        "name": "Sunset Collective", "genre": "Reality",
+        "episodes": 16, "ep_cost_k": 520, "rating": 1.1, "ip_score": 48, "svod_appeal": 60,
+        "origin": "Domestic Original",
+        "brand_partner": {"name": "Aurelia Cosmetics", "rating_bonus": 0.15},
+        "bio": "A lifestyle ensemble reality format with a beauty-brand integration already attached — "
+               "the sponsor's promotional spend is baked into the pitch.",
+    },
+    "cold_case_rotterdam": {
+        "name": "Cold Case Files: Rotterdam", "genre": "True Crime",
+        "episodes": 10, "ep_cost_k": 310, "rating": 1.0, "ip_score": 62, "svod_appeal": 58,
+        "origin": "International Format", "format_source": "Netherlands", "brand_partner": None,
+        "bio": "A true-crime docuseries format adapted from a Dutch original with strong domestic "
+               "ratings — proven structure, unproven with a U.S. audience.",
+    },
+    "second_chance_kitchen": {
+        "name": "Second Chance Kitchen", "genre": "Competition",
+        "episodes": 12, "ep_cost_k": 580, "rating": 1.4, "ip_score": 64, "svod_appeal": 71,
+        "origin": "International Format", "format_source": "South Korea",
+        "brand_partner": {"name": "Forge Kitchenware", "rating_bonus": 0.1},
+        "bio": "A cooking-competition format adapted from a South Korean hit, already paired with a "
+               "cookware sponsor — a proven format AND a subsidized acquisition cost.",
+    },
+    "after_hours": {
+        "name": "After Hours", "genre": "Talk",
+        "episodes": 20, "ep_cost_k": 280, "rating": 0.9, "ip_score": 45, "svod_appeal": 52,
+        "origin": "Domestic Original",
+        "brand_partner": {"name": "Meridian Airlines", "rating_bonus": 0.1},
+        "bio": "A late-night-adjacent talk format with a travel-brand sponsor already attached — cheap "
+               "to acquire, modest ratings ceiling.",
+    },
+}
+
+def tv_pitch_acquisition_fee_m(pitch: dict) -> float:
+    """Upfront acquisition fee, on top of the show's own season production
+    cost -- what the student pays for the rights/format itself. International
+    Format pitches carry a real rights-licensing premium over an original
+    Domestic pitch (a de-risked, proven format costs more to acquire); a
+    Brand Partnership discounts the fee since the sponsor is subsidizing
+    part of the deal in exchange for the integration."""
+    season_cost = pitch["episodes"] * pitch["ep_cost_k"] / 1000
+    base_rate = 0.90 if pitch["origin"] == "International Format" else 0.50
+    fee = season_cost * base_rate
+    if pitch.get("brand_partner"):
+        fee *= 0.85
+    return fee
 
 
 # ── Emmy Tracking ─────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ from __future__ import annotations   # list[...]/dict[...] type hints below need
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
+import streamlit as st
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 BG       = "#0b0c10"
@@ -78,6 +79,17 @@ def line_chart(df: pd.DataFrame, x: str, y_cols: list[str],
         ))
     fig.update_layout(**base_layout(title, height))
     return fig
+
+def queue_supplement(title: str, render_fn) -> None:
+    """Defer an explanatory, non-scored chart/tool to the single consolidated
+    "Supplementary Insights" expander rendered once per year (right before the
+    Simulate button in app_pages/simulation.py) instead of drawing it inline,
+    where it interrupts the scroll through the real, scored decisions above it.
+    render_fn is a no-arg callable — build it as a closure over whatever local
+    values (shows, year, a computed P&L dict, ...) the chart needs; it's only
+    invoked later, when the expander actually renders."""
+    st.session_state.setdefault("_supp_charts", []).append((title, render_fn))
+
 
 def donut_chart(labels: list, values: list, title: str = "",
                 height: int = 300) -> go.Figure:

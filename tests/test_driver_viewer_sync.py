@@ -39,7 +39,7 @@ def _register(at, role="🎮 Driver — I'll make the decisions", team="Team Syn
     at.radio(key="role_input_field").set_value(role)
     at.button(key="register_team_button").click()
     at.run()
-    at.button(key="section_tv").click()
+    next(b for b in at.button if b.label == "→ Start TV / Streaming").click()
     at.run()
     return at
 

@@ -108,10 +108,12 @@ def test_decisions_phase_has_expected_widgets():
 
 
 def test_decisions_phase_shows_bear_base_bull_preview():
+    # 2026-08-24: bear/base/bull moved from 3 text rows to an actual chart
+    # (_bear_base_bull_chart) -- the range now lives in a Plotly figure's
+    # trace text/hovertemplate, not page markdown.
     at = _movies_app()
-    text = "\n".join(md.value for md in at.markdown)
-    for label in ("bear case", "base case", "bull case"):
-        assert label in text.lower()
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert any("Bear" in s and "Base" in s and "Bull" in s for s in specs)
 
 
 def test_decisions_phase_shows_both_decisions_on_one_page():
@@ -138,6 +140,17 @@ def test_clicking_simulate_transitions_to_results_with_no_exceptions():
     assert at.session_state["movie_phase"] == "results"
     assert len(at.session_state["movie_log"]) == 1
     assert at.session_state["movie_log"][0]["cycle"] == 1
+
+
+def test_results_phase_shows_the_actual_outcome_marked_on_the_range():
+    # 2026-08-24: Results now reuses _bear_base_bull_chart with actual_npv
+    # set, so the resolved outcome plots directly on the same bear/base/bull
+    # range it was drawn from, instead of only being narrated in text.
+    at = _movies_app()
+    _simulate_button(at).click().run()
+    assert not at.exception
+    specs = [el.proto.spec for el in at.get("plotly_chart")]
+    assert any("Actual" in s and "Bear" in s and "Bull" in s for s in specs)
 
 
 def test_simulate_outcome_includes_financing_and_waterfall_fields():
@@ -663,6 +676,83 @@ def test_complete_phase_renders_slate_notables_with_no_exceptions():
     assert "Slate Notables" in text
     assert "BEST CYCLE" in text
     assert "GENRE VARIETY" in text
+
+
+def _complete_app_with_log(log: list) -> AppTest:
+    """Same seed-state pattern as _results_app_with_outcome/_complete_movies_app,
+    but for the Complete phase with a caller-supplied movie_log -- lets a
+    test control exactly which cycles carry deal-waterfall fields."""
+    def script(log):
+        import streamlit as st
+        import sys
+        sys.path.insert(0, ".")
+        st.session_state.team_name = "AppTest Team"
+        st.session_state.school = "Test School"
+        st.session_state.class_section = "Sec A"
+        st.session_state.movie_cycle = max(r["cycle"] for r in log)
+        st.session_state.movie_phase = "complete"
+        st.session_state.movie_log = log
+        import app_pages.movies as movies
+        movies.render()
+
+    at = AppTest.from_function(script, default_timeout=30, args=(log,))
+    at.run()
+    assert not at.exception, f"Complete phase raised: {list(at.exception)}"
+    return at
+
+
+def test_complete_phase_shows_slate_wide_deal_waterfall_summed_across_cycles():
+    # 2026-08-24 add: the per-cycle Deal Waterfall never aggregated across
+    # the whole slate -- this is the Complete-phase rollup, summed from
+    # each cycle's real talent_take/producer_take/studio_residual/
+    # capital_at_risk/total_revenue.
+    import json
+    log = [
+        _full_outcome(cycle=1, talent_take=8.0, producer_take=2.0, studio_residual=10.0,
+                      capital_at_risk=60.0, total_revenue=80.0),
+        _full_outcome(cycle=2, talent_take=4.0, producer_take=1.0, studio_residual=-5.0,
+                      capital_at_risk=40.0, total_revenue=40.0),
+    ]
+    at = _complete_app_with_log(log)
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Slate Deal Waterfall" in text
+
+    specs = [json.loads(el.proto.spec) for el in at.get("plotly_chart")]
+    wf_trace = next(t for s in specs for t in s["data"] if t.get("type") == "waterfall")
+    # Total Revenue, -Talent, -Capital, -Producer, Studio Residual (total measure)
+    assert wf_trace["y"] == pytest.approx([120.0, -12.0, -100.0, -3.0, 5.0])
+
+
+def test_complete_phase_deal_waterfall_ignores_legacy_cycles_without_the_fields():
+    # A cycle recorded before this feature existed (no talent_take/
+    # producer_take/studio_residual) must be excluded from the sum, not
+    # raise a KeyError or silently zero out the whole aggregate.
+    legacy = _full_outcome(cycle=1, total_revenue=999.0)
+    for key in ("talent_take", "producer_take", "studio_residual"):
+        del legacy[key]
+    real = _full_outcome(cycle=2, talent_take=4.0, producer_take=1.0, studio_residual=-5.0,
+                          capital_at_risk=40.0, total_revenue=40.0)
+    at = _complete_app_with_log([legacy, real])
+    text = "\n".join(md.value for md in at.markdown)
+    assert "Slate Deal Waterfall" in text   # still renders, using just the real entry
+    assert "999" not in text.split("Slate Deal Waterfall")[1][:2000]
+
+
+def test_complete_phase_shows_capital_weighted_genre_and_concept_donuts():
+    # 2026-08-24 add: Portfolio Diversification is a real, 15%-weighted
+    # score component that previously had no visualization -- this fixture
+    # has 3 distinct genres (Drama/Comedy/Action-Tentpole, all "New IP"), so
+    # the genre donut should show all three and the concept-type donut
+    # should show the single "New IP" slice.
+    import json
+    at = _complete_movies_app()
+    specs = [json.loads(el.proto.spec) for el in at.get("plotly_chart")]
+    all_traces = [t for s in specs for t in s["data"] if "labels" in t]
+    genre_trace = next(t for t in all_traces
+                        if set(t["labels"]) == {"Drama", "Comedy", "Action/Tentpole"})
+    concept_trace = next(t for t in all_traces if set(t["labels"]) == {"New IP"})
+    assert genre_trace is not None
+    assert concept_trace is not None
 
 
 # ── Last Cycle recap (2026-08-03) ────────────────────────────────────────────

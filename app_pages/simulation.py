@@ -31,6 +31,7 @@ from utils.game_state import (
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
     YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
+    render_vs_competitors_board,
 )
 from utils.sports_models import (
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
@@ -616,15 +617,32 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
         'enough to retain it — otherwise it churns back out once the season ends.</div>',
         unsafe_allow_html=True)
 
-    anchor = LEVEL_START_YEAR["peacock"]
-    held   = held_this_year(ss.sports_contracts, year)
+    # 2026-08-24 fix -- found while testing the live-bid-feedback addition
+    # below: every call in this function was passing `year` (the in-level
+    # turn counter, 1-YEARS_PER_LEVEL) directly into functions that need a
+    # real calendar year comparable to `anchor` (LEVEL_START_YEAR["peacock"],
+    # e.g. 2020) -- cycle_for_year/held_this_year/leagues_up_for_bid all
+    # compare against SportsContract.start_year/end_year, which ARE real
+    # calendar years (cycle_for_year's own output). With turn-index input,
+    # cycle_for_year's while loop (which only ever walks forward from
+    # anchor_year) could never find a window containing e.g. year=1 when
+    # anchor_year=2020 -- a genuine infinite loop, hanging the page the
+    # first time any Peacock team ever opened this section. Nothing had
+    # caught this before because utils/tests/test_sports_models.py always
+    # calls these with calendar-year inputs directly (correct in
+    # isolation), and no prior AppTest/playthrough had exercised this UI
+    # section at all. See app_pages/simulation.py's _sports_pnl_recap and
+    # _results()'s Redo-This-Year handler for the same fix, same reason.
+    anchor       = LEVEL_START_YEAR["peacock"]
+    calendar_year = anchor + (year - 1)
+    held   = held_this_year(ss.sports_contracts, calendar_year)
 
     if held:
         st.markdown('<div style="font-size:14px;color:#b0b5c4;margin-bottom:6px;">Currently held:</div>',
                     unsafe_allow_html=True)
         for c in held:
             info       = SPORTS_LEAGUES[c.league]
-            years_left = c.end_year - year
+            years_left = c.end_year - calendar_year
             st.markdown(f"""
             <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;
                  padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;
@@ -640,7 +658,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
                     unsafe_allow_html=True)
 
     # ── This year's auctions ────────────────────────────────────────────────
-    up      = leagues_up_for_bid(year, anchor)
+    up      = leagues_up_for_bid(calendar_year, anchor)
     already = ss.sports_bid_log.get(year, {})
     pending = [lg for lg in up if lg not in already]
 
@@ -651,7 +669,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
             f'</b></div>', unsafe_allow_html=True)
         for lg in pending:
             info = SPORTS_LEAGUES[lg]
-            _, start, end = cycle_for_year(lg, year, anchor)
+            _, start, end = cycle_for_year(lg, calendar_year, anchor)
             term = end - start + 1
             st.markdown(
                 f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:2px;"><b>{lg}</b> '
@@ -661,12 +679,26 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
             st.number_input(f"Your annual bid for {lg} ($M/yr — 0 = don't bid)",
                              min_value=0.0, max_value=300.0, step=1.0, value=0.0,
                              key=f"sports_bid_{year}_{lg}")
+            # Live market-anchor feedback (2026-08-24 add, found in a QA
+            # pass) -- previously the only feedback on "did I overpay" came
+            # AFTER clicking Submit and seeing the resolved auction. This
+            # closes the loop before commitment: how the entered bid
+            # compares to the market anchor shown just above.
+            _live_bid = float(ss.get(f"sports_bid_{year}_{lg}", 0.0))
+            if _live_bid > 0:
+                _bid_ratio = _live_bid / info["base_rights_cost_m"]
+                _ratio_c = SUCCESS if _bid_ratio <= 1.0 else (WARN if _bid_ratio <= 1.5 else DANGER)
+                st.markdown(
+                    f'<div style="font-size:12px;color:{_ratio_c};margin:-6px 0 8px;">'
+                    f'→ {_bid_ratio:.1f}x the ${info["base_rights_cost_m"]:.0f}M/yr market anchor'
+                    f'{" — a real overpay risk" if _bid_ratio > 1.5 else ""}</div>',
+                    unsafe_allow_html=True)
 
         if st.button("📡 Submit Sports Bids", use_container_width=True, key=f"sports_submit_{year}"):
             ss.sports_bid_log.setdefault(year, {})
             for lg in pending:
                 bid = float(ss.get(f"sports_bid_{year}_{lg}", 0.0))
-                idx, start, end = cycle_for_year(lg, year, anchor)
+                idx, start, end = cycle_for_year(lg, calendar_year, anchor)
                 rivals = draw_rival_bids(lg, idx)
                 result = resolve_auction(bid, rivals)
                 ss.sports_bid_log[year][lg] = result
@@ -711,10 +743,15 @@ def _sports_pnl_recap(ss, shows, year, net, new_cancel) -> dict:
     if net != "peacock":
         return {"revenue_m": 0.0, "cost_m": 0.0, "net_m": 0.0, "rows": []}
 
-    held = held_this_year(ss.sports_contracts, year)
+    # Calendar-year conversion (2026-08-24 fix, same bug/reason as
+    # _section_sports_rights_bidding above) -- held_this_year/sports_year_pnl
+    # both compare against SportsContract.start_year/end_year, real calendar
+    # years, not the turn-index `year` this function receives.
+    calendar_year = LEVEL_START_YEAR["peacock"] + (year - 1)
+    held = held_this_year(ss.sports_contracts, calendar_year)
     peacock_shows_now = [s for s in shows if s.network == "Peacock"]
     originals_spend_m = _annual_cost(peacock_shows_now, year, ss.cancelled_shows, new_cancel)
-    year_pnl = sports_year_pnl(held, year, originals_spend_m)
+    year_pnl = sports_year_pnl(held, calendar_year, originals_spend_m)
 
     if held:
         net_c = SUCCESS if year_pnl["net_m"] >= 0 else DANGER
@@ -743,6 +780,15 @@ def _decisions(ss, shows, net_info, year, net):
     collisions, so nothing in those three files needed to change."""
     threshold    = net_info["pass_threshold"]
     level_budget = ss.level_budget
+
+    # Reset the "Supplementary Insights" queue for this render (2026-08-25) —
+    # Renewal/Greenlighting below use utils.charts.queue_supplement to defer
+    # a handful of explanatory, non-scored charts (Genre Decay Curves,
+    # Premiere Calendar, Cumulative LTV Curve, Marketing ROI) here instead of
+    # drawing them inline, so they don't interrupt the scroll through real
+    # decisions. Cleared at the top of every render so a rerun doesn't just
+    # keep appending duplicates of the same charts.
+    ss["_supp_charts"] = []
 
     prev = next((r for r in ss.yearly_log if r["year"] == year - 1), None) if year > 1 else None
     if prev:
@@ -819,13 +865,26 @@ def _decisions(ss, shows, net_info, year, net):
 
     st.divider()
     st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="section-title">{next_sec} · 📅 Scheduling & Cash-Flow Reference '
-        '<span style="font-size:14px;color:#b0b5c4;">(reference — the premiere-month and '
-        'primetime-slot calls above in Renewal already drive the real math)</span></div>',
-        unsafe_allow_html=True)
-    from app_pages.schedule import render as render_schedule
-    render_schedule()
+    n_supp = len(ss.get("_supp_charts", [])) + 1  # +1 for the Schedule tool itself
+    with st.expander(
+        f"{next_sec} · 📊 Supplementary Insights (optional) — {n_supp} extra charts & tools, not scored",
+        expanded=False,
+    ):
+        st.caption(
+            "None of this affects your score or budget — it's here if you want deeper intuition on "
+            "the mechanics. Click in, or just keep scrolling to Simulate."
+        )
+        st.markdown('<div class="section-title">📅 Scheduling & Cash-Flow Reference '
+            '<span style="font-size:14px;color:#b0b5c4;">(the primetime-slot calls in Renewal above '
+            'drive real ad revenue; premiere month only shapes the monthly cash-flow timing shown '
+            'here, not the annual total)</span></div>', unsafe_allow_html=True)
+        from app_pages.schedule import render as render_schedule
+        render_schedule()
+
+        for title, render_fn in ss.get("_supp_charts", []):
+            st.divider()
+            st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+            render_fn()
 
     st.divider()
 
@@ -1026,6 +1085,13 @@ def _results(ss, shows, net_info, year, team, net):
         movers = sorted(active_rows, key=lambda x: abs(x["variance"] - 1.0), reverse=True)[:5]
         st.markdown('<div class="section-title">Rating Movers This Year</div>',
                     unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:13px;color:#b0b5c4;margin-bottom:8px;">'
+            'Rating = the show\'s 18-49 demo rating, the same audience-size figure that drives ad revenue '
+            'throughout this tool (Bravo average: 1.0-1.5; a hit: 2.0+; a mega-hit: 3.0+). The 5 shows '
+            'with the biggest swing this year, best or worst. Each card shows the point move (e.g. ▲0.15) '
+            'and the underlying % change — since ad revenue scales with rating, a +1 percentage point '
+            'move is real dollars, not just a cosmetic shift.</div>', unsafe_allow_html=True)
         cols = st.columns(5)
         for i, m in enumerate(movers):
             delta = m["rating_adj"] - m["rating_base"]
@@ -1063,8 +1129,10 @@ def _results(ss, shows, net_info, year, team, net):
                     unsafe_allow_html=True)
         st.markdown(
             '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-            'Critical reception for this year\'s Drama/Scripted/Comedy shows — independent of ratings, '
-            'same as the Movies side\'s critical reception being independent of box office.</div>',
+            'Critical reception for this year\'s Drama/Scripted/Comedy shows — independent of ratings. '
+            'A show can win here even in a season its ratings dipped, or miss it in a season ratings '
+            f'were strong. The number is a critical-reception score, 0-100: {EMMY_NOMINATION_THRESHOLD}+ is a '
+            f'nomination, {EMMY_WIN_THRESHOLD}+ is a win.</div>',
             unsafe_allow_html=True)
         emmy_cols = st.columns(min(len(emmy_rows), 5))
         for i, r in enumerate(sorted(emmy_rows, key=lambda x: x["emmy_score"], reverse=True)[:5]):
@@ -1086,44 +1154,34 @@ def _results(ss, shows, net_info, year, team, net):
             </div>
             """, unsafe_allow_html=True)
 
-    # ── Cumulative P&L chart ──────────────────────────────────────────────────
+    # ── Level P&L so far (text recap, no chart) ─────────────────────────────
+    # Chart cut 2026-08-24 (found in a QA pass): this Results-phase chart
+    # was a near-exact duplicate of _progress_chart (shown in Decisions,
+    # right before this) and 'Level P&L — All Years' (shown in _complete()
+    # at level end) -- same OCF-bar + cumulative-OCF-line shape, same data,
+    # shown 2-3 times across one year's play-through with nothing new added
+    # each time. Keeping the plain-language summary (added earlier the same
+    # session) since it's the one piece of this block that wasn't
+    # redundant with the other two charts.
     if log:
-        st.markdown('<div class="section-title" style="margin-top:18px;">Level P&L — Year by Year</div>',
-                    unsafe_allow_html=True)
-        st.markdown(
-            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-            'Green bars = revenue. Red bars = total spend (cost + marketing + G&A). '
-            'Gold line = net OCF. A line above zero means you\'re profitable that year.</div>',
-            unsafe_allow_html=True)
-
-        ylabels = [r["label"].split(" · ")[0] for r in log]
-        cum_ocf = np.cumsum([r["ocf"] for r in log]).tolist()
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Revenue", x=ylabels, y=[r["revenue"] for r in log],
-            marker_color=SUCCESS, opacity=0.75,
-            text=[f"${r['revenue']:.1f}M" for r in log], textposition="outside",
-            textfont=dict(size=10, color="#e0e2ea"),
-        ))
-        fig.add_trace(go.Bar(
-            name="Spend (cost+mkt+G&A)", x=ylabels,
-            y=[-(r["cost"] + r["mkt"] + r["ga"]) for r in log],
-            marker_color=DANGER, opacity=0.6,
-        ))
-        fig.add_trace(go.Scatter(
-            name="Annual OCF", x=ylabels, y=[r["ocf"] for r in log],
-            mode="lines+markers", line=dict(color=ACCENT, width=2.5),
-            marker=dict(size=9, color=[SUCCESS if r["ocf"] >= 0 else DANGER for r in log]),
-        ))
-        fig.add_trace(go.Scatter(
-            name="Cumulative OCF", x=ylabels, y=cum_ocf,
-            mode="lines+markers", line=dict(color=ACCENT2, width=1.5, dash="dot"),
-            marker=dict(size=6), opacity=0.7,
-        ))
-        fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.3)
-        fig.update_layout(**base_layout("Annual P&L ($M)", height=300), barmode="relative")
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        total_rev   = sum(r["revenue"] for r in log)
+        total_ocf   = sum(r["ocf"] for r in log)
+        level_margin = (total_ocf / total_rev * 100) if total_rev else 0.0
+        n_years      = len(log)
+        on_track     = level_margin >= net_info["pass_threshold"]
+        summary_c    = SUCCESS if on_track else (WARN if total_ocf >= 0 else DANGER)
+        verb         = "on pace to pass" if on_track else "currently short of"
+        st.markdown(f"""
+        <div style="background:#12141a;border:1px solid #252836;border-left:3px solid {summary_c};
+             border-radius:6px;padding:12px 16px;margin-top:4px;font-size:14px;color:#e0e2ea;">
+        <b style="color:#e8eaf0;">So far:</b> across {n_years} year{'s' if n_years != 1 else ''} on
+        {net_info['display_name']}, you've earned <b style="font-family:DM Mono,monospace;color:#e8eaf0;">
+        ${total_rev:.1f}M</b> revenue and netted <b style="font-family:DM Mono,monospace;
+        color:{SUCCESS if total_ocf >= 0 else DANGER};">${total_ocf:+.1f}M</b> cumulative OCF — an overall
+        margin of <b style="font-family:DM Mono,monospace;color:{summary_c};">{level_margin:.1f}%</b>,
+        {verb} the {net_info['pass_threshold']:.0f}% you need by the end of the level to pass.
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Cancelled shows this year ──────────────────────────────────────────
     newly = [r for r in result["shows"] if r["status"] == "cancelled"]
@@ -1173,9 +1231,15 @@ def _results(ss, shows, net_info, year, team, net):
             # auction year (see utils/sports_models.py::cycle_for_year),
             # so filtering on that is exact, same posture as greenlit-show
             # undo above (bid amounts committed aren't refunded, only the
-            # resulting contract/log entry is removed).
+            # resulting contract/log entry is removed). start_year is a
+            # real calendar year (2026-08-24 fix, same bug as
+            # _section_sports_rights_bidding) -- comparing it against the
+            # raw turn-index `year` here never matched, so Redo previously
+            # left a just-won contract in place, permanently charging its
+            # annual cost even after being "undone."
             ss.sports_bid_log.pop(year, None)
-            ss.sports_contracts = [c for c in ss.sports_contracts if c.start_year != year]
+            _redo_calendar_year = LEVEL_START_YEAR[net] + (year - 1)
+            ss.sports_contracts = [c for c in ss.sports_contracts if c.start_year != _redo_calendar_year]
             ss.sim_phase       = "decisions"
             st.rerun()
     with nav2:
@@ -1541,3 +1605,9 @@ def _complete(ss, shows, net_info, team, net):
             ss.year                 = 1
             ss.level_budget         = None   # re-derived from net_info's budget_base
             st.rerun()
+
+    # ── How You Compare ───────────────────────────────────────────────────────
+    # 2026-08-24, per user request: show competitors right here at the end
+    # of the level instead of only on the separate Leaderboard tab.
+    st.divider()
+    render_vs_competitors_board(net, team, ss.school, ss.class_section)

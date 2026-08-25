@@ -50,7 +50,15 @@ def render():
     # Student inputs
     with st.expander("🎛️ Configure Premiere Day Scenario", expanded=True):
         c1,c2,c3,c4 = st.columns(4)
-        pd_show_name = c1.selectbox("Show", [s.name for s in shows[:10]], key="sched_show",
+        # Prioritize the currently active network's own shows before
+        # truncating to 10 (2026-08-24 fix, found in a QA pass) -- `shows`
+        # is always built Oxygen-first regardless of which network is
+        # actually being played, so this dropdown could never surface a
+        # Bravo or Peacock show without scrolling past 10 Oxygen titles
+        # that aren't even part of the level currently in progress.
+        active_display = net.capitalize()
+        shows_for_dropdown = sorted(shows, key=lambda s: s.network != active_display)
+        pd_show_name = c1.selectbox("Show", [s.name for s in shows_for_dropdown[:10]], key="sched_show",
                                      help="Loads this show's real episode count and per-episode cost below — "
                                           "still yours to edit if you want to explore a hypothetical instead.")
         pd_launch    = c2.radio("Launch Day", [1, 15, 30], horizontal=True,
@@ -155,14 +163,21 @@ def render():
     st.divider()
 
     # ── Section 2: Monthly Amortization Grid ─────────────────────────────────
-    st.markdown('<div class="section-title">Monthly Amortization Grid — All Active Shows</div>', unsafe_allow_html=True)
-    st.markdown("""
+    st.markdown('<div class="section-title">Monthly Amortization Grid — Top 12 by Cost</div>', unsafe_allow_html=True)
+    st.markdown(f"""
     <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
     Red cells = months with active amortization bills. Shows premiering in the same quarter stack costs —
     a deep-red column means your cash cows must bridge a large up-front gap before ad revenue catches up.
+    {'<br><br>⚠ Showing the <b>12 costliest of ' + str(len(shows)) + '</b> active shows — a show with no red '
+     'here may just not have made this cut, not zero cost exposure.' if len(shows) > 12 else ''}
     </div>
     """, unsafe_allow_html=True)
 
+    # Title/caption corrected 2026-08-24 (found in a QA pass) -- this was
+    # previously labeled "All Active Shows" while silently truncating to
+    # the 12 costliest via this same sort+slice, which at Bravo/Peacock
+    # scale (up to ~50 combined active shows) could read as "no cost
+    # exposure" for a show that simply didn't make the top-12 cut.
     grid_shows = sorted(shows, key=lambda s: -s.total_cost(year))[:12]
     amort_rows = []
     for s in grid_shows:
@@ -233,14 +248,15 @@ def render():
         }).map(lambda v: "color:#66bb6a;" if v >= 0 else "color:#ef5350;",
                     subset=["Net Cash Flow"]), use_container_width=True)
 
-    st.divider()
-
     # Primetime Scheduling — Assign Your Shows moved to app_pages/renewal.py
     # (2026-08-03, per user request), right after the Full Renewal Analysis
     # Table, so it sits alongside this year's other real decisions instead of
     # here. This tab is cash-flow/amortization reference only now.
 
     # ── Hourly Revenue Index ──────────────────────────────────────────────────
+    # Single divider here (2026-08-24 fix) -- the moved-out section above left
+    # two dividers back to back with nothing between them, an extra visual
+    # gap inconsistent with the single-divider spacing used elsewhere.
     st.divider()
     st.markdown('<div class="section-title">Hourly Ad Revenue Index — Premiere Week</div>', unsafe_allow_html=True)
 

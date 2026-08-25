@@ -11,6 +11,7 @@ import json
 import os
 import time
 import streamlit as st
+import pandas as pd
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 from pathlib import Path
@@ -71,13 +72,24 @@ def _read_free_navigation() -> bool:
     play order (`app.py`'s `oxygen_shows`/`bravo_shows`/`peacock_shows`
     init), so skipping ahead is mechanically safe, not just a UI unlock.
 
-    Defaults to False (today's sequential-gating behavior, unchanged for
-    every deployment until an instructor opts in) — same try/except-on-
-    missing-secrets.toml reasoning as `_read_years_per_level`."""
+    Defaults to True as of 2026-08-24 (per explicit user/product decision:
+    "ultimately, the instructor will tell the students which one to
+    select, and perhaps these shouldn't be locked") — this tool is
+    instructor-directed classroom use, not self-paced mastery progression,
+    so the sequential gate's only real effect was friction (a team can't
+    explore Bravo/Peacock's mechanics early, or recover from a bad Oxygen
+    run without a forced replay) for a safeguard that doesn't match how
+    it's actually used. Pass/fail scoring, attempts, and the leaderboard
+    are completely unaffected either way (see get_team_network_status's
+    own docstring) — this only changes which nav button is clickable. An
+    instructor who specifically wants the old sequential-gating posture
+    can still opt back into it by setting `FREE_NAVIGATION = false` in
+    that deployment's own Streamlit secrets — same
+    try/except-on-missing-secrets.toml reasoning as `_read_years_per_level`."""
     try:
-        val = st.secrets.get("FREE_NAVIGATION", False)
+        val = st.secrets.get("FREE_NAVIGATION", True)
     except Exception:
-        val = False
+        val = True
     return bool(val)
 
 
@@ -432,6 +444,54 @@ def get_network_leaderboard(network: str, school: Optional[str] = None,
         r["rank"] = i + 1
     return ranked
 
+def render_vs_competitors_board(network: str, team_name: str, school: str,
+                                 class_section: str) -> None:
+    """Compact 'How You Compare' board, shown inline at the end of a
+    simulation (2026-08-24, per user request: TV's Level Complete screen
+    and Movies' Final Slate screen should each show how the team's score
+    stacks up against competitors, not just point to the separate
+    Leaderboard tab). Reuses get_network_leaderboard -- the exact same
+    ranking the full Leaderboard tab shows, so the two never disagree.
+
+    Scopes to the team's own class first (the most relevant comparison);
+    falls back to school-wide, then all-schools, if the class doesn't yet
+    have enough other official scores to be a meaningful comparison."""
+    scope_label = "your class"
+    board = get_network_leaderboard(network, school, class_section)
+    if len(board) < 2:
+        board = get_network_leaderboard(network, school, None)
+        scope_label = "your school"
+    if len(board) < 2:
+        board = get_network_leaderboard(network, None, None)
+        scope_label = "all schools"
+    if not board:
+        return
+
+    own_key  = (school, class_section, team_name)
+    own_row  = next((r for r in board
+                      if (r.get("school", ""), r.get("class_section", ""), r["team_name"]) == own_key), None)
+
+    st.markdown('<div class="section-title" style="margin-top:14px;">📊 How You Compare</div>',
+                unsafe_allow_html=True)
+    if own_row:
+        st.markdown(f"You rank **#{own_row['rank']} of {len(board)}** teams ({scope_label}) with an "
+                     f"official score of **{own_row['score']:.0f} pts**.")
+    else:
+        st.markdown(f"{len(board)} other team{'s' if len(board) != 1 else ''} ({scope_label}) already "
+                     f"have an official score here.")
+
+    rows = []
+    for r in board[:8]:
+        is_own = (r.get("school", ""), r.get("class_section", ""), r["team_name"]) == own_key
+        rows.append({
+            "Rank":  r["rank"],
+            "Team":  f"→ {r['team_name']}" if is_own else r["team_name"],
+            "Score": round(r["score"], 0),
+            "Passed": "✅" if r["passed"] else "—",
+        })
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                 height=min(320, 46 + 35 * len(rows)))
+
 def get_class_awards(network: str, school: Optional[str] = None,
                       class_section: Optional[str] = None) -> list[dict]:
     """Superlative awards across every team's official entry for one
@@ -536,9 +596,24 @@ def get_overall_leaderboard(school: Optional[str] = None,
                 "total_score": 0.0, "networks_completed": 0,
                 "breakdown": {}, "timestamp": entry["timestamp"],
             })
-            t["total_score"] += entry["score"]
+            # Bug fix, 2026-08-25 (spotted by the user doing the arithmetic
+            # on the Leaderboard itself: three networks reading 73/74/66
+            # summed to 213, but the combined total read 214). Every
+            # per-network score display in this app rounds independently
+            # with `:.0f` (this file's `breakdown` badges included, via
+            # app_pages/leaderboard.py) — but this used to accumulate the
+            # RAW unrounded score and only round the total once at the end,
+            # so a team whose real scores were e.g. 72.6/73.6/66.6 could
+            # see 73+74+67 individually (each rounds up) while the total
+            # read round(72.6+73.6+66.6)=213 (sums to a value that rounds
+            # differently) -- two "correct" numbers that visibly disagree
+            # with each other on the same page. Rounding each score BEFORE
+            # accumulating means total_score is always the sum of the exact
+            # integers shown per-network, by construction.
+            net_score = round(entry["score"])
+            t["total_score"] += net_score
             t["networks_completed"] += 1
-            t["breakdown"][net] = entry["score"]
+            t["breakdown"][net] = net_score
             t["timestamp"] = min(t["timestamp"], entry["timestamp"])   # earliest submission, for tie-breaks
 
     ranked = sorted(teams.values(), key=lambda x: (-x["total_score"], x["timestamp"]))
