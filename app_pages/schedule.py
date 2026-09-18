@@ -48,7 +48,12 @@ def render():
     """, unsafe_allow_html=True)
 
     # Student inputs
-    with st.expander("🎛️ Configure Premiere Day Scenario", expanded=True):
+    # A bordered container, not st.expander: this tool renders inside the
+    # "Supplementary Insights" expander in simulation.py, and Streamlit
+    # <= ~1.45 raises StreamlitAPIException for an expander nested in an
+    # expander (newer versions allow it, which is why tests on 1.59 missed it).
+    with st.container(border=True):
+        st.markdown("**🎛️ Configure Premiere Day Scenario**")
         c1,c2,c3,c4 = st.columns(4)
         # Prioritize the currently active network's own shows before
         # truncating to 10 (2026-08-24 fix, found in a QA pass) -- `shows`
@@ -241,7 +246,9 @@ def render():
     fig_b.update_layout(**base_layout("Monthly P&L Bridge ($M)", height=320), barmode="relative")
     st.plotly_chart(fig_b, use_container_width=True, config={"displayModeBar":False})
 
-    with st.expander("📋 Monthly Detail Table"):
+    # Checkbox toggle instead of st.expander -- see the note on the scenario
+    # container above (no expanders nested inside Supplementary Insights).
+    if st.checkbox("📋 Show Monthly Detail Table", key="sched_show_detail_table"):
         st.dataframe(bridge_df.style.format({
             "Ad Revenue":"${:.2f}M","Distribution":"${:.2f}M",
             "Content Cost":"${:.2f}M","Net Cash Flow":"${:.2f}M"

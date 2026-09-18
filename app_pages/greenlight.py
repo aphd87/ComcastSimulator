@@ -245,7 +245,7 @@ def render():
             eps       = st.number_input("Episode Count", 4, 24, 10, step=1, key="gl_eps")
         with c2:
             ep_cost   = st.number_input("Cost per Episode ($K)", 100, 5000, 750, step=50,
-                                         help="Bravo reality ~$650-900K. Scripted ~$1-2M.", key="gl_ep_cost")
+                                         help="Bravo reality ~\\$650-900K. Scripted ~\\$1-2M.", key="gl_ep_cost")
             rating    = st.slider("Projected Rating (18-49)", 0.3, 4.0, 1.2, step=0.1,
                                    help="Share of the 18-49 ad-buying demo you expect to reach. "
                                         "Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+. Chasing a "

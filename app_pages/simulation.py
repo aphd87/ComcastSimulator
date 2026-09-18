@@ -581,9 +581,9 @@ def _section_financing(ss, shows, year, net_info, level_budget):
     per_show_mkt = ss.get("mkt_budget", 5.0) / max(active_count, 1)
     if active_count and per_show_mkt < MIN_MARKETING_PER_SHOW_M:
         st.warning(
-            f"⚠ ${per_show_mkt:.1f}M/show is below the ${MIN_MARKETING_PER_SHOW_M:.0f}M/show "
+            f"⚠ \\${per_show_mkt:.1f}M/show is below the \\${MIN_MARKETING_PER_SHOW_M:.0f}M/show "
             f"realistic minimum for a show to be marketed viably ({active_count} active shows "
-            f"splitting ${ss.get('mkt_budget', 5.0):.1f}M). The math will still run, but consider "
+            f"splitting \\${ss.get('mkt_budget', 5.0):.1f}M). The math will still run, but consider "
             f"raising marketing or cancelling more shows in Renewal to concentrate spend."
         )
 

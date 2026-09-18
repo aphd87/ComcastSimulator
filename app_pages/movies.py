@@ -1419,8 +1419,8 @@ def _decisions(ss):
         studio_budget_m = ss.get("movie_studio_budget_m", STUDIO_ANNUAL_BUDGET_START_M)
         if studio_budget_m < STUDIO_ANNUAL_BUDGET_START_M * 0.7:
             st.warning(
-                f"⚠ The Studio Annual Budget has shrunk to ${studio_budget_m/1000:.2f}B (started at "
-                f"${STUDIO_ANNUAL_BUDGET_START_M/1000:.1f}B) — recent cycles have been running weak NPV. "
+                f"⚠ The Studio Annual Budget has shrunk to \\${studio_budget_m/1000:.2f}B (started at "
+                f"\\${STUDIO_ANNUAL_BUDGET_START_M/1000:.1f}B) — recent cycles have been running weak NPV. "
                 f"Not a hard cap on this greenlight, but a real signal the studio is under real financial "
                 f"pressure right now."
             )
@@ -1981,7 +1981,9 @@ def _decisions(ss):
             default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
                 else round((lo + hi) / 2, 2)
             pvod_price = st.slider(
-                f"PVOD Rental Price — band ${lo:.2f} to ${hi:.2f}, sized off your theatrical performance",
+                # `\\$` (rendered `\$`): two bare `$` in one label make Streamlit's
+                # markdown read everything between them as LaTeX math.
+                f"PVOD Rental Price — band \\${lo:.2f} to \\${hi:.2f}, sized off your theatrical performance",
                 lo, hi, float(default_price), step=0.50,
                 help="A stronger theatrical run supports a higher PVOD price ceiling — real demand can "
                      "absorb a premium; a weaker one needs a lower price to move volume. Higher prices "
@@ -2047,13 +2049,15 @@ def _decisions(ss):
             if not cp["rejected"]:
                 st.caption(f"✅ Month {cp['month']:.0f}: market accepted your ${cp['price_before']:.2f} price.")
             else:
-                resp_txt = f"held at ${cp['price_after']:.2f}" if cp["response"] == "hold" else f"cut to ${cp['price_after']:.2f}"
+                # `\\$` throughout: this caption carries two dollar amounts, and two bare
+                # `$` render as LaTeX math (the text between them comes out garbled).
+                resp_txt = f"held at \\${cp['price_after']:.2f}" if cp["response"] == "hold" else f"cut to \\${cp['price_after']:.2f}"
                 buzz_txt = ""
                 if cp.get("buzz") == "awards":
                     buzz_txt = " — the wider audience sparked real buzz, a critical-reception boost."
                 elif cp.get("buzz") == "sequel":
                     buzz_txt = " — the wider audience sparked real buzz, a Sequel Potential spark."
-                st.caption(f"⚠ Month {cp['month']:.0f}: market rejected ${cp['price_before']:.2f} — you {resp_txt}.{buzz_txt}")
+                st.caption(f"⚠ Month {cp['month']:.0f}: market rejected \\${cp['price_before']:.2f} — you {resp_txt}.{buzz_txt}")
 
         if pending is not None:
             st.warning(f"⚠ Month {pending['month']:.0f}: the market rejected your "

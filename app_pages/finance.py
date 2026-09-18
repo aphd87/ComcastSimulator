@@ -80,10 +80,10 @@ def render():
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     c1.metric("Ad Revenue",     f"${ad_rev:.1f}M",   f"Rating × ${REV_PER_RATING_POINT}M/pt",
               help=(f"A **rating point** = 1% of the 18-49 target demo watching a show (the standard "
-                    f"Nielsen ad-buying metric). Each point is worth **${REV_PER_RATING_POINT}M** in ad "
+                    f"Nielsen ad-buying metric). Each point is worth **\\${REV_PER_RATING_POINT}M** in ad "
                     f"revenue at this network's baseline rate (Bravo tier, 2012) — so a show rated 1.5 "
                     f"generates {1.5*REV_PER_RATING_POINT:.1f}M before marketing lift and cord-cutting decay. "
-                    f"Formula: Rating × ${REV_PER_RATING_POINT}M × marketing-lift × cord-cutting-decay × "
+                    f"Formula: Rating × \\${REV_PER_RATING_POINT}M × marketing-lift × cord-cutting-decay × "
                     f"schedule-slot multiplier."))
     c2.metric("Distribution",   f"${dist_rev:.1f}M", f"{subs:.1f}M subs × ${SUB_RATE_PER_MONTH}/mo")
     c3.metric("Total Revenue",  f"${total_rev:.1f}M","Ad + Distribution")
