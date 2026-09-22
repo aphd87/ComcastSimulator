@@ -1226,6 +1226,7 @@ def _decisions(ss):
     d = ss.movie_draft
 
     with left:
+        st.markdown('<div class="section-title mt-2">🎬 Concept</div>', unsafe_allow_html=True)
         title = st.text_input("Working Title", d.get("title", f"Untitled {_cycle_years_label(ss.movie_cycle)} Release"))
         gc1, gc2 = st.columns(2)
         genre = gc1.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
@@ -1374,6 +1375,7 @@ def _decisions(ss):
                 ss.movie_draft["pa_spend_m"] = float(d.get("pa_spend_m", 40.0)) + RESEARCH_FEE_M
                 st.rerun()
 
+        st.markdown('<div class="section-title mt-3">💰 Capital</div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         budget_cap = INDIE_HORROR_BUDGET_CAP_M if concept_type == "Indie-Horror" else 300.0
         budget_default = min(float(d.get("budget_m", 60.0)), budget_cap)
