@@ -1178,6 +1178,7 @@ def _decisions(ss):
         '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
         '<a href="#talent" style="color:#1a6bb5;">Studio Partnerships</a> · '
         '<a href="#scouted" style="color:#1a6bb5;">Scouted Concepts</a> · '
+        '<a href="#festivals" style="color:#1a6bb5;">Festival Acquisitions</a> · '
         '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#holding" style="color:#1a6bb5;">Holding Deals</a> · '
         '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
