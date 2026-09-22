@@ -927,4 +927,18 @@ THEORY_CONTENT = {
             "never breaking."
         ),
     },
+    "release_calendar": {
+        "title": "Release Calendar & Seasonality Trade-offs",
+        "icon": "📅",
+        "category": "movies",
+        "brief": (
+            "Debut timing is a real strategic axis, not just a date on a calendar. Summer Tentpole and Holiday "
+            "releases open bigger (+18% and +12% opening intensity) because more of the audience is out looking "
+            "for a movie — but that same crowding tanks awards recall to as low as 40%, since voters rarely "
+            "remember an early-summer release by January. Fall/Awards opens softer but is the real industry "
+            "on-ramp into the awards calendar — exactly why For-Your-Consideration campaigns are timed around "
+            "it. Off-Peak is a genuine strategy too: many mid-budget films deliberately open in an unremarkable "
+            "week specifically to dodge summer/holiday crowding rather than compete head-on."
+        ),
+    },
 }

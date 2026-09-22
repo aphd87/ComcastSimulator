@@ -19,10 +19,15 @@ class TestTheoryContentStructure:
         for key, t in THEORY_CONTENT.items():
             assert t["category"] in ("tv", "movies"), f"{key} has an invalid category"
 
-    def test_tv_and_movies_are_evenly_split(self):
+    def test_tv_and_movies_counts(self):
+        # Deliberately uneven as of the Release Calendar & Seasonality card
+        # (2026-09-22) -- Movies picked up a real decision axis (debut
+        # timing) that TV doesn't have an equivalent for, so the earlier
+        # even-split-by-design choice was dropped for this card by explicit
+        # user call.
         categories = [t["category"] for t in THEORY_CONTENT.values()]
         assert categories.count("tv") == 5
-        assert categories.count("movies") == 5
+        assert categories.count("movies") == 6
 
     def test_titles_are_unique_across_both_categories(self):
         titles = [t["title"] for t in THEORY_CONTENT.values()]
