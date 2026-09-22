@@ -1179,8 +1179,8 @@ def _decisions(ss):
         '<a href="#talent" style="color:#1a6bb5;">Studio Partnerships</a> · '
         '<a href="#scouted" style="color:#1a6bb5;">Scouted Concepts</a> · '
         '<a href="#festivals" style="color:#1a6bb5;">Festival Acquisitions</a> · '
-        '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#holding" style="color:#1a6bb5;">Holding Deals</a> · '
+        '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
         '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
         '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'
         '</div>', unsafe_allow_html=True)
