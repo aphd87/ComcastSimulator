@@ -80,15 +80,20 @@ def line_chart(df: pd.DataFrame, x: str, y_cols: list[str],
     fig.update_layout(**base_layout(title, height))
     return fig
 
-def queue_supplement(title: str, render_fn) -> None:
-    """Defer an explanatory, non-scored chart/tool to the single consolidated
-    "Supplementary Insights" expander rendered once per year (right before the
-    Simulate button in app_pages/simulation.py) instead of drawing it inline,
-    where it interrupts the scroll through the real, scored decisions above it.
-    render_fn is a no-arg callable — build it as a closure over whatever local
-    values (shows, year, a computed P&L dict, ...) the chart needs; it's only
-    invoked later, when the expander actually renders."""
-    st.session_state.setdefault("_supp_charts", []).append((title, render_fn))
+def queue_supplement(title: str, render_fn, when_to_use: str = "") -> None:
+    """Show an explanatory, non-scored chart as its own collapsed "📊 Why?"
+    box right where it's called, i.e. directly under the decision it explains.
+
+    2026-10-01: these used to be collected into one "Supplementary Insights"
+    box just above Simulate, so students only reached them after they'd
+    already made the decisions they explain. Callers must not be inside
+    another expander (nested expanders crash older Streamlit).
+    render_fn is a no-arg callable (a closure over the values the chart needs)."""
+    with st.expander(f"📊 Why? (optional) — {title}", expanded=False):
+        if when_to_use:
+            st.markdown(f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:6px;">'
+                        f'<b>Use this when:</b> {when_to_use} Not scored.</div>', unsafe_allow_html=True)
+        render_fn()
 
 
 def donut_chart(labels: list, values: list, title: str = "",

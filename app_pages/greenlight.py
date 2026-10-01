@@ -724,7 +724,8 @@ def render():
         fig_ltv.update_layout(**base_layout("Cumulative Revenue: Linear vs. SVOD ($M)", height=300))
         st.plotly_chart(fig_ltv, use_container_width=True, config={"displayModeBar":False})
 
-    queue_supplement(f"Cumulative LTV Curve (36 months) — \"{show_name}\"", _render_cumulative_ltv)
+    queue_supplement(f"Cumulative LTV Curve (36 months) — \"{show_name}\"", _render_cumulative_ltv,
+                     when_to_use="the 3-Year P&L makes streaming look bad; it shows when subscriber value catches up to linear.")
 
     st.divider()
 
@@ -808,4 +809,5 @@ def render():
                 "SVOD OCF":"${:.2f}M","SVOD ROI %":"{:.1f}%"
             }), use_container_width=True, height=280)
 
-    queue_supplement(f"Marketing ROI: Linear vs. SVOD — \"{show_name}\"", _render_marketing_roi)
+    queue_supplement(f"Marketing ROI: Linear vs. SVOD — \"{show_name}\"", _render_marketing_roi,
+                     when_to_use="setting this concept's Marketing Budget; it shows where extra marketing stops paying off.")

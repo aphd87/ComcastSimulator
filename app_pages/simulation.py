@@ -782,14 +782,8 @@ def _decisions(ss, shows, net_info, year, net):
     threshold    = net_info["pass_threshold"]
     level_budget = ss.level_budget
 
-    # Reset the "Supplementary Insights" queue for this render (2026-08-25) —
-    # Renewal/Greenlighting below use utils.charts.queue_supplement to defer
-    # a handful of explanatory, non-scored charts (Genre Decay Curves,
-    # Premiere Calendar, Cumulative LTV Curve, Marketing ROI) here instead of
-    # drawing them inline, so they don't interrupt the scroll through real
-    # decisions. Cleared at the top of every render so a rerun doesn't just
-    # keep appending duplicates of the same charts.
-    ss["_supp_charts"] = []
+    # Explanatory, non-scored charts render as collapsed "📊 Why?" boxes under
+    # the decision each one explains (utils.charts.queue_supplement, 2026-10-01).
 
     prev = next((r for r in ss.yearly_log if r["year"] == year - 1), None) if year > 1 else None
     if prev:
@@ -828,6 +822,19 @@ def _decisions(ss, shows, net_info, year, net):
     from app_pages.renewal import render as render_renewal
     render_renewal()
 
+    # Scheduling & cash-flow tools sit right under Renewal (2026-10-01), where
+    # premiere months and primetime slots are actually decided, instead of in
+    # a catch-all box just above Simulate.
+    st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
+    with st.expander("📊 Why? (optional) — Scheduling & cash-flow tools", expanded=False):
+        st.markdown(
+            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:6px;"><b>Use this when:</b> picking '
+            'premiere months and primetime slots above. Primetime slots drive real ad revenue; premiere month '
+            'only shifts when cash arrives during the year, not the annual total. Not scored.</div>',
+            unsafe_allow_html=True)
+        from app_pages.schedule import render as render_schedule
+        render_schedule()
+
     # Sports Rights (Peacock only) sits BEFORE Greenlighting, per explicit
     # user feedback after using the feature: a multi-year rights commitment
     # is the kind of decision that should shape the entertainment slate
@@ -863,29 +870,6 @@ def _decisions(ss, shows, net_info, year, net):
     # originals slate above is final, feeding retained_fraction() the real
     # number rather than a mid-page guess. See _sports_pnl_recap's docstring.
     sports_pnl = _sports_pnl_recap(ss, shows, year, net, new_cancel)
-
-    st.divider()
-    st.markdown('<a id="scheduling"></a>', unsafe_allow_html=True)
-    n_supp = len(ss.get("_supp_charts", [])) + 1  # +1 for the Schedule tool itself
-    with st.expander(
-        f"{next_sec} · 📊 Supplementary Insights (optional) — {n_supp} extra charts & tools, not scored",
-        expanded=False,
-    ):
-        st.caption(
-            "None of this affects your score or budget — it's here if you want deeper intuition on "
-            "the mechanics. Click in, or just keep scrolling to Simulate."
-        )
-        st.markdown('<div class="section-title">📅 Scheduling & Cash-Flow Reference '
-            '<span style="font-size:14px;color:#e0e2ea;">(the primetime-slot calls in Renewal above '
-            'drive real ad revenue; premiere month only shapes the monthly cash-flow timing shown '
-            'here, not the annual total)</span></div>', unsafe_allow_html=True)
-        from app_pages.schedule import render as render_schedule
-        render_schedule()
-
-        for title, render_fn in ss.get("_supp_charts", []):
-            st.divider()
-            st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
-            render_fn()
 
     st.divider()
 

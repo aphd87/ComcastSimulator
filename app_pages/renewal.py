@@ -120,7 +120,8 @@ def render():
             st.plotly_chart(fig_decay, use_container_width=True, config={"displayModeBar": False})
             st.caption("Maturation = 1 + (avg IP score / 100) × 0.06 − 0.02 per year — genres above ~33 avg IP grow, below decay. Same formula as Show.projected_rating().")
 
-        queue_supplement("Genre Decay Curves — Rating Trajectory", _render_genre_decay)
+        queue_supplement("Genre Decay Curves — Rating Trajectory", _render_genre_decay,
+                         when_to_use="deciding whether to renew an aging show; it shows which genres gain or lose ratings year over year.")
 
     st.divider()
 
@@ -424,7 +425,8 @@ def render():
             """, unsafe_allow_html=True)
         st.caption("Number = shows premiering that month. Hover a column for names.")
 
-    queue_supplement("This Year's Schedule — Premiere Calendar", _render_premiere_calendar)
+    queue_supplement("This Year's Schedule — Premiere Calendar", _render_premiere_calendar,
+                     when_to_use="you've set premiere months and want to see if too many shows land in the same month.")
 
     # New-this-year shows (greenlit this year, see app_pages/greenlight.py)
     # get their own debut-month picker right here — they're easy to miss in

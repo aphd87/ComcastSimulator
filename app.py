@@ -815,7 +815,7 @@ else:
                 "🔄 <b>Renewal</b> — renew or cancel each show, set premiere months and primetime slots; "
                 "pay for research if unsure",
                 "🎬 <b>Greenlighting</b> <i>(optional)</i> — acquire a pitched show or pitch your own, up to 3 a year",
-                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — premiere timing and cash-flow charts",
+                "📊 <b>Why? boxes</b> <i>(optional)</i> — collapsed charts under each decision explain the mechanics",
                 f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['oxygen']}–{_end_year['oxygen']}), then submit your score",
             ],
@@ -833,7 +833,7 @@ else:
                 "💰 <b>Financing</b> — separate Oxygen shows from Bravo, watch the combined budget",
                 "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
                 "🎬 <b>Greenlighting</b> <i>(optional)</i> — acquire a pitched show or pitch your own, up to 3 a year",
-                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — the dual-network cost and cash-flow charts",
+                "📊 <b>Why? boxes</b> <i>(optional)</i> — collapsed charts under each decision explain the mechanics",
                 f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}), then submit your score",
             ],
@@ -852,7 +852,7 @@ else:
                 "🔄 <b>Renewal</b> — decide which linear shows to wind down",
                 "🏈 <b>Sports Rights</b> — bid on NFL, Premier League, or Olympics packages (multi-year contracts)",
                 "🎬 <b>Greenlighting</b> <i>(optional)</i> — originals that keep sports-driven subscribers from churning",
-                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — cash-flow and cannibalization charts",
+                "📊 <b>Why? boxes</b> <i>(optional)</i> — collapsed charts under each decision explain the mechanics",
                 f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}), then submit your score",
             ],
