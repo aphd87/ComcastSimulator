@@ -28,7 +28,7 @@ CALLOUT_LABEL = {"tip": "TIP", "warn": "WATCH OUT", "key": "KEY IDEA"}
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-def new_doc() -> Document:
+def new_doc(footer_text: str = "The Slate — Media Portfolio Simulation · Student Guide") -> Document:
     doc = Document()
     sec = doc.sections[0]
     sec.page_width, sec.page_height = Inches(8.5), Inches(11)
@@ -64,7 +64,7 @@ def new_doc() -> Document:
 
     footer = sec.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = footer.add_run("The Slate — Media Portfolio Simulation · Student Guide")
+    r = footer.add_run(footer_text)
     r.font.size = Pt(9)
     r.font.color.rgb = MUTED
     return doc
@@ -155,9 +155,9 @@ def table(doc, header, rows, widths):
     return t
 
 
-def title_block(doc, title, subtitle):
+def title_block(doc, title, subtitle, label="THE SLATE  ·  STUDENT GUIDE"):
     p = doc.add_paragraph()
-    r = p.add_run("THE SLATE  ·  STUDENT GUIDE")
+    r = p.add_run(label)
     r.bold = True
     r.font.size = Pt(10)
     r.font.color.rgb = ACCENT

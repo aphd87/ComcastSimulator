@@ -857,8 +857,8 @@ THEORY_CONTENT = {
             "A movie isn't a portfolio with a margin — it's one concentrated bet, with production budget and "
             "P&A both cash out before a single dollar of revenue is visible. Risk-adjusted NPV weights the bear "
             "case at 50% rather than scoring on expected value alone, rewarding risk-aware greenlighting over "
-            "blind optimism. A $200M tentpole might show a base-case NPV of +$179M but a bear case of only "
-            "+$44M — the score reflects both, not just the rosy number."
+            "blind optimism. A well-marketed $200M tentpole might show a base-case NPV near +$240M but a bear case of only "
+            "about +$30M — the score reflects both, not just the rosy number."
         ),
     },
     "windowed_revenue": {
