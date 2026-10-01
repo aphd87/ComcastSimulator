@@ -780,6 +780,23 @@ else:
           </div>
         </div>
         """, unsafe_allow_html=True)
+        # What the other tabs are for (2026-10-01): all three are optional
+        # supplements; every scored decision lives in the Simulation tab.
+        st.markdown("""
+        <div style="background:#12141a;border:1px solid #252836;border-left:3px solid #4fc3f7;
+             border-radius:10px;padding:14px 20px;margin-top:10px;font-size:15px;color:#c8cad4;line-height:1.7;">
+          <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Beyond the Simulation tab</div>
+          You make every scored decision in <b style="color:#e8eaf0;">📊 Simulation</b>. The other three tabs
+          are optional supplements. They don't change your score, but they help you understand it:
+          <b style="color:#e8eaf0;">💹 P&amp;L / OCF</b> breaks the current year into line items and a monthly
+          cash view, so you can see exactly where margin is won or lost.
+          <b style="color:#e8eaf0;">📈 10-Yr Forecast</b> projects your current slate and marketing spend
+          over a longer horizon, using its own simplified model. It's a planning lens, not a prediction of
+          your score. <b style="color:#e8eaf0;">📖 Theory</b> explains the frameworks behind the game
+          (portfolio strategy, amortization, diversification) so you can explain <i>why</i> a decision works.
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Level Brief ──────────────────────────────────────────────────────────
     # Calendar spans read from utils.game_state.LEVEL_START_YEAR/YEARS_PER_LEVEL
