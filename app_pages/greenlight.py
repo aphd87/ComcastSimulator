@@ -243,8 +243,13 @@ def render():
         'adapted from a proven overseas hit — a real rights-licensing premium, but a higher, de-risked '
         'rating and IP Score. A <b style="color:#e8eaf0;">Brand Partnership</b> means a sponsor already '
         'attached, subsidizing part of the acquisition cost. Unlike Build From Scratch, an acquired '
-        'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one.'
-        '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
+        'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one. '
+        + (f'<b style="color:#e8c547;">You have {slots_left} of {MAX_NEW_SHOWS_PER_YEAR} new-show slots '
+           f'left this year</b> — acquiring, building from scratch, and AI-pitched shows all share them.'
+           if slots_left > 0 else
+           f'<b style="color:#ef5350;">You\'ve used all {MAX_NEW_SHOWS_PER_YEAR} new-show slots this year</b> '
+           f'— acquiring, building from scratch, and AI-pitched shows all share them. More open next year.')
+        + '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
         '<ul style="margin:4px 0 0 18px;padding:0;line-height:1.6;">'
         '<li><b>Demo</b>: who watches. Age band · gender skew · where (e.g. 18-49 · Balanced · National US).</li>'
         '<li><b>eps · $/ep</b>: episodes per season and production cost per episode. Multiply them for the season cost.</li>'
