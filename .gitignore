@@ -4,3 +4,4 @@ __pycache__/
 .streamlit/secrets.toml
 leaderboard.json
 team_state.json
+pitch_board.json

@@ -221,6 +221,7 @@ def build_plan():
         "Point to the spread: \"Same studio, same budget, same five slots. Look at this gap.\"",
         "Point to the release column: \"Who used Platform or Day-and-Date? What kind of films were they?\"",
         "Ask the bottom teams for their biggest decision, not their unluckiest film.",
+        "Open the **📋 Pitch Board** (Leaderboard page): read a top team's logline and a bottom team's aloud, with each film's actual result beside it. Ask: \"Could you have predicted these from the pitch alone?\"",
     ])
 
     doc.add_heading("BOARD 3: LUCK VS. ARCHITECTURE, REVISITED  (minutes 78–83)", level=1)

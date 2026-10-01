@@ -1275,8 +1275,7 @@ def _decisions(ss):
                        "audience — every dollar of awareness has to be earned through P&A and Star Power.")
 
         # Logline (2026-10-01): always available and required to Simulate --
-        # it used to exist only inside AI Pitch Feedback, so a school without
-        # an API key had nowhere to write one. AI Pitch Feedback grades this text.
+        # it's posted to the class Pitch Board when the film is simulated.
         logline = st.text_area(
             "Logline (1-3 sentences): who it's about, what they want, and what's in the way",
             value=d.get("logline", ""), max_chars=500, key=f"movie_logline_{ss.movie_cycle}",
@@ -1287,54 +1286,10 @@ def _decisions(ss):
         )
         ss.movie_draft["logline"] = logline
 
-        # ── AI Pitch Feedback (optional, BYOK — see README.md) ─────────────────
-        # 2026-08-17: Movies-side parallel to app_pages/greenlight.py's AI
-        # Pitch Feedback panel -- TV had this fully built and Movies never
-        # got the equivalent, even though the same BYOK infrastructure
-        # (utils/ai_grading.py) already existed. Uses grade_movie_concept, a
-        # genuinely separate model/prompt from TV's grade_show_concept (see
-        # MovieConceptGrade's docstring) -- theatrical feasibility/market-fit
-        # criteria don't map onto a TV budget/network framing.
-        from utils.ai_grading import api_key_configured, grade_movie_concept
-
-        st.markdown(
-            '<div class="section-title mt-3">AI Pitch Feedback '
-            '<span style="font-size:14px;color:#e0e2ea;">(optional)</span></div>',
-            unsafe_allow_html=True,
-        )
-        if not api_key_configured():
-            st.caption("Ask your instructor to enable AI feedback for this class.")
-        else:
-            pitch = logline
-            st.caption("Grades your Working Title, Genre, Concept Type, Source Material, and the Logline above.")
-            if st.button("🤖 Get AI Feedback", key="movie_grade_button"):
-                if not pitch.strip():
-                    st.warning("Write your Logline above first.")
-                else:
-                    with st.spinner("Grading your pitch..."):
-                        grade = grade_movie_concept(title, genre, concept_type, source_material, pitch)
-                    if grade is None:
-                        st.error("AI feedback is temporarily unavailable. Try again later.")
-                    else:
-                        total = (grade.originality_score + grade.market_fit_score
-                                  + grade.feasibility_score + grade.presentation_score)
-                        st.markdown(f"**Score: {total}/100**")
-                        st.write(grade.feedback)
-                        pgc1, pgc2 = st.columns(2)
-                        with pgc1:
-                            st.markdown("**Strengths**")
-                            for s in grade.strengths:
-                                st.markdown(f"- {s}")
-                        with pgc2:
-                            st.markdown("**Risks**")
-                            for r in grade.risks:
-                                st.markdown(f"- {r}")
-                        if grade.research_recommended:
-                            st.info(f"🔬 **Worth paying for Research on this one** before you "
-                                    f"commit budget — {grade.research_rationale}")
-                        else:
-                            st.caption(f"🔬 Probably not worth paying for Research on this one — "
-                                       f"{grade.research_rationale}")
+        # ── Peer Pitch Board (2026-10-01; replaced AI pitch feedback) ──────────
+        with st.expander("👀 See what other teams in your class have pitched (TV + Movies)", expanded=False):
+            from app_pages.pitch_board import render_pitch_board
+            render_pitch_board(ss, key="movie_pitch_board")
 
         # ── Research / Social Listening ──────────────────────────────────────
         # Phase 4 item 9, 2026-08-05: Movies-side parallel to TV/Streaming's
@@ -1356,7 +1311,7 @@ def _decisions(ss):
             "track record to lean on, so this is your only signal before you commit"
         )
         st.markdown('<div class="section-title mt-3">🔎 Research '
-                    '<span class="text-xs text-muted">(optional, distinct from AI Pitch Feedback above — '
+                    '<span class="text-xs text-muted">(optional — '
                     'this previews real seeded outcome signals, not qualitative advice)</span></div>',
                     unsafe_allow_html=True)
         st.markdown(
@@ -1481,7 +1436,7 @@ def _decisions(ss):
         st.markdown('<div class="section-title mt-3">🌎 Distribution Strategy</div>', unsafe_allow_html=True)
         st.markdown(
             '<p class="text-xs text-ink2 mb-2">How this movie gets funded globally and how hard you '
-            'push exhibitors on terms — separate from Research/AI Pitch Feedback above, which are about '
+            'push exhibitors on terms — separate from Research above, which is about '
             'the concept itself, not how it reaches audiences.</p>', unsafe_allow_html=True)
         fin_labels = {
             "self_finance": "Self-Finance — full capital at risk, full upside",
@@ -2259,6 +2214,16 @@ def _decisions(ss):
             "talent_partner_bonus": talent_bonus.get("partner_name"),
         }
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
+        # Share the film and how it did on the class Pitch Board (2026-10-01).
+        # Re-simulating the same cycle replaces its post.
+        from utils.game_state import post_pitch
+        post_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""), "movies",
+                   key=f"cycle-{ss.movie_cycle}", title=project.title, genre=project.genre,
+                   pitch=ss.movie_draft.get("logline", ""),
+                   details={"cycle_label": f"Film {ss.movie_cycle}", "concept_type": project.concept_type,
+                            "budget_m": project.budget_m, "pa_spend_m": project.pa_spend_m,
+                            "release_label": RELEASE_LABELS.get(project.release_strategy, project.release_strategy),
+                            "npv": outcome["npv"], "critical_score": outcome["critical_score"]})
         ss.movie_phase = "results"
         st.rerun()
 

@@ -29,8 +29,8 @@ def _read_years_per_level() -> int:
     """Each network level's length in years — instructor-tailorable per
     deployment (2026-08-03, per user request), via this Streamlit
     deployment's own Secrets (Settings -> Secrets on Streamlit Cloud). Same
-    BYOK-style, per-school mechanism as ANTHROPIC_API_KEY in
-    utils/ai_grading.py — this tool ships as a business case run by many
+    per-school mechanism as DATABASE_URL (utils/storage.py) — this tool ships
+    as a business case run by many
     independent school deployments, not one central instance, so any
     instructor-facing knob has to live in that school's own deployment
     config, never a shared/committed value. See README.md's deployment
@@ -704,6 +704,41 @@ def load_live_state(team_name: str, school: str, class_section: str) -> Optional
     has no Driver state saved yet (e.g. a Follow Along teammate registered
     before the Driver made their first move)."""
     return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section))
+
+
+# ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────────
+# Replaces AI pitch feedback: every pitch a team commits (a TV show it
+# greenlights, a movie it simulates) is posted to a board other teams in the
+# same school + class section can browse. Same FERPA posture as the
+# leaderboard: team pseudonyms only.
+PITCH_BOARD_FILE = Path("pitch_board.json")
+
+
+def post_pitch(team_name: str, school: str, class_section: str, sim: str, key: str,
+               title: str, genre: str, pitch: str, details: Optional[dict] = None) -> dict:
+    """Post (or re-post) one pitch. `key` identifies the pitch within the team
+    (e.g. a show id, or a movie cycle); a later post with the same key
+    replaces the earlier one on the board (Redo, re-simulate)."""
+    entry = {
+        "team_name": team_name, "school": school, "class_section": class_section,
+        "sim": sim, "key": str(key), "title": title, "genre": genre,
+        "pitch": pitch, "details": details or {}, "timestamp": time.time(),
+    }
+    _storage.append_pitch(PITCH_BOARD_FILE, entry)
+    return entry
+
+
+def class_pitches(school: str, class_section: str, sim: Optional[str] = None) -> list[dict]:
+    """Pitches posted in this school + class section, newest first, keeping
+    only the latest post per (team, sim, key)."""
+    latest = {}
+    for e in _storage.load_pitches(PITCH_BOARD_FILE):
+        if e.get("school") != school or e.get("class_section") != class_section:
+            continue
+        if sim and e.get("sim") != sim:
+            continue
+        latest[(e.get("team_name"), e.get("sim"), e.get("key"))] = e
+    return sorted(latest.values(), key=lambda e: -e.get("timestamp", 0))
 
 
 # ── Network identity ──────────────────────────────────────────────────────────

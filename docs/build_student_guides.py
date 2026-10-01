@@ -333,16 +333,10 @@ def build_tv():
     callout(doc, "tip",
             "Streaming often looks negative in Year 1. That is expected, because it books only one-third of a show's 3-year subscriber value in the first year while paying the full cost up front. "
             "Judge streaming shows over the full 3 years.")
-    doc.add_heading("🤖 Pitch your own show with AI Pitch Review  (if your school turned it on)", level=3)
-    steps(doc, [
-        "In **Show Concept Inputs**, enter a **Show Name** and pick a **Genre**.",
-        "In **AI Pitch Review**, write a 2–4 sentence pitch covering the concept, the hook, and who it's for. Choose **Domestic Original**, or **International Format** plus the country it comes from.",
-        "Click **🤖 Get AI Feedback & Estimates**. You get a score out of 100, strengths and risks, and an **AI-estimated pitch card** with demo, episodes, cost per episode, rating, SVOD appeal, and IP Score.",
-        "Click **🎬 Greenlight [show] with these estimates** to add it. The show uses the **AI's numbers**, not your sliders.",
-    ])
-    callout(doc, "tip",
-            "A clearer, more specific, more feasible pitch earns better estimates. An International Format costs a rights fee, "
-            "but its numbers are more reliable. Use **↧ Load into Concept Inputs** to explore the P&L with the AI's numbers first.")
+    doc.add_heading("👀 The Pitch Board", level=3)
+    para(doc, "Every pitch you greenlight is shared with the other teams in your class, and theirs with you. "
+              "Open **👀 See what other teams in your class have pitched** above Show Concept Inputs, or the full "
+              "**📋 Pitch Board** on the Leaderboard page. Use it like a development meeting: what is everyone betting on?")
 
     doc.add_heading("📊 Why? boxes  (optional, not scored)", level=2)
     para(doc, "Under several decisions you'll find a collapsed **📊 Why? (optional)** box: genre decay curves "
@@ -468,7 +462,7 @@ def build_movies():
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
         "**Working Title**: anything you like.",
-        "**Logline (required)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. You can't Simulate without one.",
+        "**Logline (required)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. You can't Simulate without one. Once the film is made, the logline and how the film did appear on your class's **📋 Pitch Board**.",
         "**Genre**: Action/Tentpole, Sci-Fi/Fantasy, Animated, Horror, Comedy, Drama, or Awards/Prestige. Big genres earn more overseas. Prestige genres can win awards.",
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",

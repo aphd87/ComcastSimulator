@@ -539,6 +539,17 @@ def render():
 
     st.divider()
 
+    # ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────
+    st.markdown('<div class="section-title">📋 Pitch Board — Your Class</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">Every pitch a team in your class has committed: TV shows they '
+        'greenlit from their own pitch, and films they made (with how each film actually did). '
+        'Read across them like a studio development meeting.</p>', unsafe_allow_html=True)
+    from app_pages.pitch_board import render_pitch_board
+    render_pitch_board(ss, key="lb_pitch_board")
+
+    st.divider()
+
     # ── All-Network Summary ────────────────────────────────────────────────────
     st.markdown('<div class="section-title">All Submissions — Raw Data</div>', unsafe_allow_html=True)
 
