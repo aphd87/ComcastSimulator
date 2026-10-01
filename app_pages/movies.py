@@ -1625,7 +1625,15 @@ def _decisions(ss):
                                    title="Bear → Base → Bull NPV ($M)"),
             use_container_width=True, config={"displayModeBar": False},
         )
-        st.caption("Actual outcome is drawn continuously between these at Results — not one of exactly three buckets.")
+        st.markdown(
+            '<div style="font-size:13px;color:#e0e2ea;line-height:1.55;">'
+            '<b>How to read this:</b> each bar is what the movie\'s revenue is worth today <b>minus the '
+            'Capital at Risk above</b>. So every extra $10M of budget, P&A, or stars pushes all three bars '
+            'down about $10M, unless the movie earns it back through a bigger opening or longer run. '
+            'Bear is a weak run, Base is expected, Bull is a breakout. This preview assumes a <b>wide release</b> '
+            '(Release Strategy below shows each option\'s own range) and <b>no reviews yet</b>; critics are '
+            'revealed when the movie comes out. The actual result lands anywhere between Bear and Bull.</div>',
+            unsafe_allow_html=True)
 
     st.divider()
 
