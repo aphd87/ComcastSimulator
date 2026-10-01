@@ -106,12 +106,21 @@ def _write_json_atomic(path: Path, data, indent: Optional[int] = None) -> None:
 
 
 # ── Database backend ─────────────────────────────────────────────────────────
+def normalize_url(url: str) -> str:
+    """Pin Postgres URLs to the psycopg2 driver we install (psycopg2-binary).
+    Newer SQLAlchemy releases default a bare postgresql:// URL to psycopg v3,
+    which isn't installed, so the app crashed on first connect (2026-10-01)."""
+    if url.startswith("postgres://"):          # Heroku/Supabase-style alias SQLAlchemy rejects
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    return url
+
+
 @lru_cache(maxsize=4)
 def _engine(url: str):
     from sqlalchemy import create_engine
-    if url.startswith("postgres://"):          # Heroku/Supabase-style alias SQLAlchemy rejects
-        url = "postgresql://" + url[len("postgres://"):]
-    eng = create_engine(url, pool_pre_ping=True, future=True)
+    eng = create_engine(normalize_url(url), pool_pre_ping=True, future=True)
     _ensure_schema(eng)
     return eng
 

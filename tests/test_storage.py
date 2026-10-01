@@ -92,3 +92,12 @@ def test_database_keeps_simultaneous_submissions(sqlite_db):
 
 def test_backend_name_reflects_configuration(sqlite_db):
     assert storage.backend_name() == "database"
+
+
+def test_postgres_urls_are_pinned_to_the_installed_psycopg2_driver():
+    # Newer SQLAlchemy defaults bare postgresql:// to psycopg v3 (not installed),
+    # which crashed the live app on first connect (2026-10-01).
+    assert storage.normalize_url("postgresql://u:p@h/db?sslmode=require").startswith("postgresql+psycopg2://")
+    assert storage.normalize_url("postgres://u:p@h/db").startswith("postgresql+psycopg2://")
+    assert storage.normalize_url("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+    assert storage.normalize_url("sqlite:///x.db") == "sqlite:///x.db"
