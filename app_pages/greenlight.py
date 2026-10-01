@@ -64,12 +64,12 @@ def _render_pitch_review(ss, show_name: str, genre: str, pitch: str, air_month: 
 
     st.markdown(
         '<div class="section-title">🤖 AI Pitch Review — Feedback + Estimated Metrics '
-        '<span style="font-size:14px;color:#b0b5c4;">(optional)</span></div>',
+        '<span style="font-size:14px;color:#e0e2ea;">(optional)</span></div>',
         unsafe_allow_html=True)
 
     if not api_key_configured():
         st.markdown(
-            '<div style="font-size:14px;color:#b0b5c4;">'
+            '<div style="font-size:14px;color:#e0e2ea;">'
             'Ask your instructor to enable AI pitch review for this class.</div>',
             unsafe_allow_html=True)
         return
@@ -156,16 +156,16 @@ def _render_pitch_review(ss, show_name: str, genre: str, pitch: str, air_month: 
          padding:14px;margin:8px 0;">
       <div style="font-size:12px;color:#4fc3f7;font-family:DM Mono,monospace;margin-bottom:4px;">AI-ESTIMATED PITCH CARD</div>
       <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{show_name.strip()}</div>
-      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;margin:2px 0 6px;">
+      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;margin:2px 0 6px;">
         {genre} · {origin_badge}</div>
-      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
         Demo: {est['demo_age']} · {est['demo_gender']} · {est['demo_reach']}</div>
-      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
         {est['episodes']} eps · ${est['ep_cost_k']}K/ep · rating {est['rating']:.1f} ·
         SVOD appeal {est['svod_appeal']} · IP Score {est['ip_score']}</div>
-      <div style="font-size:12px;color:#8b8fa3;margin-top:4px;">No brand partnership</div>
+      <div style="font-size:12px;color:#e0e2ea;margin-top:4px;">No brand partnership</div>
       <div style="font-size:13px;color:#e8eaf0;margin-top:8px;">{fee_line}</div>
-      <div style="font-size:12px;color:#c8cad4;margin-top:8px;font-style:italic;">Why these numbers: {est['rationale']}</div>
+      <div style="font-size:12px;color:#e0e2ea;margin-top:8px;font-style:italic;">Why these numbers: {est['rationale']}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -320,18 +320,18 @@ def render():
                 bp = pitch.get("brand_partner")
                 bp_line = (f'<div style="font-size:12px;color:#e8c547;margin-top:4px;">🤝 Brand Partnership: '
                            f'{bp["name"]} (+{bp["rating_bonus"]:.2f} rating)</div>' if bp else
-                           '<div style="font-size:12px;color:#8b8fa3;margin-top:4px;">No brand partnership</div>')
+                           '<div style="font-size:12px;color:#e0e2ea;margin-top:4px;">No brand partnership</div>')
                 with col:
                     st.markdown(f"""
                     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
                          padding:14px;height:100%;">
                       <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{pitch['name']}</div>
-                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;margin:2px 0 6px;">
+                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;margin:2px 0 6px;">
                         {pitch['genre']} · {origin_badge}</div>
-                      <div style="font-size:12px;color:#c8cad4;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
-                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+                      <div style="font-size:12px;color:#e0e2ea;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
+                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
                         Demo: {demo['age']} · {demo['gender']} · {demo['reach']}</div>
-                      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
                         {pitch['episodes']} eps · ${pitch['ep_cost_k']}K/ep · rating {pitch['rating']:.1f} ·
                         SVOD appeal {pitch['svod_appeal']} · IP Score {pitch['ip_score']}</div>
                       {bp_line}
@@ -402,7 +402,7 @@ def render():
         with gp1:
             if slots_left > 0:
                 st.markdown(
-                    f'<div style="font-size:14px;color:#b0b5c4;">Stuck on an idea? Get a batch of '
+                    f'<div style="font-size:14px;color:#e0e2ea;">Stuck on an idea? Get a batch of '
                     f'AI-proposed concepts to browse — pick one to load into the form below, still '
                     f'fully editable before greenlighting. You have '
                     f'<b style="color:#e8eaf0;">{slots_left} of {MAX_NEW_SHOWS_PER_YEAR}</b> '
@@ -410,7 +410,7 @@ def render():
                     unsafe_allow_html=True)
             else:
                 st.markdown(
-                    '<div style="font-size:14px;color:#b0b5c4;">You\'ve filled all your greenlight '
+                    '<div style="font-size:14px;color:#e0e2ea;">You\'ve filled all your greenlight '
                     'slots for this year — no need for more pitches until next year.</div>',
                     unsafe_allow_html=True)
         with gp2:
@@ -433,8 +433,8 @@ def render():
                         st.markdown(
                             f'<div style="font-size:15px;font-weight:600;color:#e8eaf0;">{idea.show_name}</div>'
                             f'<span class="badge badge-gray">{idea.genre}</span>'
-                            f'<div style="font-size:13px;color:#c8cad4;margin:6px 0;">{idea.pitch}</div>'
-                            f'<div style="font-size:13px;color:#8b8fa3;font-family:DM Mono,monospace;">'
+                            f'<div style="font-size:13px;color:#e0e2ea;margin:6px 0;">{idea.pitch}</div>'
+                            f'<div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">'
                             f'{idea.suggested_episodes} eps · ${idea.suggested_ep_cost_k}K/ep · '
                             f'rating {idea.suggested_rating:.1f} · SVOD appeal {idea.suggested_svod_appeal}'
                             f'</div>',
@@ -592,7 +592,7 @@ def render():
     # so it belongs after the actual action, not gating it.
     st.markdown('<div class="section-title">Platform P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#b0b5c4;margin-bottom:10px;line-height:1.6;">'
+        '<div style="font-size:13px;color:#e0e2ea;margin-bottom:10px;line-height:1.6;">'
         '<b style="color:#e0e2ea;">What each line means:</b> '
         '<b>Total Season Cost</b> = episode cost × episode count. '
         '<b>Ad Revenue (Y1)</b> = what Linear earns this year from ratings. '
@@ -669,7 +669,7 @@ def render():
     # ── Charts ────────────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">3-Year P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+        '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
         'Same concept, extrapolated 3 years out: Linear\'s bars are Year-1 numbers × 3 (a flat '
         'run-rate). SVOD\'s "3yr Revenue" bar is its real 3-year LTV; its "3yr OCF" bar is Year-1 OCF '
         '× 3 for the same side-by-side comparison. SVOD often looks negative here because it only '
@@ -698,7 +698,7 @@ def render():
     # student prices out. See utils/charts.py::queue_supplement.
     def _render_cumulative_ltv(linear=linear, svod=svod):
         st.markdown(
-            '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
             'Running total of revenue over time, not a single-year number. Linear\'s line spreads its '
             'Year-1 ad revenue rate evenly across all 36 months; SVOD\'s line spreads its full 3-year LTV '
             'evenly across the same 36 months. The dashed <b style="color:#e0e2ea;">Crossover</b> line '
@@ -770,7 +770,7 @@ def render():
     def _render_marketing_roi(eps=eps, ep_cost=ep_cost, rating=rating, appeal=appeal, year=year,
                                show_name=show_name):
         st.markdown(
-            '<div style="font-size:13px;color:#b0b5c4;margin-bottom:6px;">'
+            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
             'Holds this concept\'s rating and cost fixed and reruns both P&Ls at increasing marketing '
             'budgets, so you can see where extra marketing dollars actually pay off. Linear OCF moves with '
             'the ad-rating lift marketing buys; SVOD OCF moves with the extra subscriber lift (and its 3-year '

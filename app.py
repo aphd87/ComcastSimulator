@@ -256,7 +256,7 @@ def _render_network_picker(ss) -> None:
               <div style="font-size:38px;">{info['emoji']}</div>
               <div style="font-family:DM Serif Display,serif;font-size:21px;color:#e8eaf0;margin:8px 0 2px;">
                 {info['display_name']}</div>
-              <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
+              <div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
               <div style="font-size:14px;color:#e0e2ea;margin:10px 0;font-style:italic;">{info['tagline']}</div>
               <div style="font-size:14px;color:#e0e2ea;line-height:1.7;">
                 Starting budget ~${info['budget_base']:.0f}M<br>
@@ -334,7 +334,7 @@ st.markdown(
     '<div style="text-align:center;margin-bottom:2px;">'
     '<span style="font-family:DM Serif Display,serif;font-size:28px;color:#e8c547;">The Slate</span>'
     '</div>'
-    '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;'
+    '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;'
     'letter-spacing:.1em;margin-bottom:16px;">MEDIA PORTFOLIO SIMULATION</div>',
     unsafe_allow_html=True
 )
@@ -374,7 +374,7 @@ if ss.registered:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
-            f'<span style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
+            f'<span style="font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
             f'&nbsp;&nbsp;<span style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</span>'
             f'&nbsp;&nbsp;<span style="font-size:14px;color:#e0e2ea;">{ss.school} · {ss.class_section}</span>'
             f'{role_badge}'
@@ -753,11 +753,11 @@ else:
               <span class="badge badge-gray">{net_info['hq']}</span>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
+              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
               <div style="font-size:14px;color:#e0e2ea;">{net_info['demographics']}</div>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
+              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
               <div style="font-size:14px;color:#e0e2ea;">{net_info['avg_ep_cost']}</div>
             </div>
           </div>
@@ -768,7 +768,7 @@ else:
         att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#e0e2ea")
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px 14px;">
-          <div style="font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
+          <div style="font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
           <div style="font-size:15px;color:{att_color};font-family:DM Mono,monospace;">
             {'✅ PASSED' if passed else f'Attempt {attempts+1} of {MAX_ATTEMPTS}' if can_sub else '🔒 All attempts used'}
           </div>
@@ -780,11 +780,11 @@ else:
     with hcol2:
         st.markdown(f"""
         <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
-          <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;
+          <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Network Biography</div>
-          <div style="font-size:15px;color:#c8cad4;line-height:1.75;">{net_info['bio']}</div>
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.75;">{net_info['bio']}</div>
           <div style="margin-top:12px;">
-            <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
+            <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
             <div style="font-size:15px;color:#e0e2ea;">{net_info['hit_shows']}</div>
           </div>
         </div>
@@ -859,8 +859,8 @@ else:
     brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
     steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
-        f'<span style="color:#b0b5c4;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
-        f'<span style="color:#c8cad4;">{s}</span></div>'
+        f'<span style="color:#e0e2ea;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#e0e2ea;">{s}</span></div>'
         for i, s in enumerate(brief["steps"])
     )
     st.markdown(f"""
@@ -868,13 +868,13 @@ else:
          border-radius:8px;padding:16px 20px;margin-bottom:16px;">
       <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:2;min-width:260px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
           <div style="font-size:15px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
           <div style="font-size:15px;color:#e0e2ea;line-height:1.7;">{brief['mission']}</div>
         </div>
         <div style="flex:1;min-width:220px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#b0b5c4;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
           {steps_html}
         </div>
@@ -886,8 +886,8 @@ else:
     # supplements; every scored decision lives in the Simulation tab.
     st.markdown("""
     <div style="background:#12141a;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:8px;padding:14px 20px;margin-bottom:16px;font-size:15px;color:#c8cad4;line-height:1.7;">
-      <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;
+         border-radius:8px;padding:14px 20px;margin-bottom:16px;font-size:15px;color:#e0e2ea;line-height:1.7;">
+      <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
            text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Beyond the Simulation tab</div>
       You make every scored decision in <b style="color:#e8eaf0;">📊 Simulation</b>. The other three tabs
       are optional supplements. They don't change your score, but they help you understand it:

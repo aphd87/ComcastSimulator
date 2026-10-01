@@ -126,7 +126,7 @@ def render():
                  padding:5px 0;border-bottom:1px solid rgba(37,40,54,.5);">
               <span style="font-size:{size};{bold}color:#e8eaf0;">{label}</span>
               <div style="display:flex;gap:20px;align-items:center;">
-                <span style="font-size:14px;color:#b0b5c4;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
+                <span style="font-size:14px;color:#e0e2ea;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
                 <span style="font-family:'DM Mono',monospace;{bold}font-size:{size};color:{color};">{sign}${abs(val):.1f}M</span>
               </div>
             </div>
@@ -262,7 +262,7 @@ def render():
     user_subs, user_rate, user_esc = BASE_SUBS_M, SUB_RATE_PER_MONTH, 5.0
     with st.expander("🎛️ Adjust Distribution Model", expanded=False):
         st.markdown("""
-        <div style="font-size:14px;color:#b0b5c4;margin-bottom:10px;">
+        <div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">
         This is a <b>what-if sandbox</b>, not your actual game state — these three inputs
         override the model's baseline assumptions so you can see how distribution revenue
         would respond under a different deal. Changing them here only affects the table and

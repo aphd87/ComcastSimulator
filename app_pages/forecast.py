@@ -146,7 +146,7 @@ def render():
     with c1:
         st.markdown('<div class="section-title">OCF by Phase</div>', unsafe_allow_html=True)
         st.markdown(f"""
-        <div style="font-size:14px;color:#b0b5c4;margin-bottom:8px;">
+        <div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">
         <b>OCF by Phase</b> sums each year's Operating Cash Flow (Ad + Distribution + SVOD revenue,
         minus content cost, marketing, and G&amp;A) into three fixed windows: <b>Phase 1 — Oxygen</b>
         (Years 1–3, single network), <b>Phase 2 — Oxygen + Bravo</b> (Years 4–7, two P&amp;Ls), and
@@ -246,8 +246,8 @@ def render():
         <div style="display:flex;gap:12px;padding:8px 12px;margin-bottom:4px;
              background:#1a1d26;border-radius:6px;{border}opacity:{opacity};">
           <span style="font-size:16px;min-width:24px;">{icon}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;
+          <span style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;
                 min-width:60px;padding-top:2px;">Y{ev_year} · {cal}</span>
-          <span style="font-size:15px;color:{'#e8eaf0' if is_past else '#b0b5c4'};">{text}</span>
+          <span style="font-size:15px;color:{'#e8eaf0' if is_past else '#e0e2ea'};">{text}</span>
         </div>
         """, unsafe_allow_html=True)

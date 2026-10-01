@@ -990,13 +990,13 @@ def _progress_bar(ss):
         current = i == phase_idx and ss.movie_phase != "complete"
         bg, txt, clr = ("#66bb6a", "✓", "#0b0c10") if done else \
                        ("#1a6bb5", str(i + 1), "#ffffff") if current else \
-                       ("#252836", str(i + 1), "#b0b5c4")
+                       ("#252836", str(i + 1), "#e0e2ea")
         dot_items.append(
             f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
             f'<div style="width:32px;height:32px;border-radius:50%;background:{bg};'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:15px;font-weight:700;color:{clr};">{txt}</div>'
-            f'<div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{label}</div></div>'
+            f'<div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">{label}</div></div>'
         )
     connector = '<div style="width:40px;height:2px;background:#252836;margin-bottom:16px;"></div>'
     cycle_label = (f"{_cycle_years_label(ss.movie_cycle)} of {CYCLES_TOTAL * YEARS_PER_CYCLE}"
@@ -1175,7 +1175,7 @@ def _decisions(ss):
         _progress_chart(ss)
 
     st.markdown(
-        '<div style="font-size:14px;color:#8a8f9e;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
         '<a href="#talent" style="color:#1a6bb5;">Studio Partnerships</a> · '
         '<a href="#scouted" style="color:#1a6bb5;">Scouted Concepts</a> · '
         '<a href="#festivals" style="color:#1a6bb5;">Festival Acquisitions</a> · '
@@ -1278,7 +1278,7 @@ def _decisions(ss):
 
         st.markdown(
             '<div class="section-title mt-3">AI Pitch Feedback '
-            '<span style="font-size:14px;color:#8a8f9e;">(optional)</span></div>',
+            '<span style="font-size:14px;color:#e0e2ea;">(optional)</span></div>',
             unsafe_allow_html=True,
         )
         if not api_key_configured():
@@ -1711,7 +1711,7 @@ def _decisions(ss):
         st.markdown('<div class="section-title mt-3">Pay-2 Window Licensing '
                     '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
         st.markdown(
-            '<div style="font-size:13px;color:#8b8fa3;margin-bottom:6px;line-height:1.6;">'
+            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;line-height:1.6;">'
             '<b style="color:#e0e2ea;">Terms used here and in Pay-1 above:</b> '
             '<b>Pay-1 window</b> = the first licensing window, right after theatrical, when the movie is at its most valuable. '
             '<b>Pay-2 window</b> = a smaller, later window that only opens once Pay-1 has run its course. '

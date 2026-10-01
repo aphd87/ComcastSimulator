@@ -331,8 +331,8 @@ def render():
                       <span class="badge badge-gray">{r['Genre']}</span>
                       <span class="badge badge-gray">{r['Network']}</span>
                     </div>
-                    {f'<div style="font-size:13px;color:#c8cad4;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
-                    <div style="font-size:14px;color:#b0b5c4;font-family:DM Mono,monospace;">
+                    {f'<div style="font-size:13px;color:#e0e2ea;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
+                    <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">
                       Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
                     </div>
                     <div style="font-size:15px;font-family:DM Mono,monospace;color:{ocf_c};margin:4px 0 8px;">
@@ -342,7 +342,7 @@ def render():
 
                     demo = genre_demo(r["Genre"])
                     st.markdown(f"""
-                    <div style="font-size:13px;color:#8b8fa3;margin-bottom:8px;">
+                    <div style="font-size:13px;color:#e0e2ea;margin-bottom:8px;">
                       Demos: {demo['age']} · {demo['gender']} · {demo['reach']}
                     </div>
                     """, unsafe_allow_html=True)
@@ -418,7 +418,7 @@ def render():
             col.markdown(f"""
             <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
                  padding:6px 2px;text-align:center;min-height:56px;">
-              <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
+              <div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
               <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -601,7 +601,7 @@ def render():
             st.rerun()
     with af_hint_col:
         st.markdown(
-            '<div style="font-size:13px;color:#b0b5c4;padding-top:8px;">'
+            '<div style="font-size:13px;color:#e0e2ea;padding-top:8px;">'
             'Fills every slot from your top-rated shows down, best slot first — '
             'a starting point, not a final answer.</div>', unsafe_allow_html=True)
 

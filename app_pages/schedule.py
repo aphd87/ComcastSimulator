@@ -93,7 +93,7 @@ def render():
     with c1:
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
@@ -119,7 +119,7 @@ def render():
         mar1_net = mar1_rev - monthly_amort
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
@@ -146,7 +146,7 @@ def render():
         funded = "✅ Cash cows cover" if cow_coverage >= abs(net_position) else "❌ Cash gap — raise reserve"
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#b0b5c4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
             <span style="color:#e0e2ea;">Revenue shortfall vs. Day 1</span>
             <span style="font-family:'DM Mono',monospace;color:#ef5350;">${abs(gap):.3f}M</span>

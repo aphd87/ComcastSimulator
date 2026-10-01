@@ -41,7 +41,7 @@ TAILWIND_INJECT = """
             line:      '#252836',
             ink:       '#e8eaf0',
             ink2:      '#e0e2ea',
-            muted:     '#b0b5c4',
+            muted:     '#e0e2ea',
             gold:      '#e8c547',
             success:   '#66bb6a',
             danger:    '#ef5350',
@@ -213,5 +213,28 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .st-key-registration_form [data-testid="stTextInput"] label p {
     font-size: 15px !important;
 }
+
+/* Readability (2026-10-01): no grey text anywhere. Streamlit renders
+   st.caption and widget labels in a faded theme color; force near-white. */
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+.stCaption, .stCaption p { color:#e0e2ea !important; }
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { color:#e8eaf0 !important; }
+[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color:#e8eaf0 !important; }
+
+/* "?" help tooltips: always on top, high contrast, wide enough to read. */
+[data-baseweb="tooltip"], [data-baseweb="popover"] { z-index: 1000000 !important; }
+[data-testid="stTooltipContent"], [data-baseweb="tooltip"] [role="tooltip"] {
+    background:#1a1d26 !important; color:#e8eaf0 !important;
+    border:1px solid #4fc3f7 !important; border-radius:6px !important;
+    box-shadow:0 8px 28px rgba(0,0,0,.65) !important;
+    max-width:min(420px, 90vw) !important; width:max-content !important;
+    font-size:14px !important; line-height:1.55 !important;
+    white-space:normal !important; overflow-wrap:anywhere !important;
+    padding:10px 12px !important;
+}
+[data-testid="stTooltipContent"] *, [data-baseweb="tooltip"] [role="tooltip"] * {
+    color:#e8eaf0 !important; background:transparent !important;
+}
+[data-testid="stTooltipIcon"] svg { color:#e0e2ea !important; stroke:#e0e2ea !important; }
 </style>
 """
