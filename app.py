@@ -688,7 +688,7 @@ elif ss.active_section == "movies":
     <div style="background:#12141a;border:1px solid #252836;border-radius:10px;
          padding:20px 24px;margin-bottom:16px;">
       <div style="font-family:DM Serif Display,serif;font-size:22px;color:#e8c547;">
-        🎬 Universal Pictures — Day 2
+        🎬 Universal Pictures
       </div>
       <div style="font-size:15px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
         Theatrical vs. streaming economics: risk-adjusted NPV, release-window strategy, and

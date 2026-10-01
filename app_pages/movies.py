@@ -1016,7 +1016,7 @@ def render():
 
     st.markdown("""
     <div class="rounded-lg border border-line bg-surface2 px-4 py-3 mb-4 text-sm text-ink2" style="border-left:3px solid #1a6bb5;">
-    💡 <b class="text-ink">Day 2 — Universal Pictures.</b> A movie isn't a portfolio of amortized shows — it's
+    💡 <b class="text-ink">Universal Pictures.</b> A movie isn't a portfolio of amortized shows — it's
     one concentrated bet. Cost is paid entirely upfront; revenue arrives as a windowed waterfall
     (theatrical → PVOD → Peacock → library) that you can't fully see coming. You're graded on
     <b class="text-ink">risk-adjusted NPV</b>, not a margin percentage.
@@ -1219,7 +1219,7 @@ def _decisions(ss):
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Every dollar of Production Budget and P&A you commit below is '
         'paid in full, upfront — before you know whether the movie makes a cent back. That\'s different '
-        'from TV/Streaming (Day 1), where a show\'s production cost is spread out and expensed gradually '
+        'from TV/Streaming, where a show\'s production cost is spread out and expensed gradually '
         'over several years (amortized) instead of hitting all at once.</p>', unsafe_allow_html=True)
 
     left, right = st.columns([3, 2])
@@ -1661,7 +1661,7 @@ def _decisions(ss):
         """, unsafe_allow_html=True)
     else:
         st.markdown(
-            '<p class="text-xs text-ink2 mb-3">The direct extension of Day 1\'s linear-vs-SVOD Green Light call — '
+            '<p class="text-xs text-ink2 mb-3">The direct extension of TV/Streaming\'s linear-vs-SVOD Green Light call — '
             'day-and-date trades theatrical box office for immediate, dollarized Peacock subscriber value. '
             'Ground truth: 2021\'s WarnerMedia/HBO Max day-and-date experiment, and Universal\'s post-2020 '
             'shortened theatrical window with AMC.</p>', unsafe_allow_html=True)
