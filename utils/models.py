@@ -45,10 +45,27 @@ PRIMETIME_HOURS = ["7PM","8PM","9PM","10PM"]
 # original tentpole content there for decades); Sunday sits in between
 # (strong for broadcast/sports, softer for cable originals); Monday is
 # solid but competes with appointment programming elsewhere.
-DAY_OF_WEEK_MULT = {
+DAY_OF_WEEK_MULT_WEEKNIGHT = {
     "Mon": 0.90, "Tue": 1.00, "Wed": 1.00, "Thu": 0.98,
     "Fri": 0.70, "Sat": 0.65, "Sun": 0.85,
 }
+
+# Genre-specific second profile (2026-09-22, per user request: "I want
+# students to wrestle with some of the scheduling... a show does well
+# during weekend nights"). Without this, every genre shared one universal
+# curve, so "best slot" was the same answer for every show and scheduling
+# reduced to a single sort-by-rating exercise, no real conflict. Mirrors
+# the weeknight curve around the week rather than inventing new numbers:
+# unscripted docu-soap Reality faces less competition from weeknight
+# appointment programming, and Sunday-night Drama is a real industry
+# tentpole slot (Game of Thrones, Mad Men). Deliberately just two profiles,
+# not a curve per genre -- enough to force a real trade-off across a
+# roster without turning scheduling into its own research problem.
+DAY_OF_WEEK_MULT_WEEKEND = {
+    "Mon": 0.65, "Tue": 0.70, "Wed": 0.75, "Thu": 0.85,
+    "Fri": 0.95, "Sat": 1.00, "Sun": 1.00,
+}
+WEEKEND_LEANING_GENRES = {"Reality", "Drama"}
 
 # The raw day×hour product is compressed into this band before it touches
 # rating, so a bad slot genuinely costs a show real revenue (a real
@@ -62,18 +79,30 @@ SLOT_MULT_FLOOR    = 0.85
 SLOT_MULT_CEILING  = 1.15
 
 
-def slot_rating_multiplier(day: str, hour: str) -> float:
+def day_mult_table_for_genre(genre: str = None) -> dict:
+    """Which day-of-week profile a genre uses. Any genre not in
+    WEEKEND_LEANING_GENRES (including None, for callers with no specific
+    show in mind) gets the weeknight profile -- the original, unchanged
+    default, so every pre-existing caller stays exactly as calibrated."""
+    return DAY_OF_WEEK_MULT_WEEKEND if genre in WEEKEND_LEANING_GENRES else DAY_OF_WEEK_MULT_WEEKNIGHT
+
+
+def slot_rating_multiplier(day: str, hour: str, genre: str = None) -> float:
     """Rating multiplier for a show placed in a given primetime (day, hour)
     slot. A show with no slot assigned gets the neutral 1.0 baseline —
     scheduling can only help or hurt relative to that, same "deliberate
     zero-effect baseline" pattern as movie_models.py's New IP concept
     type, so every show's original calibrated numbers stay intact until a
-    student actually makes a scheduling choice."""
+    student actually makes a scheduling choice. `genre` picks the
+    weeknight-vs-weekend day profile (see WEEKEND_LEANING_GENRES); omitting
+    it falls back to the weeknight profile, so this is the strongest slot
+    for a genre-agnostic caller (e.g. the Auto-Fill ranking)."""
+    day_mult_table = day_mult_table_for_genre(genre)
     hour_mult = HOURLY_INDEX[HOUR_LABELS.index(hour.lower())]
-    day_mult  = DAY_OF_WEEK_MULT[day]
+    day_mult  = day_mult_table[day]
     raw       = hour_mult * day_mult
 
-    all_raw = [HOURLY_INDEX[HOUR_LABELS.index(h.lower())] * DAY_OF_WEEK_MULT[d]
+    all_raw = [HOURLY_INDEX[HOUR_LABELS.index(h.lower())] * day_mult_table[d]
                for d in PRIMETIME_DAYS for h in PRIMETIME_HOURS]
     raw_min, raw_max = min(all_raw), max(all_raw)
 
@@ -100,10 +129,12 @@ class Show:
 
     def schedule_multiplier(self) -> float:
         """1.0 (neutral) until a student actually assigns a primetime slot —
-        see slot_rating_multiplier() for the real trade-off math."""
+        see slot_rating_multiplier() for the real trade-off math. Passes
+        this show's own genre, so which slot actually helps depends on
+        what's being scheduled, not one universal best slot for every show."""
         if not self.slot_day or not self.slot_hour:
             return 1.0
-        return slot_rating_multiplier(self.slot_day, self.slot_hour)
+        return slot_rating_multiplier(self.slot_day, self.slot_hour, self.genre)
 
     def effective_amort_months(self) -> int:
         """Amortization window — genre-based for linear content (Zach

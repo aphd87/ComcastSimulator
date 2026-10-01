@@ -10,7 +10,7 @@ from utils.models import (
     distribution_revenue, renewal_decision, CONTENT_COST_ESC,
     performance_linked_growth, genre_demo,
     PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
-    slot_rating_multiplier, MONTHS,
+    slot_rating_multiplier, day_mult_table_for_genre, WEEKEND_LEANING_GENRES, MONTHS,
     REV_PER_RATING_POINT,
 )
 from utils.game_state import NETWORK_INFO
@@ -553,33 +553,121 @@ def render():
          border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
     ⚖️ <b style="color:#e8eaf0;">The trade-off, up front:</b> there are only {n_slots} primetime slots
     ({len(PRIMETIME_HOURS)} hours × {len(PRIMETIME_DAYS)} nights) and exactly one show per slot — you
-    cannot put every show in the best slot. Tue/Wed/9PM is the strongest slot and is worth up to
-    <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there. Fri/Sat nights are the
-    real industry "death slot" — the weakest slot costs a show up to
-    <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus, no
-    penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
+    cannot put every show in its best slot. The best slot is worth up to
+    <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there, and the worst costs a
+    show up to <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus,
+    no penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
     <br><br>
-    🖱️ <b style="color:#e8eaf0;">To assign a show:</b> double-click a cell in the grid below to open its
-    dropdown, then pick a show. Single-clicking won't open it.
+    📅 <b style="color:#e8eaf0;">Best slot depends on genre — it's not the same answer for every show.</b>
+    Most genres peak Tue/Wed/8PM, when linear TV viewership has historically been strongest. But
+    unscripted <b>Reality</b> and prestige <b>Drama</b> skew the other way — weekend nights (Fri–Sun),
+    when they face less competition from weeknight appointment programming (Sunday-night Drama is a real
+    industry tentpole slot: Game of Thrones, Mad Men). So the "death slot" for a True Crime show may be a
+    genuinely strong slot for a Reality show — see the Slot Value Map below for exact numbers by profile,
+    and don't assume the same placement logic works for your whole roster.
+    <br><br>
+    🖱️ <b style="color:#e8eaf0;">To assign a show:</b> click a cell's dropdown in the grid below and pick a show.
     <br><br>
     🎯 <b style="color:#e8eaf0;">Strategy:</b> the bonus/penalty is a <i>percentage</i> of a show's own
     rating, so the same slot is worth more real ad revenue on a big show than a small one — protect your
-    highest-rated shows with your best slots rather than spreading the love evenly. Tue/Wed/9PM is
-    strongest because that's when linear TV viewership has historically peaked (people are home, not out);
-    Fri/Sat is the death slot for the opposite reason (people are out, so at-home audiences shrink).
+    highest-rated shows with their own best slots rather than spreading the love evenly or copying one
+    "best slot" across every genre.
     </div>
     """, unsafe_allow_html=True)
 
-    show_by_label = {f"{s.name} (#{s.id})": s for s in shows}
+    # Rating appended to the label itself (2026-09-22, per user request) --
+    # the dropdown used to show a bare show name, so picking a slot meant
+    # holding every show's rating in your head or scrolling back up to the
+    # decision cards. Sort stays alphabetical by name (rating is a suffix,
+    # not the sort key) so a student can still find a specific show fast.
+    show_by_label = {f"{s.name} (#{s.id}) · {s.rating:.2f}": s for s in shows}
     show_labels   = ["— none —"] + sorted(show_by_label.keys())
+
+    # Reference table (2026-09-22, per user request) -- same "protect your
+    # best shows with your best slots" strategy note above, but as sortable
+    # data instead of prose. Uses each show's real `rating` (what
+    # ad_revenue()/schedule_multiplier() actually multiply against), not
+    # the "Proj Rating" column from the Renewal decision cards above --
+    # that column is next year's projected rating for the renewal-economics
+    # decision, a different number for a different question. Slot column
+    # reads live off the Show objects, so it reflects the grid below even
+    # before this render's edits are persisted.
+    # Unscheduled-top-show flag (2026-09-22, per user request) -- "above
+    # median rating" rather than a fixed top-N: with rosters ranging from
+    # ~15 shows (Oxygen) to ~50 (Peacock), a fixed cutoff would either
+    # never fire on a small roster or fire on half of a huge one. Median is
+    # self-scaling to whatever slate is actually in play this year.
+    ratings_this_year = [s.rating for s in shows]
+    rating_median = sorted(ratings_this_year)[len(ratings_this_year)//2] if ratings_this_year else 0
+
+    st.markdown(
+        '<div style="font-size:13px;color:#e0e2ea;margin:4px 0 6px;">'
+        '📊 <b>Reference — sorted by rating.</b> Protect your highest-rated shows with their own best '
+        'slots (see Day Profile); a show left unscheduled stays neutral. '
+        '<b style="color:#e8c547;">⚠</b> = above-median rating, still unscheduled.</div>',
+        unsafe_allow_html=True)
+    ref_rows = sorted(
+        [{"Show": s.name, "Genre": s.genre, "Rating": round(s.rating, 2), "IP Score": s.ip_score,
+          "Day Profile": "Weekend" if s.genre in WEEKEND_LEANING_GENRES else "Weeknight",
+          "Current Slot": f"{s.slot_day} {s.slot_hour}" if s.slot_day and s.slot_hour else "— unscheduled —",
+          "⚠": "⚠️" if (not s.slot_day and s.rating >= rating_median) else ""}
+         for s in shows],
+        key=lambda r: -r["Rating"])
+    st.dataframe(pd.DataFrame(ref_rows), use_container_width=True, height=220, hide_index=True)
+
+    # Slot Value Map (2026-09-22, per user request: "give some of them
+    # conflicting information... a show does well during weekend nights").
+    # slot_rating_multiplier() is now genre-dependent (see
+    # WEEKEND_LEANING_GENRES in utils/models.py), so a single universal map
+    # would be wrong for Reality/Drama -- this renders one map per profile
+    # actually present in this year's roster, labeled with which real
+    # genres use it, so the conflict is visible instead of hidden in the math.
+    st.markdown(
+        '<div style="font-size:13px;color:#e0e2ea;margin:14px 0 6px;">'
+        '🗺️ <b>Slot Value Map</b> — rating bonus/penalty per cell, same layout as the grid below. '
+        'Two profiles now, because best slot depends on genre.</div>',
+        unsafe_allow_html=True)
+
+    def _style_slot_pct(val):
+        pct = float(val.rstrip("%"))
+        if pct > 5:   return f"color:{SUCCESS};font-weight:600;"
+        if pct < -5:  return f"color:{DANGER};font-weight:600;"
+        return f"color:{TEXT2};"
+
+    genres_present = sorted({s.genre for s in shows})
+    profiles_present = {
+        "Weeknight": [g for g in genres_present if g not in WEEKEND_LEANING_GENRES],
+        "Weekend":   [g for g in genres_present if g in WEEKEND_LEANING_GENRES],
+    }
+    for profile_name, profile_genres in profiles_present.items():
+        if not profile_genres:
+            continue
+        sample_genre = profile_genres[0] if profile_name == "Weekend" else None
+        st.markdown(
+            f'<div style="font-size:13px;color:#e0e2ea;margin:8px 0 4px;">'
+            f'<b>{profile_name}</b> profile — {", ".join(profile_genres)}</div>',
+            unsafe_allow_html=True)
+        value_rows = []
+        for h in PRIMETIME_HOURS:
+            row = {"Time": h}
+            for d in PRIMETIME_DAYS:
+                row[d] = f"{(slot_rating_multiplier(d, h, sample_genre) - 1) * 100:+.0f}%"
+            value_rows.append(row)
+        value_df = pd.DataFrame(value_rows).set_index("Time")
+        st.dataframe(value_df.style.map(_style_slot_pct), use_container_width=True, height=190)
 
     # Auto-Fill — a one-click starting point, not a drag-and-drop substitute.
     # Streamlit's data_editor has no drag-across-cells interaction (that
     # would need a custom JS component, real added complexity/maintenance
     # for a teaching tool); this is the practical speed-up instead: ranks
-    # shows by rating and slots by slot_rating_multiplier() and pairs them
-    # off best-to-best, so most of the grid is already sensible and the
-    # student only needs to double-click a handful of cells to adjust.
+    # shows by rating and, in that order, greedily gives each show its own
+    # best still-open slot (genre-aware, 2026-09-22) -- a naive universal
+    # ranking would keep steering Reality/Drama into their worst slots even
+    # though Auto-Fill is supposed to be a sensible starting point. This is
+    # still greedy, not a true optimal assignment (a lower-rated show can
+    # lose a slot to a higher-rated one even when the higher-rated show
+    # barely benefits from it) -- deliberate, so there's still real
+    # hand-tuning left for the student, not a fully solved grid.
     grid_ver_key = f"primetime_grid_ver_{net}_{year}"
     if grid_ver_key not in ss:
         ss[grid_ver_key] = 0
@@ -587,45 +675,55 @@ def render():
     with af_col:
         if st.button("⚡ Auto-Fill by Rating", key=f"primetime_autofill_{net}_{year}",
                      use_container_width=True,
-                     help="Ranks your shows by rating and drops the top ones into the best slots "
-                          "first — a fast starting point you can still tweak cell by cell."):
-            slots_ranked = sorted(
-                ((d, h) for h in PRIMETIME_HOURS for d in PRIMETIME_DAYS),
-                key=lambda dh: slot_rating_multiplier(dh[0], dh[1]), reverse=True,
-            )
+                     help="Ranks your shows by rating; each show (highest first) claims its own best "
+                          "still-open slot — a fast starting point you can still tweak cell by cell."):
             shows_ranked = sorted(shows, key=lambda s: -s.rating)
+            available = {(d, h) for h in PRIMETIME_HOURS for d in PRIMETIME_DAYS}
             for s in shows:
                 s.slot_day  = None
                 s.slot_hour = None
-            for s, (d, h) in zip(shows_ranked, slots_ranked):
+            for s in shows_ranked:
+                if not available:
+                    break
+                d, h = max(available, key=lambda dh: slot_rating_multiplier(dh[0], dh[1], s.genre))
+                available.discard((d, h))
                 s.slot_day, s.slot_hour = d, h
             ss[grid_ver_key] += 1
             st.rerun()
     with af_hint_col:
         st.markdown(
             '<div style="font-size:13px;color:#e0e2ea;padding-top:8px;">'
-            'Fills every slot from your top-rated shows down, best slot first — '
-            'a starting point, not a final answer.</div>', unsafe_allow_html=True)
+            'Fills every slot from your top-rated shows down, each claiming its own best remaining slot '
+            '(genre-aware) — a starting point, not a final answer.</div>', unsafe_allow_html=True)
 
-    grid_rows = []
+    # Individual dropdowns instead of a data_editor grid (2026-09-22, per
+    # user request, after testing surfaced it as a real trap: single-click
+    # silently does nothing, and nothing in the grid hints a cell needs a
+    # double-click to open). st.selectbox opens on the first click, the
+    # same interaction every other dropdown in this app already uses, so
+    # there's no new interaction model to learn. Each selectbox's key
+    # includes grid_ver_key so Auto-Fill's st.rerun() forces a fresh
+    # default value per cell -- same "widget ignores new data under an
+    # unchanged key" fix the old data_editor needed for the same reason.
+    header_cols = st.columns([0.6] + [1] * len(PRIMETIME_DAYS))
+    for col, d in zip(header_cols[1:], PRIMETIME_DAYS):
+        col.markdown(f"**{d}**")
+
+    cell_choices = {}
     for h in PRIMETIME_HOURS:
-        row = {"Time": h}
-        for d in PRIMETIME_DAYS:
-            match = next((lbl for lbl, s in show_by_label.items()
-                          if s.slot_day == d and s.slot_hour == h), "— none —")
-            row[d] = match
-        grid_rows.append(row)
-    grid_df = pd.DataFrame(grid_rows).set_index("Time")
-
-    col_config = {d: st.column_config.SelectboxColumn(d, options=show_labels, required=True)
-                  for d in PRIMETIME_DAYS}
-    # Key includes grid_ver_key's value so Auto-Fill's st.rerun() above forces
-    # a fresh widget instance -- st.data_editor otherwise ignores a changed
-    # `grid_df` and keeps showing whatever the widget already has cached
-    # under the same key (the standard Streamlit "data changed underneath an
-    # existing widget key" gotcha).
-    edited_df = st.data_editor(grid_df, column_config=col_config, use_container_width=True,
-                                key=f"primetime_grid_{net}_{year}_{ss[grid_ver_key]}")
+        row_cols = st.columns([0.6] + [1] * len(PRIMETIME_DAYS))
+        row_cols[0].markdown(
+            f'<div style="padding-top:8px;color:{TEXT2};font-family:DM Mono,monospace;">{h}</div>',
+            unsafe_allow_html=True)
+        for col, d in zip(row_cols[1:], PRIMETIME_DAYS):
+            current_label = next((lbl for lbl, s in show_by_label.items()
+                                   if s.slot_day == d and s.slot_hour == h), "— none —")
+            idx = show_labels.index(current_label) if current_label in show_labels else 0
+            with col:
+                cell_choices[(d, h)] = st.selectbox(
+                    f"{d} {h}", show_labels, index=idx, label_visibility="collapsed",
+                    key=f"primetime_cell_{net}_{year}_{d}_{h}_{ss[grid_ver_key]}",
+                )
 
     # Persist the grid onto the real Show objects — same instances living in
     # ss.oxygen_shows/etc. (shows[:] above is a shallow copy), same "write
@@ -637,7 +735,7 @@ def render():
     assigned_once = set()
     for h in PRIMETIME_HOURS:
         for d in PRIMETIME_DAYS:
-            label = edited_df.loc[h, d]
+            label = cell_choices[(d, h)]
             if label and label != "— none —" and label in show_by_label:
                 if label in assigned_once:
                     double_booked.append(label)

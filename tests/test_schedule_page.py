@@ -60,9 +60,6 @@ def test_renewal_page_renders_primetime_grid_with_no_exceptions():
     text = "\n".join(md.value for md in at.markdown)
     assert "trade-off" in text.lower()
     assert "death slot" in text.lower()
-    # AppTest's public API (this Streamlit version) has no dedicated
-    # data_editor accessor -- the no-exception assertion above is what
-    # actually confirms the grid mounted and rendered cleanly.
 
 
 def test_unscheduled_shows_stay_neutral_after_a_no_op_render():
@@ -75,14 +72,23 @@ def test_unscheduled_shows_stay_neutral_after_a_no_op_render():
     assert all(s.schedule_multiplier() == 1.0 for s in shows)
 
 
-def test_directions_mention_double_click_to_assign_a_slot():
-    # Added 2026-08-04 per user request -- students single-clicking a
-    # SelectboxColumn cell and getting nothing to happen was a real point
-    # of confusion; the directions now say so explicitly.
+def test_grid_no_longer_requires_a_double_click():
+    # Reworked 2026-09-22, per user request, after testing surfaced the
+    # double-click SelectboxColumn as a real, silent trap (students
+    # single-clicking and getting nothing to happen, confirmed by hand
+    # during this session). The grid is now individual st.selectbox
+    # widgets, one per (day, hour) cell, which open on a single click --
+    # the same interaction every other dropdown in this app already uses.
+    # This guards against reintroducing the old double-click-only widget
+    # (and its now-inaccurate instructions) by mistake.
     at = AppTest.from_function(_script, default_timeout=30)
     at.run()
     text = "\n".join(md.value for md in at.markdown)
-    assert "double-click" in text.lower()
+    assert "double-click" not in text.lower()
+    assert "click a cell's dropdown" in text.lower()
+    # 7 days x 4 hours of real selectbox widgets, not a data_editor grid.
+    primetime_cells = [sb for sb in at.selectbox if sb.key.startswith("primetime_cell_")]
+    assert len(primetime_cells) == 28
 
 
 def test_auto_fill_by_rating_assigns_every_show_to_a_distinct_slot():
