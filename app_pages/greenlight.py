@@ -26,9 +26,182 @@ _NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturatio
 _PROTECTED_TITLES = {s.name.strip().lower() for s in (BRAVO_SLATE + OXYGEN_SLATE + PEACOCK_SLATE)}
 
 
+def _pitch_calibration_text() -> str:
+    """The marketplace catalog as plain text, so AI estimates for a
+    student's own pitch land on the same scale as the rest of the game."""
+    lines = []
+    for p in TV_PITCH_CATALOG.values():
+        d = genre_demo(p["genre"])
+        lines.append(f"- {p['name']} ({p['genre']}, {p['origin']}): {d['age']} · {d['gender']} · "
+                     f"{d['reach']}; {p['episodes']} eps · ${p['ep_cost_k']}K/ep · rating {p['rating']:.1f} · "
+                     f"SVOD appeal {p['svod_appeal']} · IP Score {p['ip_score']}")
+    return "\n".join(lines)
+
+
+def _render_pitch_review(ss, show_name: str, genre: str, air_month: int, slots_left: int) -> None:
+    """Student writes their own pitch -> one AI call returns feedback plus an
+    estimated pitch card (same format as Acquire a Pitched Show). Greenlighting
+    from the card uses the AI's numbers, not the student's sliders, so a pitch
+    can't simply claim a hit rating. Added 2026-10-01."""
+    from utils.ai_grading import api_key_configured, review_show_pitch, clamp_estimate
+
+    net         = ss.active_network
+    net_display = NETWORK_INFO[net]["display_name"]
+
+    st.markdown(
+        '<div class="section-title">🤖 AI Pitch Review — Feedback + Estimated Metrics '
+        '<span style="font-size:14px;color:#b0b5c4;">(optional)</span></div>',
+        unsafe_allow_html=True)
+
+    if not api_key_configured():
+        st.markdown(
+            '<div style="font-size:14px;color:#b0b5c4;">'
+            'Ask your instructor to enable AI pitch review for this class.</div>',
+            unsafe_allow_html=True)
+        return
+
+    st.markdown(
+        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+        'Pitch your own show. The AI grades the pitch and, like a network research team, estimates its '
+        'audience, cost, rating, SVOD appeal, and IP Score. Your <b>Show Name</b> and <b>Genre</b> come from '
+        'Show Concept Inputs above. If you greenlight from the review card, the show uses the '
+        '<b>AI\'s estimates</b>, not the sliders above. A clearer, more feasible pitch earns better numbers.'
+        '</div>', unsafe_allow_html=True)
+
+    pitch = st.text_area(
+        "Your pitch (2-4 sentences): the concept, the hook, and who it's for",
+        placeholder="e.g. A competition show where design students renovate a real "
+                    "small business on a shoestring budget...",
+        key="gl_pitch_text",
+    )
+    oc1, oc2 = st.columns([1, 1])
+    with oc1:
+        origin = st.radio("Origin", ["Domestic Original", "International Format"], horizontal=True,
+                          key="gl_pitch_origin",
+                          help="International Format = adapting a proven overseas show. You pay a "
+                               "rights fee, but the concept is more de-risked.")
+    with oc2:
+        format_source = ""
+        if origin == "International Format":
+            format_source = st.text_input("Original country", placeholder="e.g. Netherlands",
+                                          key="gl_pitch_format_source", max_chars=40)
+
+    review_key = (show_name.strip(), genre, pitch.strip(), origin, format_source.strip(), net)
+    if st.button("🤖 Get AI Feedback & Estimates", key="gl_grade_button"):
+        if not pitch.strip():
+            st.warning("Write a short pitch first.")
+        elif (show_name.strip().lower() in _PROTECTED_TITLES
+              or show_name.strip().lower() in {p["name"].lower() for p in TV_PITCH_CATALOG.values()}):
+            st.warning("That title already exists in this universe (a current show or a marketplace pitch). "
+                       "Rename your show first.")
+        else:
+            with st.spinner("Reviewing your pitch..."):
+                review = review_show_pitch(
+                    show_name.strip(), genre, pitch.strip(), origin, format_source.strip(),
+                    net_display, NETWORK_INFO[net]["ep_cost_range"], _pitch_calibration_text())
+            if review is None:
+                st.error("AI review is temporarily unavailable. Try again later.")
+            else:
+                ss.gl_ai_review = {"key": review_key,
+                                   "grade": review.model_dump(exclude={"estimate"}),
+                                   "estimate": clamp_estimate(review.estimate)}
+
+    rv = ss.get("gl_ai_review")
+    if not rv:
+        return
+    if rv["key"] != review_key:
+        st.caption("✏️ Your pitch, name, genre, or origin changed since the last review. "
+                   "Click Get AI Feedback & Estimates again to update it.")
+        return
+
+    g, est = rv["grade"], rv["estimate"]
+    total = (g["originality_score"] + g["market_fit_score"]
+             + g["feasibility_score"] + g["presentation_score"])
+    st.markdown(f"**Pitch score: {total}/100** — originality {g['originality_score']}/25 · "
+                f"market fit {g['market_fit_score']}/25 · feasibility {g['feasibility_score']}/25 · "
+                f"presentation {g['presentation_score']}/25")
+    st.write(g["feedback"])
+    gc1, gc2 = st.columns(2)
+    with gc1:
+        st.markdown("**Strengths**")
+        for s in g["strengths"]:
+            st.markdown(f"- {s}")
+    with gc2:
+        st.markdown("**Risks**")
+        for r in g["risks"]:
+            st.markdown(f"- {r}")
+    if g["research_recommended"]:
+        st.info(f"🔬 **Worth paying for Research on this one** once it's in your portfolio — "
+                f"{g['research_rationale']}")
+    else:
+        st.caption(f"🔬 Probably not worth paying for Research on this one — {g['research_rationale']}")
+
+    # Estimated pitch card, same layout as Acquire a Pitched Show
+    pitch_dict = {"episodes": est["episodes"], "ep_cost_k": est["ep_cost_k"], "origin": origin}
+    season_cost = est["episodes"] * est["ep_cost_k"] / 1000
+    fee = tv_pitch_acquisition_fee_m(pitch_dict) if origin == "International Format" else 0.0
+    origin_badge = (f'🌍 International Format ({format_source.strip() or "overseas"})'
+                    if origin == "International Format" else "🏠 Domestic Original")
+    fee_line = (f'Rights fee: <b>${fee:.2f}M</b> + ${season_cost:.2f}M season production cost'
+                if fee else f'No rights fee (in-house original) + <b>${season_cost:.2f}M</b> season production cost')
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;border-radius:8px;
+         padding:14px;margin:8px 0;">
+      <div style="font-size:12px;color:#4fc3f7;font-family:DM Mono,monospace;margin-bottom:4px;">AI-ESTIMATED PITCH CARD</div>
+      <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{show_name.strip()}</div>
+      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;margin:2px 0 6px;">
+        {genre} · {origin_badge}</div>
+      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+        Demo: {est['demo_age']} · {est['demo_gender']} · {est['demo_reach']}</div>
+      <div style="font-size:12px;color:#8b8fa3;font-family:DM Mono,monospace;">
+        {est['episodes']} eps · ${est['ep_cost_k']}K/ep · rating {est['rating']:.1f} ·
+        SVOD appeal {est['svod_appeal']} · IP Score {est['ip_score']}</div>
+      <div style="font-size:12px;color:#8b8fa3;margin-top:4px;">No brand partnership</div>
+      <div style="font-size:13px;color:#e8eaf0;margin-top:8px;">{fee_line}</div>
+      <div style="font-size:12px;color:#c8cad4;margin-top:8px;font-style:italic;">Why these numbers: {est['rationale']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    bc1, bc2 = st.columns([2, 1])
+    with bc1:
+        if slots_left <= 0:
+            st.caption("No greenlight slots left this year.")
+        elif st.button(f"🎬 Greenlight \"{show_name.strip()}\" with these estimates "
+                       f"(${fee + season_cost:.2f}M)", key="gl_greenlight_ai", type="primary",
+                       use_container_width=True):
+            new_show = Show(
+                id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=est["episodes"],
+                ep_cost_k=est["ep_cost_k"], rating=est["rating"], ip_score=est["ip_score"],
+                air_month=air_month, network=net_display,
+            )
+            roster_key = f"{net}_shows"
+            ss[roster_key] = ss[roster_key] + [new_show]
+            ss.level_budget = ss.get("level_budget", 0) - fee - season_cost
+            ss.greenlit_ids_this_year.add(new_show.id)
+            ss.greenlit_ids_this_level.add(new_show.id)
+            ss.total_shows_greenlit += 1
+            ss.next_show_id += 1
+            ss.gl_ai_review = None   # one greenlight per review
+            st.rerun()
+    with bc2:
+        if st.button("↧ Load into Concept Inputs", key="gl_load_ai_estimates", use_container_width=True,
+                     help="Copies the estimates into the sliders above to explore the Linear vs. SVOD P&L. "
+                          "Greenlighting from the sliders uses whatever the sliders say."):
+            # The sliders above already rendered this run, and Streamlit forbids
+            # changing a drawn widget's value -- queue it for render()'s next pass.
+            ss["_gl_pending_inputs"] = {"gl_eps": est["episodes"], "gl_ep_cost": est["ep_cost_k"],
+                                        "gl_rating": est["rating"], "gl_appeal": est["svod_appeal"]}
+            st.rerun()
+
+
 def render():
     ss   = st.session_state
     year = ss.get("year", 1)
+
+    # Apply "Load into Concept Inputs" from the AI Pitch Review before any
+    # Concept Input widget is drawn (see _render_pitch_review).
+    for k, v in (ss.pop("_gl_pending_inputs", None) or {}).items():
+        ss[k] = v
 
     # Slot tracking moved up here (2026-08-04) so the AI Pitch Generator
     # below can know how many greenlight slots are left before generating
@@ -277,59 +450,9 @@ def render():
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
                                          help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
 
-    # ── AI Pitch Feedback (optional, BYOK — see README.md) ──────────────────────
-    from utils.ai_grading import api_key_configured, grade_show_concept
-
+    # ── AI Pitch Review: feedback + estimated metrics (optional, BYOK) ──────────
     st.divider()
-    st.markdown(
-        '<div class="section-title">AI Pitch Feedback '
-        '<span style="font-size:14px;color:#b0b5c4;">(optional)</span></div>',
-        unsafe_allow_html=True,
-    )
-
-    if not api_key_configured():
-        st.markdown(
-            '<div style="font-size:14px;color:#b0b5c4;">'
-            'Ask your instructor to enable AI feedback for this class.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        pitch = st.text_area(
-            "Describe your show concept in your own words (2-4 sentences)",
-            placeholder="e.g. A competition show where design students renovate a real "
-                        "small business on a shoestring budget...",
-            key="gl_pitch_text",
-        )
-        if st.button("🤖 Get AI Feedback", key="gl_grade_button"):
-            if not pitch.strip():
-                st.warning("Write a short pitch first.")
-            else:
-                with st.spinner("Grading your pitch..."):
-                    grade = grade_show_concept(show_name, genre, pitch)
-                if grade is None:
-                    st.error("AI feedback is temporarily unavailable. Try again later.")
-                else:
-                    total = (grade.originality_score + grade.market_fit_score
-                              + grade.feasibility_score + grade.presentation_score)
-                    st.markdown(f"**Score: {total}/100**")
-                    st.write(grade.feedback)
-                    gc1, gc2 = st.columns(2)
-                    with gc1:
-                        st.markdown("**Strengths**")
-                        for s in grade.strengths:
-                            st.markdown(f"- {s}")
-                    with gc2:
-                        st.markdown("**Risks**")
-                        for r in grade.risks:
-                            st.markdown(f"- {r}")
-                    if grade.research_recommended:
-                        st.info(
-                            f"🔬 **Worth paying for Research on this one** once it's in your "
-                            f"portfolio — {grade.research_rationale}",
-                        )
-                    else:
-                        st.caption(f"🔬 Probably not worth paying for Research on this one — "
-                                   f"{grade.research_rationale}")
+    _render_pitch_review(ss, show_name, genre, air_month, slots_left)
 
     st.divider()
 

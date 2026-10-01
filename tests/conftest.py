@@ -31,4 +31,7 @@ def _isolate_state_files(monkeypatch, tmp_path):
     # Never reach a real database from tests, even if a local secrets file sets
     # DATABASE_URL. tests/test_storage.py opts specific tests into SQLite.
     monkeypatch.setattr(storage, "database_url", lambda: None)
+    # Never make real (billed) Claude API calls from tests, even if this
+    # machine has ANTHROPIC_API_KEY set. AI tests monkeypatch fakes in.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     yield

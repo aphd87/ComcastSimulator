@@ -10,6 +10,9 @@ configured a key, api_key_configured() returns False and the caller should
 hide the feature rather than erroring.
 """
 from __future__ import annotations
+import os
+from typing import Literal
+
 import streamlit as st
 from pydantic import BaseModel, Field
 
@@ -65,7 +68,7 @@ def grade_movie_concept(title: str, genre: str, concept_type: str, source_materi
     MovieConceptGrade's docstring for why). Returns None on any failure
     (missing key, API error) so the caller can show a friendly message
     instead of crashing the page."""
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    api_key = _api_key()
     if not api_key:
         return None
 
@@ -120,12 +123,21 @@ class ShowPitchBatch(BaseModel):
                                            "-- no two should share the same premise or hook.")
 
 
+def _api_key() -> str | None:
+    """This deployment's own key: Streamlit secrets first, then the
+    ANTHROPIC_API_KEY environment variable (handy for local runs)."""
+    try:
+        key = st.secrets.get("ANTHROPIC_API_KEY")
+        if key:
+            return str(key)
+    except Exception:
+        pass
+    return os.environ.get("ANTHROPIC_API_KEY") or None
+
+
 def api_key_configured() -> bool:
     """True if this deployment has its own Anthropic API key configured."""
-    try:
-        return bool(st.secrets.get("ANTHROPIC_API_KEY"))
-    except Exception:
-        return False
+    return bool(_api_key())
 
 
 def grade_show_concept(show_name: str, genre: str, pitch: str) -> ShowConceptGrade | None:
@@ -134,7 +146,7 @@ def grade_show_concept(show_name: str, genre: str, pitch: str) -> ShowConceptGra
     Returns None on any failure (missing key, API error) so the caller can
     show a friendly message instead of crashing the page.
     """
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    api_key = _api_key()
     if not api_key:
         return None
 
@@ -173,7 +185,7 @@ def generate_show_pitch(network_context: str) -> ShowPitchIdea | None:
     None on any failure (missing key, API error) so the caller can show a
     friendly message instead of crashing the page.
     """
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    api_key = _api_key()
     if not api_key:
         return None
 
@@ -208,7 +220,7 @@ def generate_show_pitches(network_context: str, n: int = 3) -> list[ShowPitchIde
     ideas side by side and pick whichever fits their slate, rather than
     clicking "another pitch" repeatedly and losing the earlier ones.
     Returns None on any failure, same posture as generate_show_pitch()."""
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") if api_key_configured() else None
+    api_key = _api_key()
     if not api_key:
         return None
 
@@ -234,5 +246,101 @@ def generate_show_pitches(network_context: str, n: int = 3) -> list[ShowPitchIde
             output_format=ShowPitchBatch,
         )
         return response.parsed_output.pitches
+    except Exception:
+        return None
+
+
+# ── Student pitch review: feedback + estimated metrics (2026-10-01) ──────────
+# A student writes their own show pitch; one call grades it (same rubric as
+# grade_show_concept) AND estimates the numbers a network's research team
+# would put on it, in the same shape as the Acquire a Pitched Show catalog.
+# Those estimates become the show's real numbers if the student greenlights
+# it from the review card, so a student can't simply claim a hit rating.
+
+class ShowPitchEstimate(BaseModel):
+    demo_age:    Literal["18-34", "18-49", "25-54", "35-64"] = Field(
+        description="Core age band this show would draw.")
+    demo_gender: Literal["Skews Female", "Balanced", "Skews Male"] = Field(
+        description="Gender skew of the core audience.")
+    demo_reach:  Literal["National (US)", "Global", "Regional (US)"] = Field(
+        description="Where the audience is: National (US) for most cable shows, Global only for "
+                    "concepts that clearly travel internationally, Regional for local-interest shows.")
+    episodes:    int = Field(description="First-season episode count, 6-20.")
+    ep_cost_k:   int = Field(description="Production cost per episode in $K, consistent with the genre, "
+                                         "scope, and the network's typical cost range given in the prompt.")
+    rating:      float = Field(description="Projected 18-49 rating for this unproven concept, 0.3-2.5. "
+                                           "Typical new cable show 0.8-1.4; above 1.8 only for an "
+                                           "exceptionally strong, well-funded concept.")
+    svod_appeal: int = Field(description="0-100: how well the show would attract and keep streaming "
+                                         "subscribers (bingeable, serialized, broad appeal score higher).")
+    ip_score:    int = Field(description="0-100 franchise/brand value: spinoff, format-sale, and "
+                                         "longevity potential. Most new concepts land 35-65.")
+    rationale:   str = Field(description="One or two sentences, to the student, explaining the biggest "
+                                         "drivers of these estimates (especially rating and cost).")
+
+
+class ShowPitchReview(ShowConceptGrade):
+    estimate: ShowPitchEstimate
+
+
+# Bounds applied after parsing, so a model slip can never put an absurd
+# number into the game economy.
+ESTIMATE_BOUNDS = {"episodes": (4, 24), "ep_cost_k": (100, 5000), "rating": (0.3, 2.5),
+                   "svod_appeal": (20, 100), "ip_score": (20, 90)}
+
+
+def clamp_estimate(est: ShowPitchEstimate) -> dict:
+    d = est.model_dump()
+    for k, (lo, hi) in ESTIMATE_BOUNDS.items():
+        d[k] = min(max(d[k], lo), hi)
+    d["rating"] = round(float(d["rating"]), 1)
+    d["ep_cost_k"] = int(round(d["ep_cost_k"] / 10) * 10)
+    return d
+
+
+def review_show_pitch(show_name: str, genre: str, pitch: str, origin: str, format_source: str,
+                      network_display: str, ep_cost_range_k: tuple,
+                      calibration: str) -> ShowPitchReview | None:
+    """Grade a student's own pitch and estimate its metrics with Claude
+    Haiku 4.5. `calibration` is a few catalog pitches rendered as text, so
+    estimates land on the same scale as the rest of the game. Returns None
+    on any failure (missing key, API error), same posture as the rest of
+    this module."""
+    api_key = _api_key()
+    if not api_key:
+        return None
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    origin_line = (f"International Format adapted from {format_source or 'an overseas original'}"
+                   if origin == "International Format" else "Domestic Original")
+    try:
+        response = client.messages.parse(
+            model="claude-haiku-4-5",
+            max_tokens=2048,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "You are a TV network's development and research team reviewing a business-school "
+                    "student's original show pitch in a portfolio simulation.\n\n"
+                    f"Network: {network_display} (typical cost per episode "
+                    f"${ep_cost_range_k[0]}K-${ep_cost_range_k[1]}K)\n"
+                    f"Show name: {show_name}\nGenre: {genre}\nOrigin: {origin_line}\n"
+                    f"Pitch:\n{pitch}\n\n"
+                    "1) Grade the pitch on originality, market fit, feasibility, and presentation "
+                    "(0-25 each) with brief, constructive feedback written to the student, and judge "
+                    "whether paying for in-game Research on it would be worthwhile.\n"
+                    "2) Estimate the show's audience and production metrics as a realistic, slightly "
+                    "skeptical network researcher would. Weaker, vaguer, or less feasible pitches should "
+                    "get lower ratings. Higher ratings generally require higher cost per episode. An "
+                    "International Format of a proven overseas hit earns a modestly higher, more "
+                    "reliable rating and IP Score than an untested domestic idea.\n\n"
+                    "For scale, these are pitches already in the game's marketplace:\n"
+                    f"{calibration}"
+                ),
+            }],
+            output_format=ShowPitchReview,
+        )
+        return response.parsed_output
     except Exception:
         return None

@@ -333,7 +333,16 @@ def build_tv():
     callout(doc, "tip",
             "Streaming often looks negative in Year 1. That is expected, because it books only one-third of a show's 3-year subscriber value in the first year while paying the full cost up front. "
             "Judge streaming shows over the full 3 years.")
-    para(doc, "If your school has turned it on, **🤖 Get AI Feedback** grades your pitch. Treat it as advice, not part of your score.", muted=True, size=10)
+    doc.add_heading("🤖 Pitch your own show with AI Pitch Review  (if your school turned it on)", level=3)
+    steps(doc, [
+        "In **Show Concept Inputs**, enter a **Show Name** and pick a **Genre**.",
+        "In **AI Pitch Review**, write a 2–4 sentence pitch covering the concept, the hook, and who it's for. Choose **Domestic Original**, or **International Format** plus the country it comes from.",
+        "Click **🤖 Get AI Feedback & Estimates**. You get a score out of 100, strengths and risks, and an **AI-estimated pitch card** with demo, episodes, cost per episode, rating, SVOD appeal, and IP Score.",
+        "Click **🎬 Greenlight [show] with these estimates** to add it. The show uses the **AI's numbers**, not your sliders.",
+    ])
+    callout(doc, "tip",
+            "A clearer, more specific, more feasible pitch earns better estimates. An International Format costs a rights fee, "
+            "but its numbers are more reliable. Use **↧ Load into Concept Inputs** to explore the P&L with the AI's numbers first.")
 
     doc.add_heading("📊 Supplementary Insights  (optional, not scored)", level=2)
     para(doc, "This collapsed box holds extra charts and tools: genre decay curves, the premiere calendar, cash-flow timing, and marketing ROI. "
