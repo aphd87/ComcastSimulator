@@ -8,6 +8,7 @@ from __future__ import annotations   # list[...]/dict[...]/tuple[...] type hints
                                        # need Python 3.9+ without this; Streamlit Cloud's
                                        # runtime may be older than what's tested locally.
 import json
+from utils import storage as _storage
 import os
 import time
 import streamlit as st
@@ -313,17 +314,16 @@ def compute_movie_notables(movie_log: list[dict]) -> dict:
     }
 
 # ── FERPA-Safe Leaderboard ────────────────────────────────────────────────────
+# Storage lives in utils/storage.py (2026-10-01): a database when the
+# deployment sets DATABASE_URL, else lock-protected atomic JSON files.
+# LEADERBOARD_FILE / TEAM_STATE_FILE stay here as the file-backend paths
+# (tests monkeypatch them).
 def load_leaderboard() -> list[dict]:
-    """Load leaderboard from JSON. Returns empty list if not found."""
-    if LEADERBOARD_FILE.exists():
-        try:
-            return json.loads(LEADERBOARD_FILE.read_text())
-        except Exception:
-            return []
-    return []
+    """All leaderboard entries, oldest first. Empty list if none yet."""
+    return _storage.load_entries(LEADERBOARD_FILE)
 
 def save_leaderboard(board: list[dict]) -> None:
-    LEADERBOARD_FILE.write_text(json.dumps(board, indent=2))
+    _storage.replace_entries(LEADERBOARD_FILE, board)
 
 def record_attempt(team_name: str, network: str, attempt_num: int,
                    score: float, passed: bool, details: dict,
@@ -364,8 +364,6 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
     else in this file, since it's optional and free-text class_section
     already carries the real scoping responsibility.
     """
-    board = load_leaderboard()
-
     entry = {
         "team_name":     team_name,
         "school":        school,
@@ -381,8 +379,9 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
         "slate_summary": slate_summary or [],
         "notables":      notables or {},
     }
-    board.append(entry)
-    save_leaderboard(board)
+    # Append-only: one entry per submission, never a read-modify-write of
+    # the whole board, so simultaneous submits can't drop each other.
+    _storage.append_entry(LEADERBOARD_FILE, entry)
     return entry
 
 def get_team_attempts(team_name: str, network: str, school: str = "", class_section: str = "") -> list[dict]:
@@ -692,36 +691,19 @@ def _team_key(team_name: str, school: str, class_section: str) -> str:
     return f"{school}||{class_section}||{team_name}"
 
 
-def _load_team_states() -> dict:
-    if not TEAM_STATE_FILE.exists():
-        return {}
-    try:
-        with open(TEAM_STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
 def save_live_state(team_name: str, school: str, class_section: str, snapshot: dict) -> None:
     """Persist a Driver's in-progress decision state so Follow Along
     teammates on other devices/laptops can catch up to it. `snapshot` must
     already be JSON-safe (sets -> lists, dataclasses -> dicts) — this
     function is pure storage, it doesn't know the shape of a simulation."""
-    states = _load_team_states()
-    states[_team_key(team_name, school, class_section)] = {
-        "updated_at": time.time(),
-        "state":      snapshot,
-    }
-    with open(TEAM_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(states, f)
+    _storage.save_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section), snapshot)
 
 
 def load_live_state(team_name: str, school: str, class_section: str) -> Optional[dict]:
     """Returns the Driver's last-saved snapshot dict, or None if this team
     has no Driver state saved yet (e.g. a Follow Along teammate registered
     before the Driver made their first move)."""
-    entry = _load_team_states().get(_team_key(team_name, school, class_section))
-    return entry["state"] if entry else None
+    return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section))
 
 
 # ── Network identity ──────────────────────────────────────────────────────────

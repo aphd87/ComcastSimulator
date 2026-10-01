@@ -12,6 +12,22 @@ Full design intent, mechanics, and session history: see `DESIGN_NOTES.md`.
 - If a school doesn't configure a key, the feature is simply unavailable for that deployment (no crash, no fallback to a shared/central key) — there is no scenario where one school's usage bills another school or the tool's maintainer.
 - **Practically: whoever manages each school's Streamlit Cloud deployment needs their own Anthropic API key**, and needs to be told to add it under that deployment's "Secrets" settings. This is worth surfacing to Darden now, before the feature ships, so each participating school's IT/faculty contact knows to provision one.
 
+## Saving scores — set up a database before a graded session
+
+**Without this, scores are wiped whenever the app restarts.** Streamlit Community Cloud erases the app's local disk on every reboot and every redeploy (including any push to `main`). Out of the box, The Slate saves to that disk. Teams can no longer overwrite each other (saves are locked and written safely), but everything is still lost on a restart.
+
+To keep scores permanently, give the deployment its own database. This takes about 5 minutes and is free:
+
+1. Create a free Postgres database at [Neon](https://neon.tech) or [Supabase](https://supabase.com).
+2. Copy its connection string. It looks like `postgresql://user:password@host/dbname`.
+3. In Streamlit Cloud, open the app → **Settings → Secrets** and add:
+   ```toml
+   DATABASE_URL = "postgresql://user:password@host/dbname"
+   ```
+4. Restart the app, then open the **Leaderboard**. Near the bottom it should say *"Scores are saved to this deployment's database."* If it shows a ⚠️ warning instead, the URL isn't being read.
+
+The app creates its two tables (`slate_leaderboard`, `slate_team_state`) automatically. Each school uses its own database, the same way it uses its own API key (see above). No database is shared or committed to this repo.
+
 ## Instructor settings — per-deployment Secrets
 
 Same mechanism as the API key above: any setting an instructor should be able to tailor for their own class lives in that deployment's own Streamlit secrets (Settings → Secrets on Streamlit Cloud, or `.streamlit/secrets.toml` locally — **never commit this file**), not a shared config in the repo.

@@ -21,10 +21,14 @@ readability/history.
 import pytest
 
 import utils.game_state as gs
+import utils.storage as storage
 
 
 @pytest.fixture(autouse=True)
 def _isolate_state_files(monkeypatch, tmp_path):
     monkeypatch.setattr(gs, "LEADERBOARD_FILE", tmp_path / "leaderboard.json")
     monkeypatch.setattr(gs, "TEAM_STATE_FILE", tmp_path / "team_state.json")
+    # Never reach a real database from tests, even if a local secrets file sets
+    # DATABASE_URL. tests/test_storage.py opts specific tests into SQLite.
+    monkeypatch.setattr(storage, "database_url", lambda: None)
     yield

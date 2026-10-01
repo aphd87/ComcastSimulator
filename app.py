@@ -512,7 +512,7 @@ if not ss.registered and ss.active_section != "leaderboard":
                  "School/Team Name to watch the Driver's choices live, read-only, on their own screen. "
                  "If it's just you, pick Driver."
         )
-        st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
+        st.caption("FERPA: No PII collected. Team names are pseudonyms only — never enter student names or IDs.")
         if st.button("Register Team →", key="register_team_button", use_container_width=True, type="primary"):
             if not team_input.strip():
                 st.error("Please enter a team name.")
@@ -533,7 +533,6 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.registered    = True
                 ss.tv_network_chosen = False
                 st.rerun()
-        st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
 
     st.divider()
 

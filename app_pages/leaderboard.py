@@ -543,6 +543,14 @@ def render():
     st.markdown('<div class="section-title">All Submissions — Raw Data</div>', unsafe_allow_html=True)
 
     all_entries = load_leaderboard()
+    # Storage mode, so an instructor can confirm setup at a glance (2026-10-01).
+    from utils.storage import backend_name
+    if backend_name() == "database":
+        st.caption("💾 Scores are saved to this deployment's database and survive app restarts.")
+    else:
+        st.caption("⚠️ Scores are saved on the app server's local disk, which Streamlit Cloud erases on every "
+                   "restart or redeploy. Instructors: set DATABASE_URL in this app's Secrets (see README) "
+                   "before a graded session.")
     if all_entries:
         raw_df = pd.DataFrame([{
             "Team":      e["team_name"],
