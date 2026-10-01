@@ -40,6 +40,36 @@ def test_picking_peacock_starts_peacock_not_oxygen():
     assert at.session_state["year"] == 1
 
 
+def _with_greenlit_show(at, submitted):
+    """Pretend the team greenlit show #999 on Oxygen this level."""
+    from utils.models import Show
+    extra = Show(id=999, name="Loophole Show", genre="Reality", episodes=10, ep_cost_k=300,
+                 rating=1.0, ip_score=40, air_month=3, network="Oxygen")
+    at.session_state["oxygen_shows"] = list(at.session_state["oxygen_shows"]) + [extra]
+    at.session_state["greenlit_ids_this_level"] = {999}
+    at.session_state["greenlit_ids_this_year"] = {999}
+    at.session_state["submitted"] = submitted
+    return at
+
+
+def test_switching_networks_mid_level_undoes_that_levels_greenlit_shows():
+    # Closes the loophole: switching used to refill slots + budget but keep the shows.
+    at = _with_greenlit_show(_to_tv(), submitted=False)
+    at.button(key="pick_net_oxygen").click()
+    at.run()
+    assert not at.exception, list(at.exception)
+    assert not any(s.id == 999 for s in at.session_state["oxygen_shows"])
+    assert at.session_state["greenlit_ids_this_year"] == set()
+
+
+def test_switching_after_submitting_keeps_that_levels_shows():
+    at = _with_greenlit_show(_to_tv(), submitted=True)
+    at.button(key="pick_net_bravo").click()
+    at.run()
+    assert not at.exception, list(at.exception)
+    assert any(s.id == 999 for s in at.session_state["oxygen_shows"])
+
+
 def test_follow_along_viewer_skips_picker():
     at = _to_tv(role="👀 Follow Along — view only")
     assert not at.exception

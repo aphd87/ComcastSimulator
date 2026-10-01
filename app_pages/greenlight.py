@@ -11,7 +11,7 @@ from utils.models import (
 )
 from utils.charts import base_layout, queue_supplement, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
-from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR
+from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR, YEARS_PER_LEVEL
 
 _GENRES = ["Reality", "Competition", "Talk", "Scripted", "True Crime", "Drama"]
 _NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturation threshold
@@ -252,7 +252,12 @@ def render():
            f'left this year</b> — acquiring, building from scratch, and AI-pitched shows all share them.'
            if slots_left > 0 else
            f'<b style="color:#ef5350;">You\'ve used all {MAX_NEW_SHOWS_PER_YEAR} new-show slots this year</b> '
-           f'— acquiring, building from scratch, and AI-pitched shows all share them. More open next year.')
+           f'— acquiring, building from scratch, and AI-pitched shows all share them.')
+        + (f' There are more pitches below than slots, so choose carefully. You get {MAX_NEW_SHOWS_PER_YEAR} '
+           f'fresh slots each new year, so across a {YEARS_PER_LEVEL}-year level you can add up to '
+           f'{MAX_NEW_SHOWS_PER_YEAR * YEARS_PER_LEVEL} new shows. A pitch you pass on stays here until '
+           f'someone acquires it. Switching networks or restarting a level undoes the shows you added '
+           f'in it, so slots can\'t be refilled that way.')
         + '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
         '<ul style="margin:4px 0 0 18px;padding:0;line-height:1.6;">'
         '<li><b>Demo</b>: who watches. Age band · gender skew · where (e.g. 18-49 · Balanced · National US).</li>'

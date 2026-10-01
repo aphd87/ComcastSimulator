@@ -160,6 +160,15 @@ LIVE_STATE_SCALAR_KEYS = (
 def _switch_network(ss, net: str) -> None:
     """Start `net` fresh at Year 1. Shared by the Choose Your Network screen
     and the network selector row so both reset exactly the same state."""
+    # Leaving a level that wasn't submitted abandons it, so undo the shows
+    # greenlit during it, same as Restart This Level. Otherwise switching
+    # (or re-clicking the current network) refilled the slots and budget
+    # while keeping the shows: unlimited free shows (closed 2026-10-01).
+    # A submitted level keeps its shows, same as Advance.
+    abandoned = ss.get("greenlit_ids_this_level", set()) if not ss.get("submitted") else set()
+    if abandoned:
+        for key in ("oxygen_shows", "bravo_shows", "peacock_shows"):
+            ss[key] = [s for s in ss.get(key, []) if s.id not in abandoned]
     ss.active_network          = net
     ss.tv_network_chosen       = True
     ss.submitted               = False
