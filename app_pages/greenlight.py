@@ -26,6 +26,16 @@ _NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturatio
 _PROTECTED_TITLES = {s.name.strip().lower() for s in (BRAVO_SLATE + OXYGEN_SLATE + PEACOCK_SLATE)}
 
 
+def _taken_titles() -> set:
+    """Every title a new show can't reuse: the original slates, the pitch
+    marketplace, and anything already on this team's rosters (2026-10-01)."""
+    ss = st.session_state
+    taken = set(_PROTECTED_TITLES) | {p["name"].strip().lower() for p in TV_PITCH_CATALOG.values()}
+    for key in ("oxygen_shows", "bravo_shows", "peacock_shows"):
+        taken |= {s.name.strip().lower() for s in ss.get(key, [])}
+    return taken
+
+
 def _pitch_calibration_text() -> str:
     """The marketplace catalog as plain text, so AI estimates for a
     student's own pitch land on the same scale as the rest of the game."""
@@ -38,7 +48,8 @@ def _pitch_calibration_text() -> str:
     return "\n".join(lines)
 
 
-def _render_pitch_review(ss, show_name: str, genre: str, air_month: int, slots_left: int) -> None:
+def _render_pitch_review(ss, show_name: str, genre: str, pitch: str, air_month: int,
+                         slots_left: int) -> None:
     """Student writes their own pitch -> one AI call returns feedback plus an
     estimated pitch card (same format as Acquire a Pitched Show). Greenlighting
     from the card uses the AI's numbers, not the student's sliders, so a pitch
@@ -62,18 +73,12 @@ def _render_pitch_review(ss, show_name: str, genre: str, air_month: int, slots_l
 
     st.markdown(
         '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        'Pitch your own show. The AI grades the pitch and, like a network research team, estimates its '
-        'audience, cost, rating, SVOD appeal, and IP Score. Your <b>Show Name</b> and <b>Genre</b> come from '
-        'Show Concept Inputs above. If you greenlight from the review card, the show uses the '
-        '<b>AI\'s estimates</b>, not the sliders above. A clearer, more feasible pitch earns better numbers.'
+        'Get your pitch reviewed. The AI grades the <b>Show Name</b>, <b>Genre</b>, and <b>pitch</b> you wrote '
+        'in Show Concept Inputs above and, like a network research team, estimates the show\'s audience, cost, '
+        'rating, SVOD appeal, and IP Score. If you greenlight from the review card, the show uses the '
+        '<b>AI\'s estimates</b>, not your sliders. A clearer, more feasible pitch earns better numbers.'
         '</div>', unsafe_allow_html=True)
 
-    pitch = st.text_area(
-        "Your pitch (2-4 sentences): the concept, the hook, and who it's for",
-        placeholder="e.g. A competition show where design students renovate a real "
-                    "small business on a shoestring budget...",
-        key="gl_pitch_text",
-    )
     oc1, oc2 = st.columns([1, 1])
     with oc1:
         origin = st.radio("Origin", ["Domestic Original", "International Format"], horizontal=True,
@@ -89,11 +94,10 @@ def _render_pitch_review(ss, show_name: str, genre: str, air_month: int, slots_l
     review_key = (show_name.strip(), genre, pitch.strip(), origin, format_source.strip(), net)
     if st.button("🤖 Get AI Feedback & Estimates", key="gl_grade_button"):
         if not pitch.strip():
-            st.warning("Write a short pitch first.")
-        elif (show_name.strip().lower() in _PROTECTED_TITLES
-              or show_name.strip().lower() in {p["name"].lower() for p in TV_PITCH_CATALOG.values()}):
-            st.warning("That title already exists in this universe (a current show or a marketplace pitch). "
-                       "Rename your show first.")
+            st.warning("Write your pitch in Show Concept Inputs above first.")
+        elif show_name.strip().lower() in _taken_titles():
+            st.warning("That title already exists in this universe (a current show, one of your shows, or "
+                       "a marketplace pitch). Rename your show first.")
         else:
             with st.spinner("Reviewing your pitch..."):
                 review = review_show_pitch(
@@ -172,7 +176,7 @@ def _render_pitch_review(ss, show_name: str, genre: str, air_month: int, slots_l
             new_show = Show(
                 id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=est["episodes"],
                 ep_cost_k=est["ep_cost_k"], rating=est["rating"], ip_score=est["ip_score"],
-                air_month=air_month, network=net_display,
+                air_month=air_month, network=net_display, description=pitch.strip(),
             )
             roster_key = f"{net}_shows"
             ss[roster_key] = ss[roster_key] + [new_show]
@@ -316,6 +320,7 @@ def render():
                             id=ss.next_show_id, name=pitch["name"], genre=pitch["genre"],
                             episodes=pitch["episodes"], ep_cost_k=pitch["ep_cost_k"], rating=bonus_rating,
                             ip_score=pitch["ip_score"], air_month=acquire_month, network=net_display_intro,
+                            description=pitch["bio"],
                         )
                         roster_key = f"{ss.active_network}_shows"
                         ss[roster_key] = ss[roster_key] + [new_show]
@@ -418,15 +423,16 @@ def render():
 
     # ── Show Concept Builder ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Show Concept Inputs</div>', unsafe_allow_html=True)
-    st.caption(
-        "\"18-49\" is Nielsen's standard ad-buying demo — the age range advertisers pay the most to "
-        "reach, so Projected Rating is really \"how much of that specific audience tunes in,\" not "
-        "raw viewership. These inputs are yours to set independently, but in the real world (and in "
-        "this game's economics) a higher rating rarely comes cheap: top-tier talent, bigger sets, and "
-        "more marketing all cost more, which is why Cost per Episode tends to climb alongside "
-        "Projected Rating for a believable concept — a cheap show promising a mega-hit rating is the "
-        "kind of pitch a real network would be skeptical of."
-    )
+    st.markdown(
+        '<div style="font-size:14px;color:#e8eaf0;line-height:1.6;margin-bottom:10px;">'
+        '"18-49" is Nielsen\'s standard ad-buying demo — the age range advertisers pay the most to '
+        'reach, so Projected Rating is really "how much of that specific audience tunes in," not '
+        'raw viewership. These inputs are yours to set independently, but in the real world (and in '
+        'this game\'s economics) a higher rating rarely comes cheap: top-tier talent, bigger sets, and '
+        'more marketing all cost more, which is why Cost per Episode tends to climb alongside '
+        'Projected Rating for a believable concept — a cheap show promising a mega-hit rating is the '
+        'kind of pitch a real network would be skeptical of.</div>',
+        unsafe_allow_html=True)
 
     with st.container():
         c1,c2,c3 = st.columns(3)
@@ -455,14 +461,24 @@ def render():
             svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
                                          help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
 
+        # One pitch box for the whole concept (2026-10-01): required to greenlight,
+        # saved as the show's description (shown on Renewal cards), and the same
+        # text the AI Pitch Review grades when the school has AI turned on.
+        pitch = st.text_area(
+            "Your pitch (2-4 sentences): the concept, the hook, and who it's for",
+            placeholder="e.g. A competition show where design students renovate a real "
+                        "small business on a shoestring budget...",
+            key="gl_pitch_text", max_chars=600,
+        )
+
     # ── AI Pitch Review: feedback + estimated metrics (optional, BYOK) ──────────
     st.divider()
-    _render_pitch_review(ss, show_name, genre, air_month, slots_left)
+    _render_pitch_review(ss, show_name, genre, pitch, air_month, slots_left)
 
     st.divider()
 
     # ── Title / IP legal-risk check ─────────────────────────────────────────────
-    title_collision = show_name.strip().lower() in _PROTECTED_TITLES
+    title_collision = show_name.strip().lower() in _taken_titles()
     if title_collision:
         st.markdown(f"""
         <div style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.4);
@@ -502,19 +518,26 @@ def render():
     st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
-        f'Adds this concept to {net_display}\'s real roster — production cost (${linear["cost"]:.2f}M) '
-        f'comes out of this year\'s budget immediately, and it starts earning/costing real money '
-        f'starting this year. You\'ve greenlit {slots_used} of {MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
+        f'Adds your concept to {net_display}\'s real roster <b>using the numbers in Show Concept Inputs '
+        f'above</b> — production cost (${linear["cost"]:.2f}M) comes out of this year\'s budget '
+        f'immediately, and it starts earning/costing real money this year. Your pitch becomes the '
+        f'show\'s description on the Renewal cards. You\'ve greenlit {slots_used} of '
+        f'{MAX_NEW_SHOWS_PER_YEAR} new shows this year.</div>',
         unsafe_allow_html=True)
 
+    pitch_ok = len(pitch.strip()) >= 20
     if slots_left <= 0:
         st.warning(f"⚠ You've used all {MAX_NEW_SHOWS_PER_YEAR} greenlight slots for this year — "
                     "come back next year for more.")
-    elif st.button(f"🎬 Greenlight \"{show_name}\" for {net_display}", type="primary", use_container_width=True):
+    elif not pitch_ok:
+        st.info("✍️ Write your pitch in **Show Concept Inputs** above (at least a sentence) to greenlight "
+                "this show. A network never greenlights a concept nobody can describe.")
+    elif st.button(f"🎬 Greenlight \"{show_name}\" for {net_display}", type="primary",
+                   use_container_width=True, key="gl_greenlight_manual"):
         new_show = Show(
             id=ss.next_show_id, name=show_name.strip(), genre=genre, episodes=eps,
             ep_cost_k=ep_cost, rating=rating, ip_score=_NEW_SHOW_IP_SCORE,
-            air_month=air_month, network=net_display,
+            air_month=air_month, network=net_display, description=pitch.strip(),
         )
         roster_key = f"{ss.active_network}_shows"
         ss[roster_key] = ss[roster_key] + [new_show]

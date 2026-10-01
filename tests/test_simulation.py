@@ -380,10 +380,14 @@ def test_clicking_greenlight_button_adds_show_to_roster_and_charges_budget():
     at = _decisions_sim_app()
     shows_before = len(at.session_state["oxygen_shows"])
     budget_before = at.session_state["level_budget"]
-    greenlight_button = next(b for b in at.button if "Greenlight" in b.label and "🎬" in b.label)
-    greenlight_button.click().run()
+    # A pitch is required before Greenlight This Show appears (2026-10-01).
+    assert not any(b.key == "gl_greenlight_manual" for b in at.button)
+    at.text_area(key="gl_pitch_text").set_value(
+        "A cold-case docuseries where retired detectives reopen one unsolved case per episode.").run()
+    at.button(key="gl_greenlight_manual").click().run()
     assert not at.exception, f"Greenlight click raised: {list(at.exception)}"
     assert len(at.session_state["oxygen_shows"]) == shows_before + 1
+    assert at.session_state["oxygen_shows"][-1].description.startswith("A cold-case docuseries")
     assert at.session_state["level_budget"] < budget_before
     assert at.session_state["total_shows_greenlit"] == 1
 
