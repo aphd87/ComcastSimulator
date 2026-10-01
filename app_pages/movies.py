@@ -1000,8 +1000,15 @@ def _progress_bar(ss):
             f'<div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">{label}</div></div>'
         )
     connector = '<div style="width:40px;height:2px;background:#252836;margin-bottom:16px;"></div>'
-    cycle_label = (f"{_cycle_years_label(ss.movie_cycle)} of {CYCLES_TOTAL * YEARS_PER_CYCLE}"
-                   if ss.movie_phase != "complete" else "Slate Complete")
+    if ss.movie_phase != "complete":
+        y1, y2 = _cycle_year_range(ss.movie_cycle)
+        # Year note (2026-10-01): ties the studio calendar to NPV's t=0 convention.
+        cycle_label = (f"Film {ss.movie_cycle} of {CYCLES_TOTAL} · {_cycle_years_label(ss.movie_cycle)} of "
+                       f"{CYCLES_TOTAL * YEARS_PER_CYCLE}<div style=\"font-size:13px;margin-top:4px;\">"
+                       f"Year {y1} = greenlight &amp; produce (your t = 0 investment) · "
+                       f"Year {y2} = release &amp; windows</div>")
+    else:
+        cycle_label = "Slate Complete"
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:14px 20px;margin-bottom:18px;">
       <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;margin-bottom:10px;">{cycle_label}</div>

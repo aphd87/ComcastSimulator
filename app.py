@@ -805,16 +805,18 @@ else:
             "mission": (
                 f"It's {LEVEL_START_YEAR['oxygen']}. Oxygen is bleeding — 20 true crime & reality shows, "
                 f"$95M budget, and a network on the edge of cancellation. Your mandate: turn it around "
-                f"before {_end_year['oxygen']}. Content uses a <b style='color:#e8eaf0;'>3-year amortization curve</b> — "
-                "your annual expense is 1/3 of production cost, giving you more breathing room than Bravo. "
+                f"before {_end_year['oxygen']}. Oxygen's <b style='color:#e8eaf0;'>True Crime shows amortize over 24 months</b> "
+                "(about half their cost hits each year), while other shows expense over 12 months — more breathing "
+                "room than Bravo's reality-heavy slate. "
                 "Hit a <b style='color:#e8eaf0;'>12% OCF margin</b> to pass."
             ),
             "steps": [
                 "💰 <b>Financing</b> — see your revenue streams, set marketing spend",
-                "🔄 <b>Renewal</b> — renew, watch, or cancel; pay for research if unsure",
-                "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
-                "📅 <b>Scheduling</b> — check premiere timing and amortization impact",
-                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                "🔄 <b>Renewal</b> — renew or cancel each show, set premiere months and primetime slots; "
+                "pay for research if unsure",
+                "🎬 <b>Greenlighting</b> <i>(optional)</i> — acquire a pitched show or pitch your own, up to 3 a year",
+                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — premiere timing and cash-flow charts",
+                f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['oxygen']}–{_end_year['oxygen']}), then submit your score",
             ],
         },
@@ -830,9 +832,9 @@ else:
             "steps": [
                 "💰 <b>Financing</b> — separate Oxygen shows from Bravo, watch the combined budget",
                 "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
-                "🎬 <b>Greenlighting</b> — decide which new shows go linear vs. SVOD",
-                "📅 <b>Scheduling</b> — watch the dual-network cost structure",
-                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                "🎬 <b>Greenlighting</b> <i>(optional)</i> — acquire a pitched show or pitch your own, up to 3 a year",
+                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — the dual-network cost and cash-flow charts",
+                f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}), then submit your score",
             ],
         },
@@ -846,11 +848,12 @@ else:
                 "Hit a <b style='color:#e8eaf0;'>10% OCF margin</b> across all three networks to pass."
             ),
             "steps": [
-                "🎬 <b>Greenlighting</b> — build the linear vs. Peacock P&L for each new show",
                 "💰 <b>Financing</b> — check the linear-vs-streaming economics chart",
                 "🔄 <b>Renewal</b> — decide which linear shows to wind down",
-                "📅 <b>Scheduling</b> — track the cannibalization impact on Bravo & Oxygen",
-                f"🎯 <b>End Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
+                "🏈 <b>Sports Rights</b> — bid on NFL, Premier League, or Olympics packages (multi-year contracts)",
+                "🎬 <b>Greenlighting</b> <i>(optional)</i> — originals that keep sports-driven subscribers from churning",
+                "📊 <b>Supplementary Insights</b> <i>(optional)</i> — cash-flow and cannibalization charts",
+                f"🎯 <b>Simulate Year → Results</b> — repeat for {YEARS_PER_LEVEL} years "
                 f"({LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}), then submit your score",
             ],
         },
