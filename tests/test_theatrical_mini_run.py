@@ -493,6 +493,11 @@ def _shop_button(at):
     return next(b for b in at.button if "Shop This Window" in b.label)
 
 
+def _accept_button(at, bidder):
+    # Every bid has its own Accept button now (2026-10-01), keyed by cycle, round, bidder.
+    return next(b for b in at.button if b.key == f"accept_bid_1_1_{bidder}")
+
+
 def test_shopping_bids_reveals_the_auction_and_leaves_flat_picker_untouched():
     at = _movies_app("MiniRun AppTest Team")
     _mini_run_button(at).click().run()
@@ -509,7 +514,7 @@ def test_accepting_a_bid_sets_license_out_with_the_auction_fee():
     _shop_button(at).click().run()
     winner = at.session_state["movie_licensing_auction"][1]["result"]["winner"]
     assert winner is not None, "test team must produce at least one bidder"
-    accept_btn = next(b for b in at.button if b.label.startswith("Accept "))
+    accept_btn = _accept_button(at, at.session_state["movie_licensing_auction"][1]["result"]["winner"])
     accept_btn.click().run()
     assert not at.exception, f"Accept click raised: {list(at.exception)}"
     draft = at.session_state["movie_draft"]
@@ -573,7 +578,7 @@ def test_changing_the_flat_picker_after_accepting_a_bid_clears_the_auction():
     at = _movies_app("MiniRun AppTest Team")
     _mini_run_button(at).click().run()
     _shop_button(at).click().run()
-    accept_btn = next(b for b in at.button if b.label.startswith("Accept "))
+    accept_btn = _accept_button(at, at.session_state["movie_licensing_auction"][1]["result"]["winner"])
     accept_btn.click().run()
     assert at.session_state["movie_draft"]["pay1_licensing"] == "license_out"
 
@@ -584,3 +589,68 @@ def test_changing_the_flat_picker_after_accepting_a_bid_clears_the_auction():
     assert draft["pay1_licensing"] == "keep"
     assert draft["pay1_auction_fee_m"] is None
     assert draft["pay1_auction_winner"] is None
+
+
+# ── Bid terms, accepting any bidder, and going back to market (2026-10-01) ──
+
+def test_every_bid_carries_a_term_and_round_two_runs_lower_on_average():
+    from utils.movie_models import PAY1_BID_TERMS_MO
+    r1 = draw_licensing_bids("TermTeam", 1, anchor_value_m=50.0)
+    assert r1 and all(b["term_mo"] in PAY1_BID_TERMS_MO for b in r1)
+    lows, highs = [], []
+    for t in range(60):
+        a = draw_licensing_bids(f"T{t}", 1, anchor_value_m=50.0)
+        b = draw_licensing_bids(f"T{t}", 1, anchor_value_m=50.0, round_num=2)
+        highs += [x["bid_m"] for x in a]
+        lows += [x["bid_m"] for x in b]
+    assert sum(lows) / len(lows) < sum(highs) / len(highs)
+
+
+def test_round_one_amounts_are_unchanged_by_the_new_term_draw():
+    # Terms use their own generator, so existing round-1 bid amounts are stable.
+    bids = draw_licensing_bids("StableTeam", 2, anchor_value_m=20.0)
+    again = draw_licensing_bids("StableTeam", 2, anchor_value_m=20.0)
+    assert [b["bid_m"] for b in bids] == [b["bid_m"] for b in again]
+
+
+def test_shorter_term_returns_subscriber_value_to_peacock():
+    from utils.movie_models import MovieProject, PAY1_REVERSION_SHARE
+    base = dict(title="T", genre="Drama", budget_m=60, pa_spend_m=30, star_power=50, screens=3000, cycle=1,
+                pay1_licensing="license_out", pay1_auction_fee_m=10.0)
+    short = MovieProject(**base, pay1_auction_term_mo=12)
+    long_ = MovieProject(**base, pay1_auction_term_mo=18)
+    none_ = MovieProject(**base)
+    sv = short.subscriber_value("base")
+    assert abs(short.pay1_reversion_value("base") - sv * PAY1_REVERSION_SHARE[12]) < 1e-9
+    assert short.pay1_reversion_value("base") > long_.pay1_reversion_value("base") > 0
+    assert none_.pay1_reversion_value("base") == 0.0
+    assert short.total_revenue("base") > long_.total_revenue("base") > none_.total_revenue("base")
+
+
+def test_can_accept_a_non_top_bid_and_reshop_once():
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    bids = at.session_state["movie_licensing_auction"][1]["result"]["all_bids"]
+    reshop = [b for b in at.button if b.key == "reshop_bids_1"]
+    assert reshop, "take-it-back-to-market should be offered before accepting"
+    if len(bids) >= 2:
+        runner_up = bids[1]
+        _accept_button(at, runner_up["bidder"]).click().run()
+        assert not at.exception, list(at.exception)
+        d = at.session_state["movie_draft"]
+        assert d["pay1_auction_winner"] == runner_up["bidder"]
+        assert d["pay1_auction_fee_m"] == runner_up["bid_m"]
+        assert d["pay1_auction_term_mo"] == runner_up["term_mo"]
+        assert not any(b.key == "reshop_bids_1" for b in at.button)   # no re-shop after accepting
+
+
+def test_reshop_replaces_round_one_and_is_allowed_only_once():
+    at = _movies_app("MiniRun AppTest Team")
+    _mini_run_button(at).click().run()
+    _shop_button(at).click().run()
+    next(b for b in at.button if b.key == "reshop_bids_1").click().run()
+    assert not at.exception, list(at.exception)
+    auction = at.session_state["movie_licensing_auction"][1]
+    assert auction["round"] == 2
+    assert not any(b.key == "reshop_bids_1" for b in at.button)

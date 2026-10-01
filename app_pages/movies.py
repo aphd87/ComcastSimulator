@@ -30,6 +30,7 @@ from utils.movie_models import (
     PVOD_HOLD_THROUGH_REJECTION_MULT, PVOD_CUT_RESPONSE_MULT, draw_pvod_market_rejection,
     draw_pvod_cut_buzz, PVOD_CUT_BUZZ_AWARDS_BONUS,
     LICENSING_BIDDERS, draw_licensing_bids, resolve_licensing_auction,
+    PAY1_REVERSION_SHARE, LICENSING_RESHOP_MULT_RANGE, LICENSING_MAX_ROUNDS,
     draw_licensing_bidder_appetite, licensing_appetite_flavor,
     PVOD_PRICE_PREMIUM, PVOD_PRICE_DISCOUNT,
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
@@ -344,7 +345,7 @@ def _current_project(ss) -> MovieProject:
         imax_release=d.get("imax_release", False),
         pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
         pay1_auction_fee_m=d.get("pay1_auction_fee_m"),
-        pay1_auction_winner=d.get("pay1_auction_winner"),
+        pay1_auction_winner=d.get("pay1_auction_winner"), pay1_auction_term_mo=d.get("pay1_auction_term_mo"),
         pay2_licensing=d.get("pay2_licensing", "keep"),
         pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
         theatrical_run_length=d.get("theatrical_run_length"),
@@ -1533,7 +1534,7 @@ def _decisions(ss):
                  imax_release=imax_release,
                  pay1_platform=d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM),
                  pay1_auction_fee_m=d.get("pay1_auction_fee_m"),
-                 pay1_auction_winner=d.get("pay1_auction_winner"),
+                 pay1_auction_winner=d.get("pay1_auction_winner"), pay1_auction_term_mo=d.get("pay1_auction_term_mo"),
                  pay2_licensing=d.get("pay2_licensing", "keep"),
                  pay2_platform=d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM),
                  theatrical_run_length=d.get("theatrical_run_length"),
@@ -1858,6 +1859,7 @@ def _decisions(ss):
                 # choosing to walk away from it.
                 ss.movie_draft["pay1_auction_fee_m"] = None
                 ss.movie_draft["pay1_auction_winner"] = None
+                ss.movie_draft["pay1_auction_term_mo"] = None
 
             pay1_labels = {
                 "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
@@ -1899,52 +1901,85 @@ def _decisions(ss):
                 '<p class="text-xs text-ink2 mb-2">Shop this window to rival platforms instead — unlike the '
                 'flat-fee deal above, these bids are sized off your ACTUAL theatrical result. Not every '
                 'platform bids every cycle.</p>', unsafe_allow_html=True)
+            def _run_bid_round(round_num: int) -> dict:
+                anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
+                # Game theory (2026-08-18): each bidder's appetite ties
+                # into the REAL background-slate data already generated
+                # for this team+cycle -- a strong slate makes "hot"
+                # (momentum) eligible to fire, a weak one makes "hungry"
+                # (scarcity) eligible -- see draw_licensing_bidder_appetite.
+                bg_slate = generate_background_slate(ss.team_name, ss.movie_cycle,
+                                                      studio_budget_m=ss.movie_studio_budget_m)
+                appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg_slate)
+                appetite_mult = {b: v["mult"] for b, v in appetite.items()}
+                bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value,
+                                           appetite_mult=appetite_mult, round_num=round_num)
+                return {"bids": bids, "result": resolve_licensing_auction(bids), "appetite": appetite,
+                        "round": round_num}
+
             auction = ss.movie_licensing_auction.get(ss.movie_cycle)
             if auction is None:
                 if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
                              use_container_width=True):
-                    anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
-                    # Game theory (2026-08-18): each bidder's appetite ties
-                    # into the REAL background-slate data already generated
-                    # for this team+cycle -- a strong slate makes "hot"
-                    # (momentum) eligible to fire, a weak one makes "hungry"
-                    # (scarcity) eligible -- see draw_licensing_bidder_appetite.
-                    bg_slate = generate_background_slate(ss.team_name, ss.movie_cycle,
-                                                          studio_budget_m=ss.movie_studio_budget_m)
-                    appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg_slate)
-                    appetite_mult = {b: v["mult"] for b, v in appetite.items()}
-                    bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value, appetite_mult=appetite_mult)
-                    ss.movie_licensing_auction[ss.movie_cycle] = {
-                        "bids": bids, "result": resolve_licensing_auction(bids), "appetite": appetite,
-                    }
+                    ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(1)
                     st.rerun()
             else:
                 result = auction["result"]
+                round_num = auction.get("round", 1)
+                if round_num > 1:
+                    st.markdown('<p class="text-xs text-ink2 mb-1">🔁 <b>Round 2</b> — you took the window back to '
+                                'market. The first round\'s offers are gone.</p>', unsafe_allow_html=True)
                 if not result["all_bids"]:
-                    st.caption("No platforms made an offer this cycle — the flat-fee deal above is your only "
-                               "licensing option.")
+                    st.caption("No platforms made an offer this round — the flat-fee deal above, or keeping the "
+                               "window on Peacock, are your options.")
                 else:
+                    st.markdown(
+                        '<p class="text-xs text-ink2 mb-2">Accept <b>any</b> offer, not just the highest. Each bid '
+                        'comes with a window term: when it ends, the movie returns to Peacock and you keep part of '
+                        f'its subscriber value ({PAY1_REVERSION_SHARE[12]:.0%} after a 12-month term, '
+                        f'{PAY1_REVERSION_SHARE[18]:.0%} after 18 months). A lower bid on a shorter term can be '
+                        'worth more.</p>', unsafe_allow_html=True)
                     appetite = auction.get("appetite", {})
-                    row_parts = []
+                    sub_val = live_project.subscriber_value(resolved_entry["multiplier"])
+                    accepted = ss.movie_draft.get("pay1_auction_winner")
                     for b in result["all_bids"]:
                         state = appetite.get(b["bidder"], {}).get("state")
                         flavor = licensing_appetite_flavor(b["bidder"], state)
                         icon = "🔥" if state == "hot" else ("⚠" if state == "hungry" else "")
+                        term = b.get("term_mo")
+                        kept = sub_val * PAY1_REVERSION_SHARE.get(term, 0.0) if term else 0.0
+                        term_html = (f' · {term}-month term, ~${kept:.1f}M back to Peacock after'
+                                     if term else "")
                         flavor_html = f'<div class="text-[10px] text-muted">{icon} {flavor}</div>' if flavor else ""
-                        row_parts.append(
-                            f'<div class="text-xs py-1"><div class="flex justify-between">'
-                            f'<span>{b["bidder"]}</span><span class="font-mono">${b["bid_m"]:.1f}M</span></div>'
-                            f'{flavor_html}</div>'
-                        )
-                    st.markdown(f'<div class="rounded-lg border border-line bg-surface2 p-3 mb-2">{"".join(row_parts)}</div>',
+                        bc1, bc2 = st.columns([3, 1])
+                        with bc1:
+                            st.markdown(
+                                f'<div class="text-xs py-1"><b>{b["bidder"]}</b> — '
+                                f'<span class="font-mono">${b["bid_m"]:.1f}M</span>{term_html}{flavor_html}</div>',
                                 unsafe_allow_html=True)
-                    if ss.movie_draft.get("pay1_auction_winner") == result["winner"]:
-                        st.success(f"✅ Accepted {result['winner']}'s ${result['winning_bid_m']:.1f}M bid.")
-                    elif st.button(f"Accept {result['winner']}'s ${result['winning_bid_m']:.1f}M Bid",
-                                    key=f"accept_bid_{ss.movie_cycle}", use_container_width=True, type="primary"):
-                        ss.movie_draft["pay1_licensing"] = "license_out"
-                        ss.movie_draft["pay1_auction_fee_m"] = result["winning_bid_m"]
-                        ss.movie_draft["pay1_auction_winner"] = result["winner"]
+                        with bc2:
+                            if accepted == b["bidder"]:
+                                st.markdown('<div class="text-xs py-1" style="color:#66bb6a;">✅ Accepted</div>',
+                                            unsafe_allow_html=True)
+                            elif st.button("Accept", key=f"accept_bid_{ss.movie_cycle}_{round_num}_{b['bidder']}",
+                                           use_container_width=True):
+                                ss.movie_draft["pay1_licensing"] = "license_out"
+                                ss.movie_draft["pay1_auction_fee_m"] = b["bid_m"]
+                                ss.movie_draft["pay1_auction_winner"] = b["bidder"]
+                                ss.movie_draft["pay1_auction_term_mo"] = term
+                                st.rerun()
+
+                # Take it back to market: once per cycle, only before accepting anything.
+                if round_num < LICENSING_MAX_ROUNDS and not ss.movie_draft.get("pay1_auction_winner"):
+                    lo, hi = LICENSING_RESHOP_MULT_RANGE
+                    st.markdown(
+                        '<p class="text-xs text-ink2 mt-2 mb-1">Not happy with these offers? You can reject all of '
+                        'them and take the window back to market <b>once</b>. Buyers know the title was passed over, '
+                        f'so new bids typically land {1 - hi:.0%}–{1 - lo:.0%} lower, and some platforms may not bid '
+                        'at all. These offers will be gone for good.</p>', unsafe_allow_html=True)
+                    if st.button("🔁 Reject All & Take It Back to Market", key=f"reshop_bids_{ss.movie_cycle}",
+                                 use_container_width=True):
+                        ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(round_num + 1)
                         st.rerun()
     else:
         ss.movie_draft["pay1_licensing"] = "keep"
@@ -2173,7 +2208,8 @@ def _decisions(ss):
             "domestic_bo":      project.domestic_box_office(multiplier),
             "theatrical_net":   project.theatrical_studio_net(multiplier),
             "pvod":             project.pvod_revenue(multiplier) * pvod_mult * ewom_mult,
-            "sub_value":        (project.pay1_license_fee() if project.is_licensing_out()
+            "sub_value":        (project.pay1_license_fee() + project.pay1_reversion_value(multiplier, ewom_mult)
+                                  if project.is_licensing_out()
                                   else project.subscriber_value(multiplier) * ewom_mult),
             "longtail":         project.library_longtail(multiplier, critical_score),
             "awards_bump":      project.awards_season_bump(multiplier, critical_score),

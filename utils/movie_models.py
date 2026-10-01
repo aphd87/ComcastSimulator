@@ -912,8 +912,23 @@ LICENSING_BID_PARTICIPATION_CHANCE = 0.7
 LICENSING_BID_MULT_RANGE = (0.7, 1.3)   # relative to the project's REAL resolved subscriber value
 
 
+# Bid terms + going back to market (2026-10-01, per user request: "a chance
+# to shop competitive bidding elsewhere? or give to someone else?").
+# - Every bid carries a window term. A shorter term means the title reverts
+#   to Peacock sooner, so the studio keeps part of the subscriber value --
+#   a real reason to accept a LOWER bid from a different platform.
+# - A team may reject every offer and take the window back to market once
+#   per cycle. Buyers know the title was passed over, so the second round
+#   runs lower on average (and some platforms still sit out); the first
+#   round's offers are gone for good.
+PAY1_BID_TERMS_MO     = (12, 18)
+PAY1_REVERSION_SHARE  = {12: 0.30, 18: 0.10}   # share of real subscriber value kept after the term ends
+LICENSING_RESHOP_MULT_RANGE = (0.75, 1.0)       # second-round "shopworn" discount on every bid
+LICENSING_MAX_ROUNDS  = 2
+
+
 def draw_licensing_bids(team_name: str, cycle: int, anchor_value_m: float,
-                          appetite_mult: Optional[dict] = None) -> list[dict]:
+                          appetite_mult: Optional[dict] = None, round_num: int = 1) -> list[dict]:
     """Sealed-bid competitive licensing offers for this project's Pay-1
     window, sized off anchor_value_m -- the REAL resolved subscriber value
     (project.subscriber_value(actual_multiplier), not a bear/base/bull
@@ -923,16 +938,24 @@ def draw_licensing_bids(team_name: str, cycle: int, anchor_value_m: float,
     appetite_mult (2026-08-18, Phase 6 game theory), when given, is an
     extra per-bidder multiplier layered on top of the base random spread --
     see draw_licensing_bidder_appetite below."""
-    seed = (abs(hash(team_name)) + cycle * 52711 + 977) % (2 ** 31)
+    # Round 1 keeps the original seed/sequence exactly; later rounds get their
+    # own offset. Terms come from a separate generator so they never shift
+    # the bid amounts.
+    seed = (abs(hash(team_name)) + cycle * 52711 + 977 + (round_num - 1) * 7919) % (2 ** 31)
     rng = np.random.default_rng(seed)
+    term_rng = np.random.default_rng((seed + 4241) % (2 ** 31))
     lo, hi = LICENSING_BID_MULT_RANGE
     bids = []
     for bidder in LICENSING_BIDDERS:
+        term = int(PAY1_BID_TERMS_MO[int(term_rng.integers(0, len(PAY1_BID_TERMS_MO)))])
         if rng.random() < LICENSING_BID_PARTICIPATION_CHANCE:
             mult = float(rng.uniform(lo, hi))
             if appetite_mult:
                 mult *= appetite_mult.get(bidder, 1.0)
-            bids.append({"bidder": bidder, "bid_m": round(max(0.0, anchor_value_m) * mult, 1)})
+            if round_num > 1:
+                mult *= float(rng.uniform(*LICENSING_RESHOP_MULT_RANGE))
+            bids.append({"bidder": bidder, "bid_m": round(max(0.0, anchor_value_m) * mult, 1),
+                         "term_mo": term})
     return bids
 
 
@@ -1264,6 +1287,7 @@ class MovieProject:
                                                        # takes priority over the LICENSING_PLATFORMS fee_pct
                                                        # formula entirely (a real accepted competitive bid)
     pay1_auction_winner: Optional[str] = None          # display-only: which LICENSING_BIDDERS name won
+    pay1_auction_term_mo: Optional[int] = None         # accepted bid's window term -- see PAY1_REVERSION_SHARE
     pay2_licensing: str = "keep"                    # see PAY2_LICENSING_OPTIONS above
     pay2_platform: str = DEFAULT_LICENSING_PLATFORM  # only matters when pay2_licensing == "license_out"
     theatrical_run_length: Optional[str] = None      # see THEATRICAL_RUN_LENGTHS above --
@@ -1529,6 +1553,16 @@ class MovieProject:
         fee_pct = LICENSING_PLATFORMS.get(self.pay1_platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
         return self.subscriber_value("base") * fee_pct
 
+    def pay1_reversion_value(self, scenario, ewom_mult: float = 1.0) -> float:
+        """Subscriber value the studio keeps when an accepted competitive bid's
+        window term ends and the title returns to Peacock (2026-10-01). Zero
+        for the flat-fee path, for keeping the window, or for older saved bids
+        with no term."""
+        if not self.is_licensing_out() or self.pay1_auction_fee_m is None or not self.pay1_auction_term_mo:
+            return 0.0
+        share = PAY1_REVERSION_SHARE.get(self.pay1_auction_term_mo, 0.0)
+        return self.subscriber_value(scenario) * ewom_mult * share
+
     def is_licensing_out_pay2(self) -> bool:
         """Whether a real Pay-2 licensing deal is in effect -- same
         day_and_date exclusion as Pay-1 (that release strategy already
@@ -1667,6 +1701,10 @@ class MovieProject:
             (sub_value_month,    sub_value),
             (24.0,               longtail),                   # library/EST tail, ~2 years out
         ]
+        reversion = self.pay1_reversion_value(scenario, ewom_mult)
+        if reversion:
+            # Title returns to Peacock when the licensee's term ends.
+            flows.append((sub_value_month + self.pay1_auction_term_mo, reversion))
         if pvod_discount > 0:
             # 2026-08-18: real second PVOD stage (pvod_dynamic_pricing=True
             # only) -- price drops, a later wave of price-sensitive demand
