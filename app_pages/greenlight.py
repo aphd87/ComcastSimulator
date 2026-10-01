@@ -70,7 +70,20 @@ def render():
         'adapted from a proven overseas hit — a real rights-licensing premium, but a higher, de-risked '
         'rating and IP Score. A <b style="color:#e8eaf0;">Brand Partnership</b> means a sponsor already '
         'attached, subsidizing part of the acquisition cost. Unlike Build From Scratch, an acquired '
-        'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one.</div>',
+        'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one.'
+        '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
+        '<ul style="margin:4px 0 0 18px;padding:0;line-height:1.6;">'
+        '<li><b>Demo</b>: who watches. Age band · gender skew · where (e.g. 18-49 · Balanced · National US).</li>'
+        '<li><b>eps · $/ep</b>: episodes per season and production cost per episode. Multiply them for the season cost.</li>'
+        '<li><b>Rating</b>: 18-49 demo rating, the share of U.S. adults 18-49 watching an average episode '
+        '(1.0 ≈ 1%). Higher rating = more ad revenue. Typical show 1.0-1.5, a hit 2.0+.</li>'
+        '<li><b>SVOD appeal</b> (0-100): how well the show attracts and keeps streaming subscribers. '
+        'Matters most on Peacock.</li>'
+        '<li><b>IP Score</b> (0-100): franchise/brand value. Higher means spinoff potential and a show that ages better.</li>'
+        '<li><b>Brand partnership</b>: a sponsor already attached. Cuts the acquisition fee 15% and adds a small rating bump.</li>'
+        '<li><b>Acquisition fee + season production cost</b>: what you pay. The fee buys the rights, the '
+        'production cost makes this season. Both come out of this year\'s budget the moment you click Acquire.</li>'
+        '</ul></div>',
         unsafe_allow_html=True)
 
     available_pitches = [k for k in TV_PITCH_CATALOG if k not in ss.tv_pitches_acquired]

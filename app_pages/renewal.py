@@ -11,6 +11,7 @@ from utils.models import (
     performance_linked_growth, genre_demo,
     PRIMETIME_DAYS, PRIMETIME_HOURS, SLOT_MULT_FLOOR, SLOT_MULT_CEILING,
     slot_rating_multiplier, MONTHS,
+    REV_PER_RATING_POINT,
 )
 from utils.game_state import NETWORK_INFO
 from utils.charts import base_layout, queue_supplement, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
@@ -303,6 +304,11 @@ def render():
         '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
         'For each show: Renew or Cancel, and confirm which month it premieres. '
         'The schedule below updates live as you set premiere months. '
+        '<b style="color:#e8eaf0;">Rating</b> is the show\'s 18-49 demo rating: the share of U.S. adults aged '
+        '18-49 watching an average episode (a 1.0 rating ≈ 1% of them). It\'s the audience-size number '
+        'advertisers pay for, so it drives ad revenue directly: each rating point is worth about '
+        f'${REV_PER_RATING_POINT:.0f}M a year before marketing lift and cord-cutting. For scale, a typical cable show '
+        'rates 1.0-1.5, a hit 2.0+, a mega-hit 3.0+. '
         '<b style="color:#e8eaf0;">IP Score</b> (0-100, shown in the chart above and the table below) is a '
         'fixed franchise-strength rating set per show — how much spinoff/brand value it carries, independent '
         'of its current rating or cost. A higher score also means the show ages a little better year to year. '

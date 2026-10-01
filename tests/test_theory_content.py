@@ -78,6 +78,7 @@ def _registered_app(active_section: str) -> AppTest:
     at.session_state["school"]        = "Test School of Business, Test University"
     at.session_state["class_section"] = "Fall 2026 Sec A"
     at.session_state["active_section"] = active_section
+    at.session_state["tv_network_chosen"] = True   # skip the Choose Your Network screen
     at.run()
     assert not at.exception, f"{active_section} tab raised: {list(at.exception)}"
     return at

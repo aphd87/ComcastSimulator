@@ -122,6 +122,7 @@ def init_state():
         "team_role":       "driver",   # "driver" (makes decisions) or "viewer" (Follow Along, read-only) — see utils/game_state.py's Live Team State section
         "active_section":  None,   # "leaderboard" / "tv" / "movies" — chosen on the post-registration landing screen
         "active_network":  "oxygen",
+        "tv_network_chosen": False,   # False until the team picks a network on the Choose Your Network screen
         "bravo_shows":     copy.deepcopy(BRAVO_SLATE),
         "oxygen_shows":    copy.deepcopy(OXYGEN_SLATE),
         "peacock_shows":   copy.deepcopy(PEACOCK_SLATE),
@@ -155,6 +156,25 @@ LIVE_STATE_SCALAR_KEYS = (
     "active_network", "year", "sim_phase", "level_budget", "mkt_budget",
     "total_shows_greenlit",
 )
+
+def _switch_network(ss, net: str) -> None:
+    """Start `net` fresh at Year 1. Shared by the Choose Your Network screen
+    and the network selector row so both reset exactly the same state."""
+    ss.active_network          = net
+    ss.tv_network_chosen       = True
+    ss.submitted               = False
+    ss.sim_phase               = "decisions"
+    ss.yearly_log              = []
+    ss.cancelled_shows         = set()
+    ss.renewal_decisions       = {}
+    ss.research_revealed       = {}
+    ss.emergency_shock_years   = set()
+    ss.greenlit_ids_this_year  = set()
+    ss.greenlit_ids_this_level = set()
+    ss.total_shows_greenlit    = 0
+    ss.year                    = 1
+    ss.level_budget            = None   # re-derived from the new network's budget_base
+
 
 def _build_live_snapshot(ss) -> dict:
     """Serializes the Driver's in-progress TV/Streaming decision state into
@@ -196,6 +216,52 @@ def _apply_live_snapshot(ss, snap: dict) -> None:
     ss.oxygen_shows      = [Show(**s) for s in snap.get("oxygen_shows", [])]
     ss.bravo_shows        = [Show(**s) for s in snap.get("bravo_shows", [])]
     ss.peacock_shows       = [Show(**s) for s in snap.get("peacock_shows", [])]
+
+
+def _render_network_picker(ss) -> None:
+    """Choose Your Network: shown the first time a team enters TV/Streaming,
+    so nobody is silently dropped into Oxygen. Respects the same lock status
+    as the network selector row (all open unless FREE_NAVIGATION is off)."""
+    st.markdown('<div class="section-title" style="text-align:center;">Choose Your Network</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div style="text-align:center;font-size:15px;color:#e0e2ea;margin-bottom:16px;">'
+        'Each network is its own level with its own era, budget, and margin target. '
+        'Play the one your instructor assigned — you can switch later from the network row at the top.'
+        '</div>', unsafe_allow_html=True)
+
+    net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
+    cols = st.columns(len(NETWORK_ORDER))
+    for i, (col, net) in enumerate(zip(cols, NETWORK_ORDER)):
+        info   = NETWORK_INFO[net]
+        status = net_status.get(net, {})
+        locked = status.get("locked", False) and net != "oxygen"
+        start  = LEVEL_START_YEAR[net]
+        end    = start + YEARS_PER_LEVEL - 1
+        off_sc = status.get("official_score")
+        done   = f'<div style="font-size:13px;color:#66bb6a;margin-top:6px;">Official score: {off_sc:.0f} pts</div>' if off_sc else '<div></div>'
+        with col:
+            st.markdown(f"""
+            <div style="background:#1a1d26;border:1px solid #252836;border-top:3px solid {info['color2']};
+                 border-radius:10px;padding:22px 18px;text-align:center;">
+              <div style="font-size:38px;">{info['emoji']}</div>
+              <div style="font-family:DM Serif Display,serif;font-size:21px;color:#e8eaf0;margin:8px 0 2px;">
+                {info['display_name']}</div>
+              <div style="font-size:13px;color:#b0b5c4;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
+              <div style="font-size:14px;color:#e0e2ea;margin:10px 0;font-style:italic;">{info['tagline']}</div>
+              <div style="font-size:14px;color:#e0e2ea;line-height:1.7;">
+                Starting budget ~${info['budget_base']:.0f}M<br>
+                Pass at <b style="color:#e8c547;">{info['pass_threshold']:.0f}%</b> OCF margin
+              </div>
+              {done}
+            </div>
+            """, unsafe_allow_html=True)
+            if locked:
+                st.button("🔒 Locked", key=f"pick_net_{net}", disabled=True, use_container_width=True)
+            elif st.button(f"→ Play {info['display_name']}", key=f"pick_net_{net}",
+                           type="primary", use_container_width=True):
+                _switch_network(ss, net)
+                st.rerun()
 
 
 def _render_follow_along_summary(ss, net_info, net):
@@ -341,7 +407,7 @@ if ss.registered:
                     st.rerun()
 
     # ── TV network sub-selector — only shown once TV/Streaming is picked ────
-    if ss.active_section == "tv":
+    if ss.active_section == "tv" and (ss.tv_network_chosen or ss.team_role == "viewer"):
         net_status = get_team_network_status(ss.team_name, ss.school, ss.class_section)
         net_cols = st.columns(len(NETWORK_ORDER))
         for col, net in zip(net_cols, NETWORK_ORDER):
@@ -366,19 +432,7 @@ if ss.registered:
                     is_active_net = ss.active_network == net
                     if st.button(label, key=f"net_{net}", use_container_width=True,
                                  type="primary" if is_active_net else "secondary"):
-                        ss.active_network       = net
-                        ss.submitted            = False
-                        ss.sim_phase            = "decisions"
-                        ss.yearly_log           = []
-                        ss.cancelled_shows      = set()
-                        ss.renewal_decisions    = {}
-                        ss.research_revealed    = {}
-                        ss.emergency_shock_years = set()
-                        ss.greenlit_ids_this_year  = set()
-                        ss.greenlit_ids_this_level = set()
-                        ss.total_shows_greenlit    = 0
-                        ss.year                 = 1
-                        ss.level_budget         = None   # re-derived from the new network's budget_base
+                        _switch_network(ss, net)
                         st.rerun()
                 else:
                     st.markdown(
@@ -477,6 +531,7 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.class_abbrev  = class_abbrev_input.strip()
                 ss.team_role     = "driver" if role_label.startswith("🎮") else "viewer"
                 ss.registered    = True
+                ss.tv_network_chosen = False
                 st.rerun()
         st.caption("FERPA: No PII collected. Team names are pseudonyms only. Scores stored locally in leaderboard.json")
 
@@ -660,6 +715,10 @@ else:
         _snap = load_live_state(ss.team_name, ss.school, ss.class_section)
         if _snap:
             _apply_live_snapshot(ss, _snap)
+
+    if ss.team_role != "viewer" and not ss.tv_network_chosen:
+        _render_network_picker(ss)
+        st.stop()
 
     net      = ss.active_network
     net_info = NETWORK_INFO[net]

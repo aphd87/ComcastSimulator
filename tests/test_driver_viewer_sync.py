@@ -41,6 +41,11 @@ def _register(at, role="🎮 Driver — I'll make the decisions", team="Team Syn
     at.run()
     next(b for b in at.button if b.label == "→ Start TV / Streaming").click()
     at.run()
+    # A Driver lands on Choose Your Network first; pick Oxygen like a student
+    # would. A Follow Along viewer skips it (their network mirrors the Driver's).
+    if role.startswith("🎮"):
+        at.button(key="pick_net_oxygen").click()
+        at.run()
     return at
 
 
