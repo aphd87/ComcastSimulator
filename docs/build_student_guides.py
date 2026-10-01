@@ -344,9 +344,10 @@ def build_tv():
             "A clearer, more specific, more feasible pitch earns better estimates. An International Format costs a rights fee, "
             "but its numbers are more reliable. Use **↧ Load into Concept Inputs** to explore the P&L with the AI's numbers first.")
 
-    doc.add_heading("📊 Supplementary Insights  (optional, not scored)", level=2)
-    para(doc, "This collapsed box holds extra charts and tools: genre decay curves, the premiere calendar, cash-flow timing, and marketing ROI. "
-              "Open it if you want to dig deeper. Skip it if you're short on time.")
+    doc.add_heading("📊 Why? boxes  (optional, not scored)", level=2)
+    para(doc, "Under several decisions you'll find a collapsed **📊 Why? (optional)** box: genre decay curves "
+              "under Renewal, scheduling and cash-flow tools right after it, and the LTV curve and marketing-ROI chart "
+              "in Greenlighting. Each one says when it's useful. Open them when you're unsure about that decision.")
 
     doc.add_heading("▶ Simulate the year", level=2)
     para(doc, "Check **Expected This Year** (your projected margin against the target), then click **▶ Simulate Year [N] → See Results**.")
@@ -413,7 +414,7 @@ def build_movies():
     table(doc, ["", ""], [
         ["**Your job**", "Greenlight one movie per cycle, decide how much to spend making and marketing it, and choose how to release it."],
         ["**The goal**", "Build a slate with a **positive risk-adjusted NPV** (net present value). In short, your movies should be worth more than they cost, after accounting for risk."],
-        ["**How it's played**", "**5 cycles**, each covering 2 years (year 1 = make the movie, year 2 = release it). That's 10 in-game years."],
+        ["**How it's played**", "**5 films, one per cycle.** Each cycle covers 2 years: the first year you greenlight and produce (your t = 0 investment), the second you release. That's 10 in-game years."],
         ["**Time needed**", "About 25–45 minutes."],
         ["**What counts**", "Only your **first submitted score**. Practice runs don't count."],
     ], [1.5, 5.0])
@@ -467,6 +468,7 @@ def build_movies():
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
         "**Working Title**: anything you like.",
+        "**Logline (required)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. You can't Simulate without one.",
         "**Genre**: Action/Tentpole, Sci-Fi/Fantasy, Animated, Horror, Comedy, Drama, or Awards/Prestige. Big genres earn more overseas. Prestige genres can win awards.",
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",
@@ -474,18 +476,20 @@ def build_movies():
     ])
     doc.add_heading("💰 Capital", level=3)
     bullets(doc, [
-        "**Production Budget ($M)**: what it costs to make the movie.",
-        "**P&A / Marketing Spend ($M)**: prints and advertising. Marketing buys you an opening weekend, but it can't make a weak movie hold its audience.",
-        "**Star Power (0–100)**: bigger stars mean a bigger opening.",
-        "**Planned Opening Screens** and **IMAX release**.",
-        "**Financing Structure**: Self-Finance (all the upside, all the risk), Pre-Sale (sell international rights early to cover about 40% of the budget, which means less risk but a smaller share of the profit), or Tax Incentive (shoot where a government rebate lowers your cost).",
+        "**Production Budget ($M)**: what it costs to make the movie. **Budget buys quality.** A gold hint shows your genre's typical budget (about $150M for a tentpole, $15M for horror). Far below it, the film looks cheap and draws weaker audiences; above it, gains taper off.",
+        "**P&A / Marketing Spend ($M)**: prints and advertising. With no marketing, almost nobody shows up; past a point, extra spending barely moves the opening. Finding that sweet spot is part of the job.",
+        "**Star Power (0–100)**: bigger stars mean a bigger opening, and they cost money.",
+        "**Planned Opening Screens** and **IMAX release**. A gold hint shows how many screens your genre's audience can fill. Booking more mostly adds empty seats.",
+        "**Financing Structure**: **Self-Finance** (all the upside, all the risk). **Pre-Sale**: distributors pay a guaranteed advance about equal to your expected international take; they recoup it first and you get half of anything beyond it. That's insurance: worth it for risky films like horror, a bad trade for a likely hit. **Tax Incentive**: shoot where a government rebate lowers your cost.",
         "**AI Production Tools**: cheaper and faster, but they cap how well critics can rate the movie. An AI-tooled prestige film can be nominated for an Oscar but can't win.",
     ])
     doc.add_heading("🌎 Distribution Strategy", level=3)
     para(doc, "Choose your **Exhibitor Posture**, which sets how hard you negotiate with theater owners. Aggressive keeps more of each ticket but gets you fewer screens. Exhibitor-Friendly gives up more of each ticket but gets you more screens. Standard sits in between.")
     callout(doc, "tip",
-            "Before you move on, check **Capital at Risk** and the **Projected Range** chart (Bear / Base / Bull cases). "
-            "If even the Base case is negative, rethink the budget.")
+            "Before you move on, check **Capital at Risk** and the **Projected Range** chart. Each Bear / Base / Bull bar is "
+            "what the movie's revenue is worth today **minus** Capital at Risk, so every extra $10M you commit pushes all three "
+            "bars down about $10M unless the movie earns it back. The chart assumes a wide release and no reviews yet. "
+            "If even the Base case is negative, rethink the plan.")
 
     doc.add_heading("Holding Deals  (optional)", level=2)
     para(doc, "Reserve a specific actor for **next** cycle's movie. Click **Place Hold** for a single movie or **Multi-Picture** for several. "
@@ -494,14 +498,14 @@ def build_movies():
     doc.add_heading("3 · Release Strategy  (required)", level=2)
     steps(doc, [
         "**Pick a Debut Season.** Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
-        "**Pick a release strategy** (from Cycle 3 on; Cycles 1–2 are Wide Theatrical only): **Wide Theatrical**, **Platform / Limited** (start small and expand), or **Day-and-Date** (theaters and Peacock at the same time; this gives up some box office).",
+        "**Pick a release strategy** (from Cycle 3 on; Cycles 1–2 are Wide Theatrical only). **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens in about 600 theaters and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself, so it can win for horror and comedy.",
         "**Click 🎬 Run Theatrical Simulation.** This is required, and it locks in how the movie does in theaters.",
-        "**Pay-1 Window Licensing**: license the first streaming window for a flat fee, or click **🏷️ Shop This Window to Competitive Bid** to let rival platforms bid, then accept the best offer.",
+        "**Pay-1 Window Licensing**: keep the first streaming window on Peacock, license it for a flat fee, or click **🏷️ Shop This Window to Competitive Bid**. You can accept **any** bid, not just the highest: each comes with a 12- or 18-month term, and a shorter term returns the movie to Peacock sooner, so a lower bid can be worth more. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; the new bids usually come in lower.",
         "**Set the PVOD price** (renting or buying at home while the movie is still new).",
         "**PVOD Market Acceptance Checks**: if viewers reject your price, choose **Hold** (keep the price and accept fewer sales) or **Cut** (lower the price to win back volume).",
     ])
     callout(doc, "warn",
-            "The **▶ Simulate** button stays greyed out until you've run the Theatrical Simulation and answered any PVOD rejection. "
+            "The **▶ Simulate** button stays greyed out until you've written a Logline, run the Theatrical Simulation, and answered any PVOD rejection. "
             "If you can't click it, scroll up and look for the step you skipped.")
 
     page_break(doc)
@@ -519,9 +523,11 @@ def build_movies():
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)
-    para(doc, "Your score is out of 100 points and has four parts. **Passing** means your slate's average risk-adjusted NPV is above $0.")
+    para(doc, "Your score is out of 100 points and has four parts. **Passing** means your slate's average graded NPV is above $0. "
+              "Each film's graded NPV is **75% your decisions** (risk-adjusted, so the bear case counts) and **25% luck** (what the film "
+              "actually earned). A breakout helps and a flop hurts, but good decisions still matter most.")
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
-        ["**Risk-adjusted NPV**", "45%", "+$200M average per movie", "Your movies create value after accounting for risk."],
+        ["**Risk-adjusted NPV**", "45%", "+$200M average per movie", "Your movies create value after accounting for risk (plus a little luck)."],
         ["**Capital efficiency**", "20%", "6× revenue per marketing dollar", "You got a lot back for what you spent."],
         ["**Strategic fit**", "20%", "Genre, season, and release choices that fit together", "Your decisions make sense as a set."],
         ["**Portfolio diversification**", "15%", "A varied slate across cycles", "Don't make the same movie five times."],
@@ -529,6 +535,9 @@ def build_movies():
 
     doc.add_heading("Common mistakes", level=1)
     bullets(doc, [
+        "**Leaving the defaults alone.** The default film is an under-funded tentpole, and it loses money.",
+        "**A cheap blockbuster.** A $20M action film looks cheap and underperforms. Fund the genre properly.",
+        "**Maxing out P&A or screens.** Past the genre's sweet spot you're paying for empty seats.",
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
         "**Five sequels in a row.** Franchise fatigue is real, and your diversification score drops.",
