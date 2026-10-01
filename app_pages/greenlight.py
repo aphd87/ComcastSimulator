@@ -11,7 +11,10 @@ from utils.models import (
 )
 from utils.charts import base_layout, queue_supplement, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
-from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR, YEARS_PER_LEVEL
+from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR, YEARS_PER_LEVEL, LEVEL_START_YEAR
+from utils.pitch_market import (
+    contested_fee, rival_for, resolve_rival_signings, RIVAL_FEE_PREMIUM, RIVAL_POACH_CHANCE,
+)
 
 _GENRES = ["Reality", "Competition", "Talk", "Scripted", "True Crime", "Drama"]
 _NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturation threshold
@@ -255,9 +258,10 @@ def render():
            f'— acquiring, building from scratch, and AI-pitched shows all share them.')
         + (f' There are more pitches below than slots, so choose carefully. You get {MAX_NEW_SHOWS_PER_YEAR} '
            f'fresh slots each new year, so across a {YEARS_PER_LEVEL}-year level you can add up to '
-           f'{MAX_NEW_SHOWS_PER_YEAR * YEARS_PER_LEVEL} new shows. A pitch you pass on stays here until '
-           f'someone acquires it. Switching networks or restarting a level undoes the shows you added '
-           f'in it, so slots can\'t be refilled that way.')
+           f'{MAX_NEW_SHOWS_PER_YEAR * YEARS_PER_LEVEL} new shows. A pitch you pass on stays available '
+           f'next year <b>unless a rival network is bidding on it (🔥)</b>, in which case the rival may sign it '
+           f'first. Switching networks or restarting a level undoes the shows you added in it, so slots '
+           f'can\'t be refilled that way.')
         + '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
         '<ul style="margin:4px 0 0 18px;padding:0;line-height:1.6;">'
         '<li><b>Demo</b>: who watches. Age band · gender skew · where (e.g. 18-49 · Balanced · National US).</li>'
@@ -268,12 +272,31 @@ def render():
         'Matters most on Peacock.</li>'
         '<li><b>IP Score</b> (0-100): franchise/brand value. Higher means spinoff potential and a show that ages better.</li>'
         '<li><b>Brand partnership</b>: a sponsor already attached. Cuts the acquisition fee 15% and adds a small rating bump.</li>'
+        f'<li><b>🔥 Competitor interest</b>: a rival network is bidding. Winning it now costs '
+        f'{RIVAL_FEE_PREMIUM:.0%} more; waiting risks losing it for good ({RIVAL_POACH_CHANCE:.0%} chance '
+        f'each new year).</li>'
         '<li><b>Acquisition fee + season production cost</b>: what you pay. The fee buys the rights, the '
         'production cost makes this season. Both come out of this year\'s budget the moment you click Acquire.</li>'
         '</ul></div>',
         unsafe_allow_html=True)
 
-    available_pitches = [k for k in TV_PITCH_CATALOG if k not in ss.tv_pitches_acquired]
+    # Competitor interest (2026-10-01, utils/pitch_market.py): contested pitches
+    # a team passed on may be signed by the rival at the start of a new year.
+    team_key = f"{ss.get('school', '')}||{ss.get('class_section', '')}||{ss.get('team_name', '')}"
+    still_open = [k for k in TV_PITCH_CATALOG if k not in ss.tv_pitches_acquired]
+    resolve_rival_signings(ss, team_key, ss.active_network, year, still_open)
+    lost = ss.get("tv_pitches_lost", {})
+    if lost:
+        gone = " · ".join(
+            f'<b>{TV_PITCH_CATALOG[k]["name"]}</b> → {v["rival"]} '
+            f'({NETWORK_INFO[v["network"]]["display_name"]} {LEVEL_START_YEAR[v["network"]] + v["year"] - 1})'
+            for k, v in lost.items())
+        st.markdown(
+            f'<div style="font-size:14px;color:#ef5350;margin-bottom:10px;">🚫 Signed by rival networks '
+            f'before you acquired them: <span style="color:#e8eaf0;">{gone}</span></div>',
+            unsafe_allow_html=True)
+
+    available_pitches = [k for k in still_open if k not in lost]
     if not available_pitches:
         st.caption("No pitches left to acquire — every show in this catalog has already been picked up.")
     else:
@@ -284,7 +307,13 @@ def render():
             for col, key in zip(pcols, chunk):
                 pitch = TV_PITCH_CATALOG[key]
                 demo  = genre_demo(pitch["genre"])
-                fee   = tv_pitch_acquisition_fee_m(pitch)
+                fee   = contested_fee(tv_pitch_acquisition_fee_m(pitch), key)
+                rival = rival_for(key)
+                rival_line = (
+                    f'<div style="font-size:12px;color:#ffa726;margin-top:4px;">🔥 Competitor interest: '
+                    f'{rival} is bidding. Fee includes a +{RIVAL_FEE_PREMIUM:.0%} competitive premium. '
+                    f'Pass this year and there\'s a {RIVAL_POACH_CHANCE:.0%} chance {rival} signs it '
+                    f'before next year.</div>' if rival else '<div></div>')
                 season_cost = pitch["episodes"] * pitch["ep_cost_k"] / 1000
                 origin_badge = (f'🌍 International Format ({pitch["format_source"]})'
                                 if pitch["origin"] == "International Format" else "🏠 Domestic Original")
@@ -306,6 +335,7 @@ def render():
                         {pitch['episodes']} eps · ${pitch['ep_cost_k']}K/ep · rating {pitch['rating']:.1f} ·
                         SVOD appeal {pitch['svod_appeal']} · IP Score {pitch['ip_score']}</div>
                       {bp_line}
+                      {rival_line}
                       <div style="font-size:13px;color:#e8eaf0;margin-top:8px;">
                         Acquisition fee: <b>${fee:.2f}M</b> + ${season_cost:.2f}M season production cost
                       </div>

@@ -56,7 +56,10 @@ def test_acquiring_a_pitch_adds_it_to_the_roster_and_deducts_budget():
     at = _greenlight_app(budget=500.0)
     key = "peak_condition"
     pitch = TV_PITCH_CATALOG[key]
-    fee = tv_pitch_acquisition_fee_m(pitch)
+    # Peak Condition has a rival bidding, so the fee carries the competitive premium.
+    from utils.pitch_market import contested_fee
+    fee = contested_fee(tv_pitch_acquisition_fee_m(pitch), key)
+    assert fee > tv_pitch_acquisition_fee_m(pitch)
     season_cost = pitch["episodes"] * pitch["ep_cost_k"] / 1000
 
     at.button(key=f"acquire_{key}").click()
