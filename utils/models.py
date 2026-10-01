@@ -5,6 +5,7 @@ All monetary values in $M unless noted.
 from __future__ import annotations   # list[...]/dict[...] type hints below need Python
                                        # 3.9+ without this — see utils/game_state.py
 import numpy as np
+from utils.seeding import stable_seed
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
@@ -246,7 +247,7 @@ def preview_show_variance(team_name: str, year: int, shows: list, target_id: int
     `shows` must be in the same order render() builds it in (oxygen + bravo
     + peacock, as applicable) — draws are consumed sequentially, one per
     show, same as the real computation."""
-    seed = (abs(hash(team_name)) + year * 1337) % (2 ** 31)
+    seed = (stable_seed(team_name) + year * 1337) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     for s in shows:
         v = float(rng.uniform(0.93, 1.08))
@@ -431,7 +432,7 @@ def draw_emmy_reception(team_name: str, year: int, show_id: int, genre: str) -> 
     if genre not in EMMY_ELIGIBLE_GENRES:
         return None
     lo, mode, hi = EMMY_RECEPTION_BOUNDS[genre]
-    seed = (abs(hash(team_name)) + show_id * 7247 + year * 887 + 53) % (2 ** 31)
+    seed = (stable_seed(team_name) + show_id * 7247 + year * 887 + 53) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return float(rng.triangular(lo, mode, hi))
 
@@ -460,7 +461,7 @@ def draw_production_risk_event(team_name: str, year: int, show_id: int) -> Optio
     replicates for the Research feature. Returns None almost all the time;
     when it doesn't, the reason string is what actually happened, not a
     generic "bad year" label."""
-    seed = (abs(hash(team_name)) + show_id * 8191 + year * 613) % (2 ** 31)
+    seed = (stable_seed(team_name) + show_id * 8191 + year * 613) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     if rng.random() > PRODUCTION_RISK_CHANCE:
         return None
@@ -482,7 +483,7 @@ def draw_emergency_budget_shock(team_name: str, year: int) -> Optional[float]:
     that's been cut (e.g. 0.15 = a 15% cut) when it fires. Seeded on its
     own hash offset, drawn once per team+year (network-level event, not
     per-show)."""
-    seed = (abs(hash(team_name)) + year * 5303 + 17) % (2 ** 31)
+    seed = (stable_seed(team_name) + year * 5303 + 17) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     if rng.random() > EMERGENCY_BUDGET_CHANCE:
         return None
@@ -499,7 +500,7 @@ def preview_regional_signal(team_name: str, year: int, show: "Show") -> Optional
     more likely to surface ("strong" fit) but a non-matching region can
     still appear ("moderate" fit) — real audiences don't always follow the
     obvious genre lines."""
-    seed = (abs(hash(team_name)) + show.id * 6151 + year * 271) % (2 ** 31)
+    seed = (stable_seed(team_name) + show.id * 6151 + year * 271) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     if rng.random() > REGIONAL_SIGNAL_CHANCE:
         return None

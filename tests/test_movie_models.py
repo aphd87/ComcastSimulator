@@ -27,7 +27,7 @@ from utils.movie_models import (
     PRODUCTION_TROUBLE_REASONS,
     draw_ancillary_surprise, ANCILLARY_SURPRISE_CHANCE, ANCILLARY_SURPRISE_RANGE,
     ANCILLARY_SURPRISE_REASONS_UP, ANCILLARY_SURPRISE_REASONS_DOWN,
-    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, PRESALE_INTL_RETAINED_PCT, TAX_CREDIT_PCT,
+    FINANCING_STRUCTURES, PRESALE_OVERAGE_SHARE, PRESALE_SALES_AGENT_FEE_PCT, PRESALE_ADVANCE_PCT_OF_BASE_INTL, TAX_CREDIT_PCT,
     participation_waterfall, TALENT_GROSS_GUARANTEE_M, TALENT_GROSS_PARTICIPATION,
     PRODUCER_NET_PARTICIPATION,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, RIVAL_CLAIM_CHANCE, HOLD_FORFEIT_CHANCE, RIVAL_POACH_CHANCE,
@@ -84,11 +84,12 @@ class TestRealisticScale:
         p = _tentpole()
         assert p.npv("bear") < p.npv("base") < p.npv("bull")
 
-    def test_indie_platform_release_is_marginal_not_a_guaranteed_win(self):
+    def test_indie_drama_earns_a_realistic_return_and_platform_beats_wide(self):
+        # 2026-10-01 rebalance: a platform rollout is the right call for a
+        # small drama (it was never worth choosing before), at believable scale.
         p = _indie()
-        # A small specialty release should be a real bet, not a lock — base
-        # case should be close to break-even, not comfortably positive.
-        assert -20 < p.npv("base") < 20
+        assert -20 < p.npv("base") < 60
+        assert p.npv("base") > _indie(release_strategy="wide_theatrical").npv("base")
 
     def test_opening_weekend_lands_in_realistic_per_screen_range(self):
         p = _tentpole()
@@ -115,7 +116,7 @@ class TestIRR:
 
     def test_moderate_outcome_converges_to_a_real_number(self):
         # A case picked to sit inside the search bounds, not pinned at either end.
-        irr = _tentpole().irr("bear")
+        irr = _indie().irr("bear")
         assert irr not in (None, float("inf"))
         assert -0.5 < irr < 5.0
 
@@ -1039,7 +1040,10 @@ class TestFinancingStructure:
         # added on top, unaffected by financing_structure.
         base = _tentpole()
         presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
-        effective_advance = base.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
+        # 2026-10-01: the advance is a minimum guarantee sized off base-case
+        # international rentals, net of the sales agent's fee.
+        effective_advance = presale.presale_net_advance()
+        assert effective_advance == pytest.approx(presale.presale_gross_advance() * (1 - PRESALE_SALES_AGENT_FEE_PCT))
         expected = ((base.budget_m - effective_advance) + base.pa_spend_m
                     + base.star_power * STAR_POWER_COST_PER_POINT_M + base.screens * SCREEN_COST_PER_SCREEN_M)
         assert presale.capital_at_risk() == pytest.approx(expected)
@@ -1052,7 +1056,7 @@ class TestFinancingStructure:
         # "got no advance at all", not at either extreme.
         base = _tentpole()
         presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
-        full_advance_capital = base.budget_m * (1 - PRESALE_ADVANCE_PCT) + base.pa_spend_m
+        full_advance_capital = base.capital_at_risk() - presale.presale_gross_advance()
         assert presale.capital_at_risk() > full_advance_capital
         assert presale.capital_at_risk() < base.capital_at_risk()
 
@@ -1065,13 +1069,30 @@ class TestFinancingStructure:
         assert tax.capital_at_risk() < base.capital_at_risk()
 
     def test_presale_caps_international_box_office(self):
+        # Minimum guarantee (2026-10-01): distributors recoup the advance first,
+        # the studio shares in the overage beyond it.
         base = _tentpole()   # Action/Tentpole: GENRE_INTL_MULT=2.3, real upside to give up
         presale = MovieProject(**{**base.__dict__, "financing_structure": "presale"})
-        dom = 100.0
+        dom = base.domestic_box_office("bull")
         full_intl = base.international_box_office(dom)
-        presale_intl = presale.international_box_office(dom)
-        assert presale_intl == pytest.approx(full_intl * PRESALE_INTL_RETAINED_PCT)
-        assert presale_intl < full_intl
+        recoup_bo = presale.presale_gross_advance() / 0.52
+        assert presale.international_box_office(dom) == pytest.approx(
+            max(0.0, full_intl - recoup_bo) * PRESALE_OVERAGE_SHARE)
+        assert presale.international_box_office(dom) < full_intl
+        # A flop never earns overage: the studio already has its advance.
+        assert presale.international_box_office(base.domestic_box_office("bear")) == 0.0
+
+    def test_presale_pays_off_for_high_variance_genres_not_stable_ones(self):
+        """The lesson of the 2026-10-01 rebalance: presale is insurance. It
+        beats self-financing (risk-adjusted) for a high-variance horror film
+        and loses for a stable, predictable tentpole."""
+        def ra(genre, fin):
+            budget = {"Horror": 15, "Action/Tentpole": 150}[genre]
+            p = MovieProject(title="t", genre=genre, budget_m=budget, pa_spend_m=round(budget * 0.6),
+                             star_power=50, screens=3000, cycle=3, financing_structure=fin)
+            return risk_adjusted_npv(p)
+        assert ra("Horror", "presale") > ra("Horror", "self_finance")
+        assert ra("Action/Tentpole", "presale") < ra("Action/Tentpole", "self_finance")
 
     def test_tax_incentive_does_not_touch_international_box_office(self):
         base = _tentpole()
@@ -1115,7 +1136,7 @@ class TestParticipationWaterfall:
         # A small platform-release indie in its bear case: revenue doesn't
         # clear the talent guarantee plus the full $25M capital at risk --
         # deterministic at these calibrated numbers, not just "possible."
-        p = _indie()
+        p = _indie(release_strategy="wide_theatrical")
         wf = participation_waterfall(p, "bear")
         after_recoupment = wf["revenue"] - wf["talent_take"] - wf["recoupment"]
         assert after_recoupment < 0

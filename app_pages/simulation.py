@@ -17,6 +17,7 @@ instructor-tailorable per deployment (2026-08-03) — see README.md.
 import streamlit as st
 import pandas as pd
 import numpy as np
+from utils.seeding import stable_seed
 import plotly.graph_objects as go
 
 from utils.models import (
@@ -112,7 +113,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
     revenue/cost, same as _preview_pnl above — everything downstream
     (Results banner, Complete-phase totals, score) reads result["revenue"]/
     ["cost"] and so already reflects the sports P&L without further changes."""
-    seed = (abs(hash(ss.team_name)) + year * 1337) % (2 ** 31)
+    seed = (stable_seed(ss.team_name) + year * 1337) % (2 ** 31)
     rng  = np.random.default_rng(seed)
 
     prev_cancelled = ss.cancelled_shows

@@ -416,8 +416,8 @@ def test_cutting_with_no_buzz_leaves_critical_score_untouched():
 
 
 def test_cutting_with_awards_buzz_bumps_critical_score_by_the_calibrated_bonus():
-    """AwardsBuzzHunt4 is a verified deterministic awards-buzz cut."""
-    at = _movies_app("AwardsBuzzHunt4")
+    """BuzzHunt0 is a verified deterministic awards-buzz cut (stable seeding, 2026-10-01)."""
+    at = _movies_app("BuzzHunt0")
     _mini_run_button(at).click().run()
     resolved_cs = at.session_state["movie_theatrical_resolved"][1]["critical_score"]
     cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))
@@ -432,8 +432,8 @@ def test_cutting_with_awards_buzz_bumps_critical_score_by_the_calibrated_bonus()
 
 
 def test_cutting_with_sequel_buzz_flags_the_outcome_without_touching_critical_score():
-    """BuzzHunt12 is a verified deterministic sequel-buzz cut."""
-    at = _movies_app("BuzzHunt12")
+    """BuzzHunt3 is a verified deterministic sequel-buzz cut (stable seeding, 2026-10-01)."""
+    at = _movies_app("BuzzHunt3")
     _mini_run_button(at).click().run()
     resolved_cs = at.session_state["movie_theatrical_resolved"][1]["critical_score"]
     cut_btn = next(b for b in at.button if b.label.startswith("Cut to"))

@@ -16,6 +16,7 @@ see DESIGN_NOTES.md's "Day 2" section for the full rationale:
 """
 from __future__ import annotations
 import numpy as np
+from utils.seeding import stable_seed
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -104,7 +105,7 @@ def draw_pvod_market_rejection(team_name: str, cycle: int, checkpoint_idx: int, 
     """Own independent seeded axis (own hash offset -- never perturbs any
     other draw_* sequence in this file). checkpoint_idx (0, 1, ...)
     distinguishes the 6mo vs. 12mo check so they aren't the same roll."""
-    seed = (abs(hash(team_name)) + cycle * 15013 + checkpoint_idx * 733 + 89) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 15013 + checkpoint_idx * 733 + 89) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return bool(rng.random() < pvod_reject_chance(price_frac))
 
@@ -138,7 +139,7 @@ def draw_pvod_cut_buzz(team_name: str, cycle: int, checkpoint_idx: int) -> Optio
     "sequel", or None (no buzz -- the common case, ~65% of cuts).
     checkpoint_idx keeps a second cut in the same cycle from drawing the
     same outcome as the first."""
-    seed = (abs(hash(team_name)) + cycle * 30469 + checkpoint_idx * 2081 + 577) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 30469 + checkpoint_idx * 2081 + 577) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() >= PVOD_CUT_BUZZ_CHANCE:
         return None
@@ -161,7 +162,7 @@ def pvod_price_band(multiplier: float, genre: str, concept_type: str = "New IP")
     return round(lo, 2), round(hi, 2)
 SVOD_SUB_LTV_MO       = 8.0    # matches utils/models.py's SVOD_SUB_LTV_MO for consistency with Day 1
 SVOD_MARGIN           = 0.15
-BASE_PER_SCREEN_M     = 0.010  # $M ($10K) per screen — blockbuster-average opening baseline
+BASE_PER_SCREEN_M     = 0.013  # $M ($13K) per screen at a typical budget — rescaled 2026-10-01 balance pass
 STAR_POWER_BOOST_MAX  = 0.30   # max star power (100) adds up to +30% to opening, not a multiplier stack
 # 2026-08-17, per explicit user question ("should Star Power be increased
 # without impacting budget?"): it previously was -- a completely free
@@ -176,15 +177,76 @@ STAR_POWER_BOOST_MAX  = 0.30   # max star power (100) adds up to +30% to opening
 # project set to a real value -- there's no backward-compatible "off"
 # position to default to.
 STAR_POWER_COST_PER_POINT_M = 0.20   # $M per Star Power point -- maxing to 100 costs $20M in casting
-MKT_LIFT_PER_M        = 0.006  # opening-weekend awareness lift per $1M P&A — gentle on purpose:
-                                # this stacks with star power on the same opening-weekend number,
-                                # so both together should move it moderately, not compound explosively
+# P&A awareness now saturates -- see PA_AWARENESS_FLOOR / PA_LIFT_MAX (2026-10-01).
 BASE_WINDOW_DAYS      = 90     # 2012-era theatrical exclusivity norm
 WINDOW_SHRINK_PER_CYCLE_DAYS = 15   # real-world post-2012 compression, applied per cycle (1->2->3)
 CYCLES_TOTAL          = 5
 YEARS_PER_CYCLE        = 2
 WINDOWING_UNLOCK_CYCLE = 3   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" —
                               # cycles before this are wide-theatrical only, no strategy choice yet
+
+# ── Balance pass (2026-10-01) ────────────────────────────────────────────────
+# An engine-level QA run found one recipe won every team and cycle: a $20M
+# "tentpole" with maxed P&A, stars, and screens. Production budget only ever
+# added cost (it never improved the movie), P&A and screens scaled linearly
+# with no saturation, Platform/Day-and-Date and presale financing were never
+# worth choosing, and leaving every default untouched passed. These levers
+# make each choice a real trade-off, sized per genre.
+
+# 1) Budget buys quality. Spending below a genre's typical budget weakens the
+#    film's draw sharply; spending above it helps with diminishing returns.
+GENRE_TYPICAL_BUDGET_M = {
+    "Action/Tentpole": 150.0, "Sci-Fi/Fantasy": 130.0, "Animated": 100.0,
+    "Horror": 15.0, "Comedy": 35.0, "Drama": 30.0, "Awards/Prestige": 40.0,
+}
+PRODUCTION_VALUE_ELASTICITY = 0.5           # doubling the budget lifts the draw ~41%
+PRODUCTION_VALUE_RANGE      = (0.35, 1.30)  # floor for a badly under-funded film, ceiling for over-spend
+
+# 2) P&A and screens saturate. Awareness flattens out at a level sized to the
+#    genre's typical budget; screens beyond a genre's real audience demand
+#    earn only a fraction of a normal screen.
+PA_AWARENESS_FLOOR          = 0.35          # draw with zero P&A: a wide release nobody knows about
+PA_LIFT_MAX                 = 1.25          # awareness P&A can add on top of the floor (saturating)
+PA_REF_PCT_OF_TYPICAL_BUDGET = 0.60         # P&A at 60% of typical budget buys ~63% of that max
+GENRE_SCREEN_DEMAND = {
+    "Action/Tentpole": 4200, "Sci-Fi/Fantasy": 3800, "Animated": 3800,
+    "Horror": 2800, "Comedy": 3000, "Drama": 2000, "Awards/Prestige": 1200,
+}
+OVERSCREEN_PRODUCTIVITY     = 0.20          # a screen past demand earns 20% of a normal one
+# Per-screen audience draw by genre: horror, comedy, and drama open smaller
+# than a tentpole on the same screens -- strong ROI, smaller absolute dollars.
+GENRE_AUDIENCE_SCALE = {
+    "Action/Tentpole": 1.00, "Sci-Fi/Fantasy": 0.95, "Animated": 0.95,
+    "Horror": 0.50, "Comedy": 0.62, "Drama": 0.75, "Awards/Prestige": 1.00,
+}
+
+# 3) Release strategies with real use cases.
+#    Platform: opens in ~600 theaters and expands on word of mouth. Its total
+#    run, relative to a wide release at the genre's natural screen count:
+PLATFORM_SCREENS = 600
+PLATFORM_YIELD = {
+    "Awards/Prestige": 1.60, "Drama": 1.20, "Comedy": 0.80, "Horror": 0.70,
+    "Animated": 0.55, "Sci-Fi/Fantasy": 0.55, "Action/Tentpole": 0.50,
+}
+#    Day-and-Date: a Peacock premiere is a subscriber event in itself, worth
+#    this much (x genre streaming appeal x production value) regardless of
+#    box office -- so it can beat the theatrical revenue a smaller film gives up.
+DND_PREMIERE_SUB_VALUE_M = 145.0
+
+# 4) Presale: the advance is sized off the film's expected (base-case)
+#    international rentals, not its budget. Guaranteed money that cushions a
+#    bad outcome but caps the upside -- worth it for high-variance genres.
+PRESALE_ADVANCE_PCT_OF_BASE_INTL = 1.00     # minimum guarantee = expected international rentals (before fee)
+PRESALE_OVERAGE_SHARE = 0.50                # studio's share of international rentals past the advance
+
+
+def _stable_seed(*parts) -> int:
+    """Deterministic 31-bit seed from team name / offsets (2026-10-01).
+    Python's built-in hash() changes every time the server restarts, which
+    silently re-rolled every team's draws after a reboot."""
+    import hashlib
+    digest = hashlib.sha256("|".join(str(p) for p in parts).encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") % (2 ** 31)
 
 GENRES = ["Action/Tentpole", "Sci-Fi/Fantasy", "Animated", "Horror", "Comedy", "Drama", "Awards/Prestige"]
 
@@ -432,7 +494,7 @@ def draw_critical_reception(team_name: str, cycle: int, genre: str,
     if ai_production_tools:
         hi = lo + (hi - lo) * AI_TOOLS_CRITICAL_CEILING_MULT
         mode = min(mode, hi)
-    seed = (abs(hash(team_name)) + cycle * 7919 + 31) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 7919 + 31) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return float(rng.triangular(lo, mode, hi))
 
@@ -465,7 +527,7 @@ def draw_production_trouble(team_name: str, cycle: int) -> Optional[tuple[str, f
     (reason, haircut_multiplier) where haircut_multiplier < 1.0 is meant to
     be applied to the already-drawn box-office multiplier before computing
     the cycle's actual outcome."""
-    seed = (abs(hash(team_name)) + cycle * 5563 + 97) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 5563 + 97) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > PRODUCTION_TROUBLE_CHANCE:
         return None
@@ -506,7 +568,7 @@ def draw_ancillary_surprise(team_name: str, cycle: int) -> Optional[tuple[str, f
     post-theatrical licensing/ancillary markets, distinct from the core
     theatrical performance. Returns None most of the time; when it fires,
     returns (reason, multiplier) where multiplier can be above or below 1.0."""
-    seed = (abs(hash(team_name)) + cycle * 6229 + 149) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 6229 + 149) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > ANCILLARY_SURPRISE_CHANCE:
         return None
@@ -553,7 +615,7 @@ def draw_ewom_piracy_swing(team_name: str, cycle: int) -> Optional[tuple[str, fl
     (reason, multiplier) where multiplier can land above or below 1.0 —
     the whole point is this can genuinely swing either direction, unlike
     Production Trouble's one-directional haircut."""
-    seed = (abs(hash(team_name)) + cycle * 7457 + 337) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 7457 + 337) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > EWOM_PIRACY_CHANCE:
         return None
@@ -756,7 +818,7 @@ def draw_rival_claim(team_name: str, cycle: int, partner_key: str) -> Optional[s
     Seeded off (team, cycle, partner) so trying a different partner isn't
     correlated with a rival claim on the first one. Returns the rival's
     name if claimed, else None."""
-    seed = (abs(hash(team_name)) + cycle * 8191 + abs(hash(partner_key)) % 4001 + 11) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 8191 + stable_seed(partner_key) % 4001 + 11) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > RIVAL_CLAIM_CHANCE:
         return None
@@ -769,7 +831,7 @@ def draw_hold_forfeit(team_name: str, cycle_placed: int, partner_key: str) -> Op
     together in time? Own independent seed offset from draw_rival_claim, so
     clearing the rival-claim check doesn't correlate with clearing this
     one. Returns a forfeit reason if the hold falls through, else None."""
-    seed = (abs(hash(team_name)) + cycle_placed * 5237 + abs(hash(partner_key)) % 4001 + 71) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle_placed * 5237 + stable_seed(partner_key) % 4001 + 71) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > HOLD_FORFEIT_CHANCE:
         return None
@@ -791,7 +853,7 @@ def draw_rival_poach(team_name: str, partner_key: str, cycle: int) -> Optional[s
     partners not already claimed by the team (an already-claimed partner
     isn't up for grabs) and should treat a returned rival as permanent for
     the rest of the level, not re-rolled."""
-    seed = (abs(hash(team_name)) + cycle * 3541 + abs(hash(partner_key)) % 4001 + 211) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 3541 + stable_seed(partner_key) % 4001 + 211) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > RIVAL_POACH_CHANCE:
         return None
@@ -826,11 +888,10 @@ def draw_rival_poach(team_name: str, partner_key: str, cycle: int) -> Optional[s
 # reduced capital_at_risk as if the studio kept 100% of the advance, which
 # understated what a global distribution deal actually costs to arrange.
 FINANCING_STRUCTURES = ["self_finance", "presale", "tax_incentive"]
-PRESALE_ADVANCE_PCT       = 0.40   # fraction of production budget the international advance covers, GROSS
-                                     # (before the sales agent's fee -- see PRESALE_SALES_AGENT_FEE_PCT)
 PRESALE_SALES_AGENT_FEE_PCT = 0.20   # mid-point of the note's real 10-30% range -- the sales agent's cut
                                        # of the advance, which never reaches the studio's own capital pool
-PRESALE_INTL_RETAINED_PCT = 0.15   # studio's residual/overage share of the international b.o. it gave away
+# Advance sizing and the overage split moved to the balance-pass block near the top
+# (PRESALE_ADVANCE_PCT_OF_BASE_INTL, PRESALE_OVERAGE_SHARE), 2026-10-01.
 TAX_CREDIT_PCT            = 0.22   # net-of-discount effective credit (headline ~30%, but non-refundable
                                      # credits are commonly sold at a discount -- see the note)
 
@@ -941,7 +1002,7 @@ def draw_licensing_bids(team_name: str, cycle: int, anchor_value_m: float,
     # Round 1 keeps the original seed/sequence exactly; later rounds get their
     # own offset. Terms come from a separate generator so they never shift
     # the bid amounts.
-    seed = (abs(hash(team_name)) + cycle * 52711 + 977 + (round_num - 1) * 7919) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 52711 + 977 + (round_num - 1) * 7919) % (2 ** 31)
     rng = np.random.default_rng(seed)
     term_rng = np.random.default_rng((seed + 4241) % (2 ** 31))
     lo, hi = LICENSING_BID_MULT_RANGE
@@ -1003,7 +1064,7 @@ def draw_licensing_bidder_appetite(team_name: str, cycle: int, background_slate:
     avg_npv = (sum(m["npv"] for m in background_slate) / len(background_slate)) if background_slate else 0.0
     hot_eligible = avg_npv > 0
     hungry_eligible = avg_npv <= LICENSING_APPETITE_HUNGRY_NPV_THRESHOLD
-    seed = (abs(hash(team_name)) + cycle * 8123 + 5501) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 8123 + 5501) % (2 ** 31)
     rng = np.random.default_rng(seed)
     lo, hi = LICENSING_APPETITE_PREMIUM_RANGE
     out = {}
@@ -1174,7 +1235,7 @@ def draw_ai_tooling_setback(team_name: str, cycle: int) -> Optional[tuple[str, f
     of the time; when it fires, returns (reason, haircut_multiplier) applied
     the same way draw_production_trouble's haircut is -- multiplicatively on
     the resolved box-office multiplier."""
-    seed = (abs(hash(team_name)) + cycle * 4657 + 233) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 4657 + 233) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > AI_TOOLS_SETBACK_CHANCE:
         return None
@@ -1324,8 +1385,7 @@ class MovieProject:
         default, since star_power/screens were already required fields
         every existing project set to a real value."""
         if self.financing_structure == "presale":
-            effective_advance = self.budget_m * PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
-            budget_component = self.budget_m - effective_advance
+            budget_component = self.budget_m - self.presale_net_advance()
         elif self.financing_structure == "tax_incentive":
             budget_component = self.budget_m * (1 - TAX_CREDIT_PCT)
         else:
@@ -1335,9 +1395,46 @@ class MovieProject:
         acquisition_cost = SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0)
         star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
         imax_cost = IMAX_COST_M if self.is_imax_eligible() else 0.0
-        screen_cost = self.screens * SCREEN_COST_PER_SCREEN_M
+        booked = min(self.screens, PLATFORM_SCREENS) if self.release_strategy == "platform" else self.screens
+        screen_cost = booked * SCREEN_COST_PER_SCREEN_M
         return (budget_component + self.pa_spend_m + acquisition_cost + star_power_cost
                 + imax_cost + screen_cost)
+
+    def presale_gross_advance(self) -> float:
+        """Minimum guarantee distributors pay for international rights
+        (2026-10-01): the film's base-case international rentals, deliberately
+        uncapped: a hot genre package (e.g. horror) can presell for more than
+        its budget."""
+        dom = self.domestic_box_office("base")
+        intl_rentals = dom * GENRE_INTL_MULT.get(self.genre, 1.4) * EXHIBITOR_SPLIT_BY_POSTURE.get(
+            self.exhibitor_posture, EXHIBITOR_SPLIT)
+        return intl_rentals * PRESALE_ADVANCE_PCT_OF_BASE_INTL
+
+    def presale_net_advance(self) -> float:
+        """Advance the studio actually receives, after the sales agent's fee."""
+        return self.presale_gross_advance() * (1 - PRESALE_SALES_AGENT_FEE_PCT)
+
+    def production_value_mult(self) -> float:
+        """How much the production budget lifts the film's draw relative to
+        its genre's typical budget (2026-10-01). 1.0 at the typical budget."""
+        typical = GENRE_TYPICAL_BUDGET_M.get(self.genre, 60.0)
+        lo, hi = PRODUCTION_VALUE_RANGE
+        return min(max((max(self.budget_m, 0.1) / typical) ** PRODUCTION_VALUE_ELASTICITY, lo), hi)
+
+    def effective_screens(self) -> float:
+        """Screens that actually pull an audience: anything past the genre's
+        real demand earns only OVERSCREEN_PRODUCTIVITY of a screen (2026-10-01)."""
+        demand = GENRE_SCREEN_DEMAND.get(self.genre, 3000)
+        if self.screens <= demand:
+            return float(self.screens)
+        return demand + (self.screens - demand) * OVERSCREEN_PRODUCTIVITY
+
+    def platform_legs(self) -> float:
+        """Platform rollout's expansion multiplier on its ~600-theater opening,
+        so the full run lands at PLATFORM_YIELD x a wide release at the
+        genre's natural screen count (2026-10-01)."""
+        demand = GENRE_SCREEN_DEMAND.get(self.genre, 3000)
+        return PLATFORM_YIELD.get(self.genre, 0.6) * demand / PLATFORM_SCREENS
 
     def is_imax_eligible(self) -> bool:
         """Whether an IMAX/large-format release is actually in effect this
@@ -1367,7 +1464,12 @@ class MovieProject:
         return max(BASE_WINDOW_DAYS - shrink, 17)   # 17 days = real 2021 post-COVID floor
 
     def awareness_lift(self) -> float:
-        return 1 + self.pa_spend_m * MKT_LIFT_PER_M
+        """Opening-weekend awareness bought by P&A. Saturates (2026-10-01):
+        returns flatten past a genre-sized reference spend, so maxing P&A on a
+        small film mostly burns money."""
+        import math
+        ref = GENRE_TYPICAL_BUDGET_M.get(self.genre, 60.0) * PA_REF_PCT_OF_TYPICAL_BUDGET
+        return PA_AWARENESS_FLOOR + PA_LIFT_MAX * (1 - math.exp(-max(self.pa_spend_m, 0.0) / ref))
 
     def concept_opening_boost(self) -> float:
         """Sequel/Family-Kids adjustment to opening intensity — see
@@ -1408,13 +1510,15 @@ class MovieProject:
         IMAX/large-format release (see is_imax_eligible) adds its own flat
         premium-pricing/event-appeal boost on top -- an upgrade to the
         screens you already have, not additional screens."""
-        screens = self.screens if self.release_strategy != "platform" else min(self.screens, 600)
+        screens = (self.effective_screens() if self.release_strategy != "platform"
+                   else min(self.screens, PLATFORM_SCREENS))
         screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
         source_boost = SOURCE_OPENING_BOOST.get(self.source_material, 1.0)
         imax_boost = 1 + IMAX_OPENING_BOOST_PCT if self.is_imax_eligible() else 1.0
         return (BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost()
-                * self.awareness_lift() * self.season_opening_mult() * source_boost * imax_boost)
+                * self.awareness_lift() * self.season_opening_mult() * source_boost * imax_boost
+                * self.production_value_mult() * GENRE_AUDIENCE_SCALE.get(self.genre, 1.0))
 
     def cannibalization_factor(self) -> float:
         """Theatrical box-office suppression from the release-strategy
@@ -1422,7 +1526,9 @@ class MovieProject:
         streaming reach; platform trades opening scale for a slower,
         specialty rollout. Ballpark figures referenced against the real
         2021 WarnerMedia/HBO Max day-and-date experiment, not exact."""
-        return {"wide_theatrical": 1.0, "platform": 0.85, "day_and_date": 0.55}[self.release_strategy]
+        # Platform's smaller footprint is modeled by its own legs (platform_legs,
+        # 2026-10-01) rather than a flat haircut.
+        return {"wide_theatrical": 1.0, "platform": 1.0, "day_and_date": 0.55}[self.release_strategy]
 
     def domestic_box_office(self, scenario) -> float:
         """`scenario` is either a named key ("bear"/"base"/"bull", for
@@ -1448,17 +1554,22 @@ class MovieProject:
             run_mult = RUN_LENGTH_BOX_OFFICE_MULT.get(self.theatrical_run_length, 1.0)
         else:
             run_mult = 1.0
-        return self.opening_weekend() * multiplier * self.cannibalization_factor() * run_mult
+        legs = self.platform_legs() if self.release_strategy == "platform" else 1.0
+        return self.opening_weekend() * multiplier * self.cannibalization_factor() * run_mult * legs
 
     def international_box_office(self, domestic_gross: float) -> float:
         """International box office the studio itself keeps. Under a
         Territorial Pre-Sales financing structure, most of this was already
         sold away to the distributor who fronted the advance (see
-        capital_at_risk()) -- the studio retains only a small residual/
-        overage share (PRESALE_INTL_RETAINED_PCT), not the full territory."""
+        capital_at_risk()) -- the studio keeps only its PRESALE_OVERAGE_SHARE of
+        rentals beyond the distributor's recouped advance."""
         intl = domestic_gross * GENRE_INTL_MULT.get(self.genre, 1.4)
         if self.financing_structure == "presale":
-            return intl * PRESALE_INTL_RETAINED_PCT
+            # Minimum-guarantee structure (2026-10-01): the distributor recoups
+            # its advance first, then the studio shares in the overage.
+            split = EXHIBITOR_SPLIT_BY_POSTURE.get(self.exhibitor_posture, EXHIBITOR_SPLIT)
+            recoup_bo = self.presale_gross_advance() / split if split else 0.0
+            return max(0.0, intl - recoup_bo) * PRESALE_OVERAGE_SHARE
         return intl
 
     def theatrical_studio_net(self, scenario: str) -> float:
@@ -1522,7 +1633,12 @@ class MovieProject:
             sub_lift_m *= 1.7   # immediate/exclusive availability drives materially more sub value
         elif self.release_strategy == "platform":
             sub_lift_m *= 1.1
-        return sub_lift_m * SVOD_SUB_LTV_MO * 12 * SVOD_MARGIN
+        value = sub_lift_m * SVOD_SUB_LTV_MO * 12 * SVOD_MARGIN
+        if self.release_strategy == "day_and_date":
+            # A Peacock premiere is a subscriber event regardless of box office (2026-10-01).
+            value += (DND_PREMIERE_SUB_VALUE_M * appeal * self.production_value_mult()
+                      * GENRE_AUDIENCE_SCALE.get(self.genre, 1.0))
+        return value
 
     def is_licensing_out(self) -> bool:
         """Whether the Pay-1 SVOD window is actually being licensed away
@@ -1904,7 +2020,7 @@ def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama",
     3-way coin flip, and a horror movie's draw genuinely swings wider than
     an awards drama's (and an indie-horror one wider still)."""
     bounds = scenario_multipliers_for(genre, concept_type)
-    seed = (abs(hash(team_name)) + cycle * 4201) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 4201) % (2 ** 31)
     rng = np.random.default_rng(seed)
     return float(rng.triangular(bounds["bear"], bounds["base"], bounds["bull"]))
 
@@ -2062,7 +2178,7 @@ def generate_background_slate(team_name: str, cycle: int,
     visible consequence of a shrunk pool (a bad year literally produces a
     smaller, cheaper background slate) or a grown one (a strong year's
     slate visibly gets bigger bets)."""
-    seed = (abs(hash(team_name)) + cycle * 9769 + 401) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 9769 + 401) % (2 ** 31)
     rng = np.random.default_rng(seed)
     n = int(rng.integers(BACKGROUND_SLATE_MIN, BACKGROUND_SLATE_MAX + 1))
     budget_max = min(200.0, max(20.0, studio_budget_m * 0.04)) if studio_budget_m is not None else 200.0
@@ -2139,7 +2255,7 @@ def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
     with the real engine -- these aren't flavor-only like the Background
     Studio Slate, they're real starting points for the student's own
     project."""
-    seed = (abs(hash(team_name)) + cycle * 6151 + 631) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 6151 + 631) % (2 ** 31)
     rng = np.random.default_rng(seed)
     concepts = []
     for i in range(SCOUTED_CONCEPTS_PER_CYCLE):
@@ -2170,7 +2286,7 @@ def draw_scouted_poach(team_name: str, concept_id: str) -> Optional[str]:
     same posture as draw_rival_poach) -- this function itself doesn't track
     whether it's already been rolled. Returns the rival's name if poached,
     else None."""
-    seed = (abs(hash(team_name)) + abs(hash(concept_id)) % 7919 + 4001) % (2 ** 31)
+    seed = (stable_seed(team_name) + stable_seed(concept_id) % 7919 + 4001) % (2 ** 31)
     rng = np.random.default_rng(seed)
     if rng.random() > SCOUTED_POACH_CHANCE:
         return None
@@ -2280,7 +2396,7 @@ def generate_festival_slate(team_name: str, cycle: int) -> list[dict]:
     this cycle, and stable across renders. A real curation bump
     (FESTIVAL_CURATION_BONUS) reflects that these are pre-juried films, not
     a random slate."""
-    seed = (abs(hash(team_name)) + cycle * 44201 + 991) % (2 ** 31)
+    seed = (stable_seed(team_name) + cycle * 44201 + 991) % (2 ** 31)
     rng = np.random.default_rng(seed)
     slate = []
     for key, fest in FESTIVALS.items():
@@ -2318,7 +2434,7 @@ def draw_festival_acquisition_bids(team_name: str, cycle: int, film_id: str, anc
     sequence. appetite_mult (see draw_licensing_bidder_appetite, called
     with bidders=RIVAL_STUDIOS) layers Phase 6's real hot/hungry game
     theory on top, the same logic, not a parallel one."""
-    seed = (abs(hash(team_name)) + abs(hash(film_id)) % 7919 + cycle * 31607 + 251) % (2 ** 31)
+    seed = (stable_seed(team_name) + stable_seed(film_id) % 7919 + cycle * 31607 + 251) % (2 ** 31)
     rng = np.random.default_rng(seed)
     lo, hi = LICENSING_BID_MULT_RANGE
     bids = []

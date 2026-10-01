@@ -36,7 +36,7 @@ from utils.movie_models import (
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
     draw_production_trouble, draw_ancillary_surprise,
-    FINANCING_STRUCTURES, PRESALE_ADVANCE_PCT, PRESALE_SALES_AGENT_FEE_PCT, TAX_CREDIT_PCT, participation_waterfall,
+    FINANCING_STRUCTURES, PRESALE_OVERAGE_SHARE, PRESALE_SALES_AGENT_FEE_PCT, GENRE_TYPICAL_BUDGET_M, GENRE_SCREEN_DEMAND, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
@@ -1403,6 +1403,12 @@ def _decisions(ss):
             st.caption("The negative cost — everything spent to actually make the film (cast/crew, sets, "
                        "VFX, post-production) before a single ticket sells. Not the same as Capital at "
                        "Risk below, which also folds in P&A and any financing discount you've chosen.")
+            # Genre norm (2026-10-01 balance pass): budget now buys production value.
+            _typ = GENRE_TYPICAL_BUDGET_M.get(genre, 60.0)
+            st.markdown(
+                f'<div style="font-size:13px;color:#e8c547;">🎯 Typical {genre} budget: ~${_typ:.0f}M. '
+                f'Well below it, the film looks cheap and draws weaker audiences; above it, gains taper off.</div>',
+                unsafe_allow_html=True)
         with c2:
             pa = st.number_input("P&A / Marketing Spend ($M)", 5.0, 200.0, float(d.get("pa_spend_m", 40.0)), step=5.0,
                                   help="Historically rivals or exceeds the production budget for a wide release.")
@@ -1446,6 +1452,10 @@ def _decisions(ss):
             )
         with c4:
             screens = st.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
+            st.markdown(
+                f'<div style="font-size:13px;color:#e8c547;">🎯 A {genre} audience fills about '
+                f'{GENRE_SCREEN_DEMAND.get(genre, 3000):,} screens. Booking more mostly adds empty seats.</div>',
+                unsafe_allow_html=True)
             st.caption(f"The U.S. has roughly 40,000 movie screens total (NATO estimate), of which only "
                        f"about 700-900 are true large-format IMAX screens — a genuine scarce resource "
                        f"exhibitors allocate to their highest-confidence openings. A wide theatrical "
@@ -1485,17 +1495,16 @@ def _decisions(ss):
             format_func=lambda k: fin_labels[k],
             help="How this movie gets funded before a single ticket sells.",
         )
-        net_advance_pct = PRESALE_ADVANCE_PCT * (1 - PRESALE_SALES_AGENT_FEE_PCT)
         fin_notes = {
             "self_finance": "You fund 100% of budget + P&A yourself and keep every dollar of "
                              "revenue, domestic and international.",
-            "presale": f"A sales agent brokers advances from international distributors, territory "
-                       f"by territory, worth ~{PRESALE_ADVANCE_PCT:.0%} of your production budget "
-                       f"before you shoot — but the agent takes a real {PRESALE_SALES_AGENT_FEE_PCT:.0%} "
-                       f"fee off that advance (real-world range: 10-30%), so only ~{net_advance_pct:.0%} "
-                       f"of budget actually reaches you. In exchange, those distributors own most of "
-                       f"the international box office outright — real cash relief now, a capped "
-                       f"upside later.",
+            "presale": f"A sales agent pre-sells your international rights for a guaranteed advance "
+                       f"(a minimum guarantee) roughly equal to the international rentals your movie is "
+                       f"expected to earn, paid before you shoot. The agent keeps "
+                       f"{PRESALE_SALES_AGENT_FEE_PCT:.0%} (real-world range: 10-30%). Distributors recoup "
+                       f"their advance first; you get {PRESALE_OVERAGE_SHARE:.0%} of anything beyond it. "
+                       f"Worth it for risky, high-variance films (horror, indie): the money is yours even "
+                       f"if it flops. For a likely hit, you're selling your upside cheap.",
             "tax_incentive": f"Shooting in a tax-friendly location cuts your effective production "
                               f"budget by ~{TAX_CREDIT_PCT:.0%} (net of the discount most non-local "
                               f"studios take to monetize the credit) — no revenue trade-off.",

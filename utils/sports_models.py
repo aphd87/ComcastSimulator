@@ -32,6 +32,7 @@ Design decisions locked in with the user before building (2026-08-04):
 """
 from __future__ import annotations
 import numpy as np
+from utils.seeding import stable_seed
 from dataclasses import dataclass
 from typing import Optional
 
@@ -99,7 +100,7 @@ def _seeded_term(league_key: str, cycle_index: int, term_range: tuple[int, int])
     league's Nth auction cycle. Same world for every team in a deployment
     (no team_name in the seed), matching how real rights deals don't wait
     for any one team's convenience."""
-    seed = (abs(hash(league_key)) + cycle_index * 7919) % (2 ** 31)
+    seed = (stable_seed(league_key) + cycle_index * 7919) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     lo, hi = term_range
     return int(rng.integers(lo, hi + 1))
@@ -140,7 +141,7 @@ def draw_rival_bids(league_key: str, cycle_index: int) -> list[dict]:
     team in a deployment sees the same rivals bidding the same amounts for
     the same cycle, same reasoning as _seeded_term. Not every rival
     participates every cycle."""
-    seed = (abs(hash(league_key)) + cycle_index * 104729 + 11) % (2 ** 31)
+    seed = (stable_seed(league_key) + cycle_index * 104729 + 11) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     base = SPORTS_LEAGUES[league_key]["base_rights_cost_m"]
     lo, hi = RIVAL_BID_MULT_RANGE
