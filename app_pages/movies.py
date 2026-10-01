@@ -36,7 +36,7 @@ from utils.movie_models import (
     SCREEN_COST_PER_SCREEN_M, MULTI_PICTURE_DEAL_CYCLES,
     STUDIO_ANNUAL_BUDGET_START_M, next_studio_budget,
     draw_production_trouble, draw_ancillary_surprise,
-    FINANCING_STRUCTURES, PRESALE_OVERAGE_SHARE, PRESALE_SALES_AGENT_FEE_PCT, GENRE_TYPICAL_BUDGET_M, GENRE_SCREEN_DEMAND, TAX_CREDIT_PCT, participation_waterfall,
+    FINANCING_STRUCTURES, PRESALE_OVERAGE_SHARE, PRESALE_SALES_AGENT_FEE_PCT, GENRE_TYPICAL_BUDGET_M, GENRE_SCREEN_DEMAND, MOVIE_LUCK_WEIGHT, TAX_CREDIT_PCT, participation_waterfall,
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, draw_rival_claim, draw_hold_forfeit, draw_rival_poach,
     ORIGIN_MEDIUM_SOURCE_SYNERGY, TALENT_SOURCE_SYNERGY_MULT,
     EXHIBITOR_POSTURES, PAY1_LICENSING_OPTIONS, PAY1_LICENSE_DISCOUNT,
@@ -2504,7 +2504,10 @@ def _complete(ss):
     sorted_log = sorted(ss.movie_log, key=lambda r: r["cycle"])
     projects = [MovieProject(**r["project_kwargs"]) for r in sorted_log]
     critical_scores = [r["critical_score"] for r in sorted_log]
-    score = compute_movie_score(projects, critical_scores)
+    # 25% of each film's graded NPV is what it actually earned (MOVIE_LUCK_WEIGHT).
+    actual_npvs = [r.get("npv") for r in sorted_log]
+    score = compute_movie_score(projects, critical_scores,
+                                actual_npvs=actual_npvs if all(v is not None for v in actual_npvs) else None)
 
     total_c = SUCCESS if score["total"] >= 70 else (WARN if score["total"] >= 50 else DANGER)
     npv_c = SUCCESS if score["avg_ra_npv_m"] >= 0 else DANGER
@@ -2565,8 +2568,10 @@ def _complete(ss):
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
         components = [
             ("Risk-Adj. NPV",           score["risk_adjusted_npv"],       "45%",
-             "Weights your bear-case outcome at 50% rather than scoring on the rosy base case alone — "
-             "rewards risk-aware greenlighting, not blind optimism."),
+             f"{1 - MOVIE_LUCK_WEIGHT:.0%} your decisions, {MOVIE_LUCK_WEIGHT:.0%} luck. The decision part "
+             "weights your bear case at 50% rather than the rosy base case, rewarding risk-aware greenlighting. "
+             "The luck part is what each film actually earned: a breakout helps, a flop hurts. It's the "
+             "movie business."),
             ("Capital Efficiency",      score["capital_efficiency"],      "20%",
              "Total lifetime revenue per P&A dollar spent, averaged across your slate — a real-world "
              "3-6x is healthy; 6x total revenue / P&A scores 100."),

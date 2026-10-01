@@ -2047,7 +2047,15 @@ def nearest_scenario_label(multiplier: float, genre: str = "Drama",
     return min(bounds, key=lambda k: abs(bounds[k] - multiplier))
 
 
-def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[list] = None) -> dict:
+# A little luck (2026-10-01, per user: "there should be a little luck in the
+# movie industry, it's the cultural arts industry"). Each film's graded NPV
+# blends the risk-adjusted NPV (the decision) with what it actually earned
+# (box office, reviews, word of mouth). Decisions still dominate.
+MOVIE_LUCK_WEIGHT = 0.25
+
+
+def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[list] = None,
+                        actual_npvs: Optional[list] = None) -> dict:
     """Composite score across a slate of MovieProjects (one per cycle
     played so far). Weights mirror utils/game_state.py::compute_score's
     pattern but with Day 2's own components — see DESIGN_NOTES.md.
@@ -2063,6 +2071,9 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
         critical_scores = [None] * len(projects)
 
     ra_npvs = [risk_adjusted_npv(p, cs) for p, cs in zip(projects, critical_scores)]
+    if actual_npvs is not None and len(actual_npvs) == len(ra_npvs):
+        ra_npvs = [(1 - MOVIE_LUCK_WEIGHT) * ra + MOVIE_LUCK_WEIGHT * actual
+                   for ra, actual in zip(ra_npvs, actual_npvs)]
     avg_ra_npv = sum(ra_npvs) / len(ra_npvs)
     avg_cap_eff = sum(capital_efficiency(p, critical_score=cs)
                        for p, cs in zip(projects, critical_scores)) / len(projects)

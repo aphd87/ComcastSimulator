@@ -1692,3 +1692,17 @@ class TestDebutSeasonEffects:
         p = _awards_project("Fall/Awards")
         score = strategic_fit_score(p, 80.0)
         assert 0 <= score <= 100
+
+
+# ── A little luck in the grade (2026-10-01) ──────────────────────────────────
+def test_luck_moves_the_score_but_decisions_dominate():
+    from utils.movie_models import MOVIE_LUCK_WEIGHT
+    projects = [_tentpole(cycle=c) for c in range(1, 6)]
+    base = compute_movie_score(projects)
+    ra = base["avg_ra_npv_m"]
+    hit = compute_movie_score(projects, actual_npvs=[ra + 200] * 5)
+    flop = compute_movie_score(projects, actual_npvs=[ra - 200] * 5)
+    assert hit["avg_ra_npv_m"] == pytest.approx(ra + 200 * MOVIE_LUCK_WEIGHT, abs=0.01)
+    assert flop["avg_ra_npv_m"] == pytest.approx(ra - 200 * MOVIE_LUCK_WEIGHT, abs=0.01)
+    assert hit["total"] >= base["total"] >= flop["total"]
+    assert MOVIE_LUCK_WEIGHT < 0.5   # decisions still dominate
