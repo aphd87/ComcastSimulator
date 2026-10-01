@@ -571,7 +571,7 @@ elif ss.active_section in (None, "app"):
         Welcome, {ss.team_name}
       </div>
       <div style="font-size:15px;color:#e0e2ea;margin-top:6px;">
-        Choose your simulation to begin — you can switch anytime from the sidebar.
+        Choose your simulation to begin — you can switch anytime from the menu at the top.
       </div>
     </div>
     """, unsafe_allow_html=True)
