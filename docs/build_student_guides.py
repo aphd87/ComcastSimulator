@@ -247,6 +247,9 @@ def build_tv():
     callout(doc, "key",
             "Your budget is tied to how you're doing. Beat the margin target and next year's budget grows faster. "
             "Miss it and the budget shrinks. One bad year makes the next year harder.")
+    callout(doc, "tip",
+            "**Check your syllabus for which network is due when.** A common setup: play **Oxygen as homework** and submit "
+            "it, then play **Bravo or Peacock in class**. You can open any network directly from the **Choose Your Network** screen.")
 
     doc.add_heading("The three networks", level=2)
     table(doc, ["Network", "Years", "Starting budget", "Pass if margin ≥", "What makes it different"], [
@@ -322,13 +325,18 @@ def build_tv():
     doc.add_heading("🎬 Greenlighting — launch new shows  (optional, up to 3 per year)", level=2)
     para(doc, "There are two ways to add a show:")
     bullets(doc, [
-        "**Acquire a Pitched Show**: buy a ready-made concept from the marketplace. Each one lists its audience, whether it's an international format, and any brand sponsor (sponsors lower the price).",
-        "**Build your own**: fill in the **Show Concept Inputs** (genre, episodes, cost per episode, expected rating). Then compare the **Platform P&L** for TV versus streaming.",
+        "**Acquire a Pitched Show**: buy a ready-made concept from the marketplace. Each one lists its audience, whether it's an international format, and any brand sponsor (sponsors lower the price). "
+        "Some show **🔥 Competitor interest**: a rival network is bidding, so winning it now costs **25% more**, and if you pass, there's a **50% chance** each year the rival signs it and it's gone for good.",
+        "**Build your own**: name it, fill in the **Show Concept Inputs** (genre, episodes, cost per episode, expected rating), and **write a 2–4 sentence pitch** (the concept, the hook, and who it's for). "
+        "You can't greenlight your own show without a pitch.",
     ])
+    callout(doc, "key",
+            "**3 new-show slots per year**, shared between acquiring and building. You get 3 fresh slots each new year. "
+            "There are more pitches than slots, so choose. Switching networks or restarting a level undoes the shows you added in it.")
     steps(doc, [
-        "Pick or build a concept.",
+        "Pick or build a concept (and write its pitch if it's your own).",
         "Check the **3-Year P&L Comparison** and the **Sensitivity Analysis** (what happens if the rating or the cost per episode moves).",
-        "Click **🎬 Greenlight [show] for [network]**. The production cost comes out of your budget **immediately**.",
+        "Click **🎬 Greenlight [show] for [network]**. The production cost comes out of your budget **immediately**, and your pitch is shared on your class's **📋 Pitch Board**.",
     ])
     callout(doc, "tip",
             "Streaming often looks negative in Year 1. That is expected, because it books only one-third of a show's 3-year subscriber value in the first year while paying the full cost up front. "

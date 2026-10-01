@@ -684,16 +684,89 @@ elif ss.active_section == "leaderboard":
 
 elif ss.active_section == "movies":
     # ── Movies — peer section, independent of TV network progress ──────────────
-    st.markdown("""
-    <div style="background:#12141a;border:1px solid #252836;border-radius:10px;
-         padding:20px 24px;margin-bottom:16px;">
-      <div style="font-family:DM Serif Display,serif;font-size:22px;color:#e8c547;">
-        🎬 Universal Pictures
-      </div>
-      <div style="font-size:15px;color:#e0e2ea;margin-top:6px;line-height:1.7;">
-        Theatrical vs. streaming economics: risk-adjusted NPV, release-window strategy, and
-        award-season reception — a concentrated, front-loaded bet, in contrast to TV's
-        steady, amortized portfolio.
+    # Studio card + biography + Mission Brief (2026-10-01), mirroring each TV
+    # network's Network Biography and Mission Brief so Movies opens the same way.
+    mcol1, mcol2 = st.columns([1, 2])
+    with mcol1:
+        st.markdown("""
+        <div class="net-logo-wrap" style="background:linear-gradient(135deg, rgba(26,107,181,.18), rgba(26,29,38,.95));">
+          <div>
+            <div class="net-logo-text" style="color:#4fc3f7;">UNIVERSAL</div>
+            <div class="net-tagline">One film. One check. Five chances.</div>
+            <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;">
+              <span class="badge badge-gray">Est. 1912</span>
+              <span class="badge badge-gray">NBCUniversal / Comcast</span>
+              <span class="badge badge-gray">Universal City, CA</span>
+            </div>
+            <div style="margin-top:8px;">
+              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">KEY AUDIENCE</div>
+              <div style="font-size:14px;color:#e0e2ea;">Global and all-quadrant: families, franchise action fans, and horror audiences</div>
+            </div>
+            <div style="margin-top:8px;">
+              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">BUDGET RANGE</div>
+              <div style="font-size:14px;color:#e0e2ea;">~$15M horror to $150M+ tentpoles, plus P&amp;A</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with mcol2:
+        st.markdown("""
+        <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
+          <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Studio Biography</div>
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.75;">
+            Founded in 1912 by Carl Laemmle, Universal is one of Hollywood's oldest studios. Comcast took
+            control of NBCUniversal in 2011, putting the studio alongside NBC, Bravo, Oxygen, and later
+            Peacock. Its modern slate runs on a few durable engines: global franchises (Jurassic, Fast &amp;
+            Furious), family animation through Illumination (Despicable Me, Minions) and DreamWorks Animation
+            (acquired 2016), and low-budget, high-return horror through its partnership with Blumhouse. In 2020
+            it broke the traditional 90-day theatrical window, sending Trolls World Tour straight to premium
+            video on demand and then agreeing to a 17-day window with AMC. Peacock now gives its films a
+            streaming home of their own. The challenge: unlike a TV slate, every film is a bet paid in full,
+            up front.
+          </div>
+          <div style="margin-top:12px;">
+            <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE FILMS</div>
+            <div style="font-size:15px;color:#e0e2ea;">Jaws, E.T., Jurassic Park, Fast &amp; Furious, Despicable Me,
+              Get Out, Oppenheimer, The Super Mario Bros. Movie, Five Nights at Freddy's</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    _movie_steps = [
+        "🤝 <b>Studio Partnerships, Scouted Concepts, Festivals</b> <i>(optional)</i> — cheaper talent or a ready-made idea",
+        "🎬 <b>Greenlight</b> — logline, genre, budget near the genre's typical level, P&amp;A, screens, financing",
+        "📅 <b>Release Strategy</b> — season; from Film 3, Wide, Platform, or Day-and-Date",
+        "🎟️ <b>Theatrical Simulation</b>, then Pay-1 licensing and PVOD pricing",
+        "🎯 <b>Simulate → Results</b> — repeat for 5 films, then submit your score",
+    ]
+    _movie_steps_html = "".join(
+        f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
+        f'<span style="color:#e0e2ea;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#e0e2ea;">{s}</span></div>'
+        for i, s in enumerate(_movie_steps))
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
+         border-radius:8px;padding:16px 20px;margin:12px 0 16px;">
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:2;min-width:260px;">
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
+          <div style="font-size:15px;color:#4fc3f7;font-weight:600;margin-bottom:6px;">
+            Five films, ten years. Build a slate worth more than it costs.</div>
+          <div style="font-size:15px;color:#e0e2ea;line-height:1.7;">
+            You run Universal's film slate: one film every two years, with a $3.5B studio budget that grows
+            when your films earn and shrinks when they don't. Every dollar of budget and P&amp;A is spent
+            before a single ticket sells. You're graded on <b style="color:#e8eaf0;">risk-adjusted NPV</b>,
+            weighing your bad outcome, not just your hopeful one; 25% of each film's grade is what it actually
+            earned. Pass with an average graded NPV above $0.
+          </div>
+        </div>
+        <div style="flex:1;min-width:220px;">
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+               text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
+          {_movie_steps_html}
+        </div>
       </div>
     </div>
     """, unsafe_allow_html=True)

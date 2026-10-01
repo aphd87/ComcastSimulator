@@ -117,3 +117,11 @@ class TestMoviesTheoryTabShowsOnlyMoviesContent:
         for t in THEORY_CONTENT.values():
             if t["category"] == "tv":
                 assert t["title"] not in text
+
+
+def test_movies_page_has_a_studio_bio_and_mission_brief_like_the_tv_networks():
+    at = _registered_app("movies")
+    text = " ".join(m.value for m in at.markdown)
+    assert "Studio Biography" in text and "Carl Laemmle" in text
+    assert "SIGNATURE FILMS" in text
+    assert "Mission Brief" in text and "Five films, ten years" in text
