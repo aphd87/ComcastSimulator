@@ -64,7 +64,7 @@ The app creates its tables automatically: `slate_leaderboard`, `slate_team_state
 - **Release strategy** (from Film 3): Wide suits tentpoles, Platform suits drama and awards titles, Day-and-Date suits horror and comedy.
 - **Financing:** tax incentive, or presale, which works as insurance and pays off for high-variance films.
 - **Pay-1 window:** keep it on Peacock, take a flat license, or shop it to competitive bid. Students can accept any bid (shorter terms return the film sooner), or reject all bids and go back to market once.
-- **Scoring:** risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Each film's graded NPV is **75% decisions + 25% luck** (what it actually earned). Pass = average graded NPV above $0.
+- **Scoring:** risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Each film's graded NPV is **75% decisions + 25% luck** (what it actually earned). Pass = the **decisions-only** (risk-adjusted) NPV averages above $0, so luck moves the score but can't pass a slate; a team that changes nothing always fails.
 
 ### Peer Pitch Board
 Every pitch a team commits is shared with the other teams in **its own school + class section**: TV shows greenlit from a team's own pitch, and every film a team makes (logline, numbers, and how it actually did). Students see it on the Leaderboard page (**📋 Pitch Board**) and in a "👀 See what other teams in your class have pitched" box beside each pitch form.

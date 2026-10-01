@@ -1706,3 +1706,16 @@ def test_luck_moves_the_score_but_decisions_dominate():
     assert flop["avg_ra_npv_m"] == pytest.approx(ra - 200 * MOVIE_LUCK_WEIGHT, abs=0.01)
     assert hit["total"] >= base["total"] >= flop["total"]
     assert MOVIE_LUCK_WEIGHT < 0.5   # decisions still dominate
+
+
+def test_a_slate_that_changes_nothing_always_fails_even_with_great_luck():
+    # Per user (2026-10-01): "a team that changes nothing should always fail as you need to try."
+    from utils.movie_models import draw_critical_reception
+    D = dict(title="t", genre="Action/Tentpole", budget_m=60.0, pa_spend_m=40.0, star_power=50, screens=3000)
+    for i in range(50):
+        projs = [MovieProject(**D, cycle=c) for c in range(1, 6)]
+        crit = [draw_critical_reception(f"Lazy{i}", c, "Action/Tentpole") for c in range(1, 6)]
+        lucky = compute_movie_score(projs, crit, actual_npvs=[300.0] * 5)   # every film a huge hit
+        assert not lucky["passed"]
+        assert lucky["avg_ra_npv_m"] > 0          # luck still lifts the graded NPV / score...
+        assert lucky["avg_decision_npv_m"] < 0    # ...but the decisions alone don't clear $0

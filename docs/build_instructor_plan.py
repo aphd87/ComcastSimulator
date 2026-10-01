@@ -53,7 +53,7 @@ def build_plan():
         ["**The turn**", "Yesterday students learned to **spread risk across a portfolio**. Today they can't: every film is one concentrated bet, paid up front. And unlike TV, **luck is real** here (25% of each film's grade)."],
         ["**Format**", "Teams of ~4 on **one laptop** (Movies has no Follow Along view). Same team details as yesterday so both scores sit together on the Leaderboard."],
         ["**Timing**", "**0–12 boards → 12–72 play → 72–85 debrief boards.** Five films in 60 minutes ≈ 12 minutes per film."],
-        ["**What counts**", "First submitted score is official. Pass = average graded NPV above $0. Graded NPV = 75% decisions (risk-adjusted) + 25% luck (what each film actually earned)."],
+        ["**What counts**", "First submitted score is official. Pass = decisions-only (risk-adjusted) NPV averages above $0, so luck can't pass a slate. The score uses graded NPV = 75% decisions + 25% luck (what each film actually earned)."],
     ], [1.5, 5.0])
     t = doc.tables[-1]
     t.rows[0]._tr.getparent().remove(t.rows[0]._tr)
@@ -336,7 +336,7 @@ def build_plan():
         ["**Financing**", "Tax incentive almost always helps. Presale is insurance: pays off for high-variance films, a bad trade for likely hits."],
         ["**Pay-1 window**", "Any bid can be accepted; shorter terms return the film to Peacock sooner. One go-back-to-market round per film."],
         ["**Scoring**", "Risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Graded NPV = 75% decisions + 25% luck."],
-        ["**A team that changes nothing**", "Scores in the high 30s and passes or fails on luck. A good contrast for Board 2."],
+        ["**A team that changes nothing**", "Always fails (score in the high 30s): passing depends on decisions alone. A good contrast for Board 2."],
     ], [1.7, 4.8])
     callout(doc, "tip",
             "After class, the Leaderboard's **All Submissions — Raw Data** table has a download button for a CSV of every "

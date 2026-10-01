@@ -525,7 +525,7 @@ def build_movies():
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)
-    para(doc, "Your score is out of 100 points and has four parts. **Passing** means your slate's average graded NPV is above $0. "
+    para(doc, "Your score is out of 100 points and has four parts. **Passing** depends on your decisions alone: your films' risk-adjusted NPV (before luck) must average above $0, so leaving the defaults alone always fails. "
               "Each film's graded NPV is **75% your decisions** (risk-adjusted, so the bear case counts) and **25% luck** (what the film "
               "actually earned). A breakout helps and a flop hurts, but good decisions still matter most.")
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
@@ -537,7 +537,7 @@ def build_movies():
 
     doc.add_heading("Common mistakes", level=1)
     bullets(doc, [
-        "**Leaving the defaults alone.** The default film is an under-funded tentpole, and it loses money.",
+        "**Leaving the defaults alone.** The default film is an under-funded tentpole; a slate of them always fails.",
         "**A cheap blockbuster.** A $20M action film looks cheap and underperforms. Fund the genre properly.",
         "**Maxing out P&A or screens.** Past the genre's sweet spot you're paying for empty seats.",
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",

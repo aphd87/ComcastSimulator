@@ -2071,6 +2071,10 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
         critical_scores = [None] * len(projects)
 
     ra_npvs = [risk_adjusted_npv(p, cs) for p, cs in zip(projects, critical_scores)]
+    # Passing depends on decisions alone (2026-10-01, per user: a team that
+    # changes nothing must always fail -- "you need to try"). Luck moves the
+    # score below, but can never carry a slate over the pass line.
+    avg_decision_npv = sum(ra_npvs) / len(ra_npvs)
     if actual_npvs is not None and len(actual_npvs) == len(ra_npvs):
         ra_npvs = [(1 - MOVIE_LUCK_WEIGHT) * ra + MOVIE_LUCK_WEIGHT * actual
                    for ra, actual in zip(ra_npvs, actual_npvs)]
@@ -2103,7 +2107,8 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
         "strategic_fit":            round(s_fit, 1),
         "portfolio_diversification": round(s_div, 1),
         "avg_ra_npv_m":             round(avg_ra_npv, 2),
-        "passed":                   avg_ra_npv > 0,   # pass/fail gate: positive risk-adjusted NPV, not a fixed margin %
+        "avg_decision_npv_m":       round(avg_decision_npv, 2),
+        "passed":                   avg_decision_npv > 0,   # decisions only; luck can't pass a slate
     }
 
 

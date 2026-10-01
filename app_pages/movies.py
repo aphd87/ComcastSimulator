@@ -2484,6 +2484,8 @@ def _complete(ss):
 
     total_c = SUCCESS if score["total"] >= 70 else (WARN if score["total"] >= 50 else DANGER)
     npv_c = SUCCESS if score["avg_ra_npv_m"] >= 0 else DANGER
+    dec_npv = score.get("avg_decision_npv_m", score["avg_ra_npv_m"])
+    pass_c = SUCCESS if score["passed"] else DANGER
 
     st.markdown(f"""
     <div class="rounded-lg bg-surface2 p-5 mb-5" style="border-left:4px solid #1a6bb5;">
@@ -2491,7 +2493,10 @@ def _complete(ss):
         Full Slate Results — Universal Pictures · {CYCLES_TOTAL * YEARS_PER_CYCLE} Years
       </div>
       <div class="flex gap-8 flex-wrap">
-        <div><div class="text-[9px] text-muted font-mono">AVG RISK-ADJ. NPV</div>
+        <div><div class="text-[9px] text-muted font-mono">PASS / FAIL (DECISIONS ONLY)</div>
+          <div class="text-3xl font-serif" style="color:{pass_c};">{'PASS' if score['passed'] else 'FAIL'}</div>
+          <div class="text-[9px] text-muted font-mono">decisions avg {_fmt_money(dec_npv)} — must be above $0</div></div>
+        <div><div class="text-[9px] text-muted font-mono">AVG GRADED NPV (75% DECISIONS + 25% LUCK)</div>
           <div class="text-3xl font-serif" style="color:{npv_c};">{_fmt_money(score['avg_ra_npv_m'])}</div></div>
         <div><div class="text-[9px] text-muted font-mono">SCORE</div>
           <div class="text-3xl font-serif" style="color:{total_c};">{score['total']:.0f}</div>

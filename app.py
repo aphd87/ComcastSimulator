@@ -759,7 +759,8 @@ elif ss.active_section == "movies":
             when your films earn and shrinks when they don't. Every dollar of budget and P&amp;A is spent
             before a single ticket sells. You're graded on <b style="color:#e8eaf0;">risk-adjusted NPV</b>,
             weighing your bad outcome, not just your hopeful one; 25% of each film's grade is what it actually
-            earned. Pass with an average graded NPV above $0.
+            earned. To <b style="color:#e8eaf0;">pass</b>, your decisions alone (risk-adjusted NPV, before luck) must average
+            above $0: luck moves your score, but it can't pass a slate for you.
           </div>
         </div>
         <div style="flex:1;min-width:220px;">
