@@ -401,7 +401,7 @@ def render():
             'the calendar in the main Renewal flow) — it doesn\'t take any input of its own. '
             'premiere month does NOT change this year\'s annual OCF or score — only the primetime day/hour '
             'grid does that. What premiere month DOES change is the monthly cash-flow shape shown '
-            'on the Scheduling tab: a late-month premiere means a full month\'s cost with only a few days of '
+            'in the "Scheduling & cash-flow tools" box just below Renewal: a late-month premiere means a full month\'s cost with only a few days of '
             'revenue, a real cash-trough risk even though the annual total is unaffected. This view exists so '
             'you can spot months stacked with several premieres before you Simulate.</div>',
             unsafe_allow_html=True)

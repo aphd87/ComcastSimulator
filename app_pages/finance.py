@@ -184,7 +184,7 @@ def render():
     st.markdown("""
     <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
     Ad revenue follows a seasonal curve — summer dip, fall and spring peaks. Content cost follows each
-    show's real premiere month, same curve the Scheduling tab uses. The OCF chart below turns red in
+    show's real premiere month, same curve as the "Scheduling & cash-flow tools" box on the Simulation page. The OCF chart below turns red in
     months where cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
     </div>
     """, unsafe_allow_html=True)
