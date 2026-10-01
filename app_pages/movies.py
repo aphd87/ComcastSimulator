@@ -1267,6 +1267,19 @@ def _decisions(ss):
             st.caption("An original screenplay has no rights to acquire, but also no built-in "
                        "audience — every dollar of awareness has to be earned through P&A and Star Power.")
 
+        # Logline (2026-10-01): always available and required to Simulate --
+        # it used to exist only inside AI Pitch Feedback, so a school without
+        # an API key had nowhere to write one. AI Pitch Feedback grades this text.
+        logline = st.text_area(
+            "Logline (1-3 sentences): who it's about, what they want, and what's in the way",
+            value=d.get("logline", ""), max_chars=500, key=f"movie_logline_{ss.movie_cycle}",
+            placeholder="e.g. A stranded astronaut has to out-think a planet that's actively "
+                        "trying to kill her, using only what she can scavenge...",
+            help="A logline is the one- or two-sentence pitch a studio greenlights from. You don't need a "
+                 "full synopsis. Required before you can Simulate.",
+        )
+        ss.movie_draft["logline"] = logline
+
         # ── AI Pitch Feedback (optional, BYOK — see README.md) ─────────────────
         # 2026-08-17: Movies-side parallel to app_pages/greenlight.py's AI
         # Pitch Feedback panel -- TV had this fully built and Movies never
@@ -1285,15 +1298,11 @@ def _decisions(ss):
         if not api_key_configured():
             st.caption("Ask your instructor to enable AI feedback for this class.")
         else:
-            pitch = st.text_area(
-                "Describe your movie concept in your own words (2-4 sentences)",
-                placeholder="e.g. A stranded astronaut has to out-think a planet that's actively "
-                            "trying to kill her, using only what she can scavenge...",
-                key="movie_pitch_text",
-            )
+            pitch = logline
+            st.caption("Grades your Working Title, Genre, Concept Type, Source Material, and the Logline above.")
             if st.button("🤖 Get AI Feedback", key="movie_grade_button"):
                 if not pitch.strip():
-                    st.warning("Write a short pitch first.")
+                    st.warning("Write your Logline above first.")
                 else:
                     with st.spinner("Grading your pitch..."):
                         grade = grade_movie_concept(title, genre, concept_type, source_material, pitch)
@@ -1540,7 +1549,8 @@ def _decisions(ss):
                  theatrical_run_length=d.get("theatrical_run_length"),
                  theatrical_run_days=d.get("theatrical_run_days"),
                  pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
-                 pvod_chosen_price=d.get("pvod_chosen_price"))
+                 pvod_chosen_price=d.get("pvod_chosen_price"),
+                 logline=d.get("logline", ""))   # display text, not a MovieProject field
     ss.movie_draft = draft
     project = _current_project(ss)
 
@@ -2144,7 +2154,10 @@ def _decisions(ss):
     # never exercises it.
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
     pending_pvod_response = ss.movie_pvod_pending_rejection.get(ss.movie_cycle) is not None
-    can_simulate = resolved_entry is not None and not pending_pvod_response
+    has_logline = len(ss.movie_draft.get("logline", "").strip()) >= 20
+    can_simulate = resolved_entry is not None and not pending_pvod_response and has_logline
+    if not has_logline:
+        st.caption("⚠ Write a Logline in Greenlight → Concept (at least a sentence) before you can Simulate.")
     if resolved_entry is None:
         st.caption("⚠ Run the Theatrical Simulation above before you can Simulate the full year.")
     elif pending_pvod_response:
@@ -2190,6 +2203,7 @@ def _decisions(ss):
         outcome = {
             "cycle":            ss.movie_cycle,
             "project_kwargs":   dict(project.__dict__),
+            "logline":          ss.movie_draft.get("logline", ""),
             "multiplier":       multiplier,
             "scenario_label":   nearest_scenario_label(multiplier, project.genre, project.concept_type),
             "critical_score":   critical_score,

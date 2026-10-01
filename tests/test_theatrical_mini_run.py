@@ -148,6 +148,11 @@ def _movies_app_script(team_name):
     import sys
     sys.path.insert(0, ".")
     st.session_state.team_name = team_name
+    # Simulate needs a logline (2026-10-01); seed one the way a student would
+    # have written it in Greenlight -> Concept before reaching Release.
+    if "movie_draft" not in st.session_state:
+        st.session_state.movie_draft = {
+            "logline": "A stranded astronaut must out-think a planet that's trying to kill her."}
     import app_pages.movies as movies
     movies.render()
 
@@ -654,3 +659,15 @@ def test_reshop_replaces_round_one_and_is_allowed_only_once():
     auction = at.session_state["movie_licensing_auction"][1]
     assert auction["round"] == 2
     assert not any(b.key == "reshop_bids_1" for b in at.button)
+
+
+def test_simulate_stays_locked_without_a_logline():
+    at = _movies_app("MiniRun AppTest Team")
+    at.text_area(key="movie_logline_1").set_value("").run()
+    _mini_run_button(at).click().run()
+    assert not at.exception, list(at.exception)
+    assert _simulate_button(at).disabled is True
+    assert any("Write a Logline" in c.value for c in at.caption)
+    at.text_area(key="movie_logline_1").set_value(
+        "A disgraced robot hunter must stop the machines he once built from taking the city.").run()
+    assert _simulate_button(at).disabled is False
