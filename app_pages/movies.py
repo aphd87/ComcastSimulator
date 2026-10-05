@@ -2377,7 +2377,8 @@ def _decisions(ss):
         auction = ss.movie_licensing_auction.get(ss.movie_cycle)
         if auction is None:
             st.markdown('<p class="text-xs text-ink2 mb-1">Instead of a flat fee, rival platforms bid on the Pay-1 '
-                        'window based on how this film actually opened. Not every platform bids.</p>',
+                        'window based on how this film actually opened. Not every platform bids. (Real '
+                        'streamers, simulated bids.)</p>',
                         unsafe_allow_html=True)
             if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
                          use_container_width=True):

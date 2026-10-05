@@ -541,9 +541,9 @@ def test_accepting_a_bid_sets_license_out_with_the_auction_fee():
 
 
 def test_licensing_appetite_flavor_reads_real_for_both_states():
-    assert "flush with recent hits" in licensing_appetite_flavor("Horizon+", "hot")
-    assert "thin on content" in licensing_appetite_flavor("Horizon+", "hungry")
-    assert licensing_appetite_flavor("Horizon+", None) == ""
+    assert "strong run of its own releases" in licensing_appetite_flavor("Netflix", "hot")
+    assert "needs titles to fill its schedule" in licensing_appetite_flavor("Netflix", "hungry")
+    assert licensing_appetite_flavor("Netflix", None) == ""
 
 
 def test_licensing_bidder_appetite_hot_only_eligible_with_a_strong_slate():

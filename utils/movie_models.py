@@ -891,7 +891,12 @@ TALENT_SOURCE_SYNERGY_MULT = 1.5   # bonus multiplier when origin_medium's mappe
                                      # matches the project's actual source_material -- rewards casting
                                      # that's actually strategic, not just "sign whoever's cheapest/biggest"
 
-RIVAL_STUDIOS = ["Paragon Pictures", "Constellation Studios", "Anchor Bay Media", "Vantage Films"]
+# Real competitor names (2026-10-05, per explicit user request: "use actual
+# competitors like Paramount, Warner Bros., Disney"), same posture as Sports
+# Rights' RIVAL_BIDDERS. Kept at four so festival auctions stay exactly as
+# competitive as before. Everything these companies bid, sign, or earn in
+# the game is simulated -- the UI says so.
+RIVAL_STUDIOS = ["Disney", "Warner Bros.", "Paramount", "Sony Pictures"]
 RIVAL_CLAIM_CHANCE  = 0.20   # chance a rival has already locked the talent's window when you try to hold it
 HOLD_FORFEIT_CHANCE = 0.30   # chance a *successfully placed* hold still falls through by next cycle --
                               # "no guarantee the movie comes together in time" is the whole point of a hold
@@ -1031,17 +1036,19 @@ PAY1_LICENSE_DISCOUNT  = 0.55   # flat fee as a fraction of BASE-case subscriber
 # ── Licensing Marketplace — "different platforms want different cuts" ──────
 # 2026-08-18, per explicit user question: licensing out was previously a
 # single flat-rate choice, as if there were only one possible buyer. Real
-# platforms negotiate different terms -- StreamCo Prime pays a bigger
-# guaranteed fee (a premium buyer), ValueStream+ pays less but is a real,
-# available alternative. "streamco"'s rate is set EXACTLY equal to the
+# platforms negotiate different terms -- one pays a bigger guaranteed fee
+# (a premium buyer), the other pays less but is a real, available
+# alternative. Real platform names since 2026-10-05 (Amazon Prime Video is
+# Universal's real-world post-Peacock Pay-1 partner); keys unchanged so saved
+# sessions still resolve. Fee levels are simulated, not deal terms. "streamco"'s rate is set EXACTLY equal to the
 # original PAY1_LICENSE_DISCOUNT so the pre-existing default reproduces the
 # prior flat-rate behavior exactly -- no silent recalibration for anyone
 # not touching this feature. Reused for BOTH Pay-1 and Pay-2 licensing
 # (see below) -- the same two platforms buy either window, at their own
 # independent rate each time.
 LICENSING_PLATFORMS = {
-    "streamco":    {"name": "StreamCo Prime",  "fee_pct": PAY1_LICENSE_DISCOUNT},
-    "valuestream":  {"name": "ValueStream+",    "fee_pct": 0.40},
+    "streamco":    {"name": "Amazon Prime Video", "fee_pct": PAY1_LICENSE_DISCOUNT},
+    "valuestream":  {"name": "Netflix",            "fee_pct": 0.40},
 }
 DEFAULT_LICENSING_PLATFORM = "streamco"
 
@@ -1058,7 +1065,7 @@ DEFAULT_LICENSING_PLATFORM = "streamco"
 # real buyers who've already seen how the movie opened, bidding
 # accordingly. A distinct fictional bidder set (not the same two named
 # platforms) keeps the two paths visually unambiguous in the UI.
-LICENSING_BIDDERS = ["Horizon+", "Nimbus Stream", "Vantage Play", "Aurora Screen"]
+LICENSING_BIDDERS = ["Netflix", "Amazon Prime Video", "Apple TV+", "HBO Max"]   # real names; bids simulated
 LICENSING_BID_PARTICIPATION_CHANCE = 0.7
 LICENSING_BID_MULT_RANGE = (0.7, 1.3)   # relative to the project's REAL resolved subscriber value
 
@@ -1175,10 +1182,12 @@ def licensing_appetite_flavor(bidder: str, state: Optional[str]) -> str:
     """Real, teachable in-fiction reason a bidder's offer came in higher
     than the base spread -- both directions genuinely mean 'bidding
     aggressively,' just for opposite real-world reasons."""
+    # Neutral, in-game wording: these are real companies, and the "hot" /
+    # "hungry" states are simulated draws, not claims about the businesses.
     if state == "hot":
-        return f"{bidder} is flush with recent hits and bidding aggressively."
+        return f"In this round, {bidder} is riding a strong run of its own releases and bidding aggressively."
     if state == "hungry":
-        return f"{bidder} is thin on content and bidding aggressively to catch up."
+        return f"In this round, {bidder} needs titles to fill its schedule and is bidding aggressively."
     return ""
 
 
