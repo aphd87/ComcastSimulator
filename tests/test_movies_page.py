@@ -90,7 +90,8 @@ def test_decisions_phase_has_expected_widgets():
     # 2026-08-18, Phase 7: Film Festival Acquisitions adds one "Your bid
     # ($M)" number_input per festival (len(FESTIVALS) == 3), rendered
     # before Greenlight -- total is now 3 festival bids + budget/P&A/screens.
-    assert len(at.number_input) == 3 + len(FESTIVALS)   # festival bids, then budget, P&A, screens
+    # festival bids, then budget, P&A, screens, then the Release Plan's run-days cell (2026-10-05)
+    assert len(at.number_input) == 4 + len(FESTIVALS)
     # genre, concept type, source material, financing structure, exhibitor
     # posture (Greenlight) + debut season, Pay-2 licensing (Release Strategy
     # -- shown even at Cycle 1 since "wide_theatrical" != "day_and_date";
@@ -104,7 +105,7 @@ def test_decisions_phase_has_expected_widgets():
     # page load its selectbox isn't rendered yet either.
     # +2 selectboxes (2026-10-05): Universal Library IP and Lead Actor.
     assert len(at.selectbox) == 9
-    assert len(at.slider) == 2         # star power, theatrical run length (days)
+    assert len(at.slider) == 1         # star power (run length is a Release Plan number cell now)
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
 
@@ -454,13 +455,15 @@ def test_exhibitor_posture_and_pay1_licensing_selectboxes_default_correctly():
     at = _movies_app()
     posture_box = _selectbox(at, "Exhibitor Negotiation Posture")
     debut_season_box = _selectbox(at, "Debut Season")
-    pay1_box = at.selectbox[[b.label for b in at.selectbox].index("Debut Season") + 1]   # Pay-1, right after debut season
+    release_box = _selectbox(at, "Release Strategy")   # right after Debut Season in the Release Plan row
     assert posture_box.value == "standard"
     assert len(posture_box.options) == 3
     assert debut_season_box.value == "Off-Peak"
     assert len(debut_season_box.options) == 6
-    assert pay1_box.value == "keep"
-    assert len(pay1_box.options) == 2
+    # Cycle 1: only Wide Theatrical exists yet, and Pay-1 waits for the Theatrical Sim.
+    assert release_box.value == "wide_theatrical" and release_box.disabled
+    assert not any(b.label == "Pay-1 Window" for b in at.selectbox)
+    assert at.session_state["movie_draft"].get("pay1_licensing", "keep") == "keep"
 
 
 def test_selecting_debut_season_updates_draft_and_simulated_outcome():
@@ -478,10 +481,10 @@ def test_selecting_debut_season_updates_draft_and_simulated_outcome():
 
 def test_pay1_licensing_selectbox_is_hidden_for_day_and_date():
     at = _movies_app_at_cycle_3()
-    at.button(key="pick_day_and_date").click().run()
+    _selectbox(at, "Release Strategy").set_value("day_and_date").run()
     assert not at.exception
-    caption_text = "\n".join(c.value for c in at.caption)
-    assert "Pay-1 licensing isn't available for Day-and-Date" in caption_text
+    assert not any(b.label == "Pay-1 Window" for b in at.selectbox)
+    assert any("Peacock (D&amp;D)" in md.value for md in at.markdown)
     assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"
 
 
@@ -610,14 +613,14 @@ def _movies_app_at_cycle_3() -> AppTest:
 
 def test_windowing_unlocked_at_cycle_3_shows_choose_strategy_buttons():
     at = _movies_app_at_cycle_3()
-    choose_buttons = [b for b in at.button if b.key and b.key.startswith("pick_")]
-    assert len(choose_buttons) == 3   # wide_theatrical, platform, day_and_date
+    release_box = _selectbox(at, "Release Strategy")
+    assert release_box.options and len(release_box.options) == 3   # wide, platform, day-and-date
+    assert not release_box.disabled
 
 
 def test_clicking_choose_strategy_updates_the_draft_with_no_exceptions():
     at = _movies_app_at_cycle_3()
-    day_and_date_button = next(b for b in at.button if b.key == "pick_day_and_date")
-    day_and_date_button.click().run()
+    _selectbox(at, "Release Strategy").set_value("day_and_date").run()
     assert not at.exception, f"Choose-strategy click raised: {list(at.exception)}"
     assert at.session_state["movie_draft"]["release_strategy"] == "day_and_date"
     assert at.session_state["movie_phase"] == "decisions"   # no phase transition, just a selection
@@ -977,3 +980,30 @@ def test_your_slate_table_renders_at_cycle_3_with_two_prior_cycles():
 def test_your_slate_table_absent_at_cycle_1_with_no_prior_cycles():
     at = _movies_app()
     assert not any("Your Slate So Far" in md.value for md in at.markdown)
+
+
+# ── Release Plan table: Pay-2 comes due a cycle after release (2026-10-05) ──
+def test_release_plan_lets_you_choose_pay2_for_earlier_films_and_reprices_their_npv():
+    at = _movies_app_at_cycle_3_with_two_prior_logs()
+    pay2_cells = {sb.label: sb for sb in at.selectbox if sb.label.startswith("Pay-2 for Film")}
+    assert set(pay2_cells) == {"Pay-2 for Film 1", "Pay-2 for Film 2"}
+    assert all(sb.value is None for sb in pay2_cells.values())   # a real choice, no silent default
+    caption_text = " ".join(c.value for c in at.caption)
+    assert "Pay-2 (earlier films)" in caption_text                # gates Simulate until chosen
+
+    from utils.movie_models import MovieProject, LICENSING_PLATFORMS
+    film1 = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    npv_before = film1["npv"]
+    platform = next(iter(LICENSING_PLATFORMS))
+    kw = film1["project_kwargs"]
+    expected_delta = (MovieProject(**{**kw, "pay2_licensing": "license_out", "pay2_platform": platform})
+                      .npv(film1["multiplier"], film1["critical_score"])
+                      - MovieProject(**kw).npv(film1["multiplier"], film1["critical_score"]))
+
+    pay2_cells["Pay-2 for Film 1"].set_value(platform).run()
+    assert not at.exception, list(at.exception)
+    film1 = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
+    assert film1["project_kwargs"]["pay2_licensing"] == "license_out"
+    assert film1["project_kwargs"]["pay2_platform"] == platform
+    assert film1["pay2_decided_cycle"] == 3
+    assert film1["npv"] == pytest.approx(npv_before + expected_delta)

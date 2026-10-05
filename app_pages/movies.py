@@ -351,14 +351,31 @@ def _step_status(ss) -> list:
                or any(signed <= cyc + 1 < signed + MULTI_PICTURE_DEAL_CYCLES
                       for signed in ss.movie_multi_picture_deals.values()))
     release = ss.movie_theatrical_resolved.get(cyc) is not None
+    pay2 = [("Pay-2 (earlier films)", "release", False,
+             "choose Pay-2 for each earlier film in the Release Plan table")] \
+        if _pending_pay2_films(ss) else []
     return [
         ("Partnerships", "talent", partnerships, "sign a Studio Partnership"),
         ("Scouted Concepts", "scouted", scouted, "option at least one Scouted Concept"),
         ("Festivals", "festivals", festivals, "bid on at least one festival film"),
         ("Greenlight", "greenlight", greenlight, "write your pitch / logline"),
         ("Holding Deals", "holding", holding, "place a Holding Deal or sign a Multi-Picture Deal"),
+    ] + pay2 + [
         ("Release", "release", release, "run the Theatrical Simulation"),
     ]
+
+
+def _numbered_steps(ss) -> list:
+    """(number, label, anchor, done, todo). Numbers match the section titles
+    1-6; the Pay-2 step for earlier films lives inside section 6."""
+    out, n = [], 0
+    for label, anchor, done, todo in _step_status(ss):
+        if label.startswith("Pay-2"):
+            out.append((6, label, anchor, done, todo))
+        else:
+            n += 1
+            out.append((n, label, anchor, done, todo))
+    return out
 
 
 def _step_bar(ss):
@@ -366,7 +383,7 @@ def _step_bar(ss):
     they are in this film's cycle and what's left before Simulate."""
     steps = _step_status(ss)
     chips = []
-    for i, (label, anchor, done, _) in enumerate(steps, start=1):
+    for i, label, anchor, done, _ in _numbered_steps(ss):
         bg, border, mark = (("rgba(102,187,106,.15)", SUCCESS, "✓") if done
                             else ("#1a1d26", "#252836", str(i)))
         chips.append(f'<a href="#{anchor}" style="text-decoration:none;color:#ffffff;background:{bg};'
@@ -406,6 +423,7 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
             "Lead":            TALENT_PARTNERS[lead]["name"] if lead in TALENT_PARTNERS
                                else f"Unnamed (Star Power {kw['star_power']})",
             "Release":         RELEASE_LABELS.get(kw["release_strategy"], kw["release_strategy"]),
+            "Run (days)":      p.window_days(),
             "Capital at Risk": f"${r['capital_at_risk']:.0f}M",
             "Opening Wknd":    f"${p.opening_weekend():.0f}M",
             "Worldwide B.O.":  f"${worldwide:.0f}M",
@@ -418,6 +436,24 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
                 f'<span class="text-xs text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV '
                 f'{_fmt_money(total)})</span></div>', unsafe_allow_html=True)
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def _pending_pay2_films(ss) -> list:
+    """Earlier films whose Pay-2 window opens now and hasn't been decided
+    yet (2026-10-05). Day-and-Date films are excluded -- that strategy
+    commits the title to Peacock, same as Pay-1."""
+    return [r for r in sorted(ss.movie_log, key=lambda r: r["cycle"])
+            if r["cycle"] < ss.movie_cycle and r.get("pay2_decided_cycle") is None
+            and r["project_kwargs"].get("release_strategy") != "day_and_date"]
+
+
+def _film_npv(entry: dict, kw: dict) -> float:
+    """A logged film's NPV under (possibly changed) project kwargs, with the
+    same resolved draws it was simulated with."""
+    return MovieProject(**kw).npv(entry["multiplier"], entry["critical_score"],
+                                  pvod_mult=entry.get("pvod_mult", 1.0),
+                                  theme_park_mult=entry.get("theme_park_mult", 1.0),
+                                  ewom_mult=entry.get("ewom_mult", 1.0))
 
 
 def _contracted_talent(ss) -> list:
@@ -1902,436 +1938,317 @@ def _decisions(ss):
     # window only makes sense once the concept it's for actually exists.
     _section_holding_deals(ss, resolved_hold_key)
 
-    # ── Decision 2: Release Strategy ─────────────────────────────────────────
+    # ── 6 · Release Plan — one row per film in the slate ─────────────────────
+    # 2026-10-05, per explicit user request: "there should be a slate table
+    # for release strategy on down through the theatrical simulate and the
+    # simulate... that way, students can make decisions for entire slate
+    # quickly and efficiently." One row per film, windows in the order they
+    # open. Earlier films are locked (their real choices and result) except
+    # Pay-2, which comes due the cycle after release; the current film's row
+    # holds every release decision; later slots are placeholders. Follow-ups
+    # that need a real interaction (Pay-1 competitive bids, PVOD market
+    # rejections) render right under the table once they're triggered.
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">6 · Release Plan — Your Slate</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="text-xs text-ink2 mb-2">One row per film, windows in the order they open: <b>theaters</b> '
+        '(release type and run length) → <b>PVOD</b> (premium rental at home; you set the price) → <b>Pay-1</b> '
+        '(first streaming window: keep it on Peacock or license it) → <b>Pay-2</b> (second window, '
+        f'~{PAY2_WINDOW_MONTH/12:.0f} years out, decided the cycle after release). Fill in this film\'s row, click '
+        '<b>🎬 Theatrical Sim</b>, then set PVOD and Pay-1 with the real opening in hand.</p>',
+        unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">6 · Release Strategy</div>', unsafe_allow_html=True)
+    d = ss.movie_draft   # the live draft (Greenlight just rebuilt it), not the start-of-run copy
+    windowing_unlocked = ss.movie_cycle >= WINDOWING_UNLOCK_CYCLE
+    strategies_shown = RELEASE_STRATEGIES if windowing_unlocked else ["wide_theatrical"]
+    final_film = ss.movie_cycle >= CYCLES_TOTAL
+    platform_names = {k: v["name"] for k, v in LICENSING_PLATFORMS.items()}
 
-    # ── Seasonality / Debut Timing ───────────────────────────────────────────
-    # Phase 5, 2026-08-05: the release-*timing* decision Movies never had
-    # before (release_strategy below is wide/platform/day-and-date -- a
-    # different axis entirely, decided second so a season's crowding/genre-
-    # fit effect is visible on every release-strategy preview card below).
-    # Summer/Holiday open bigger but crowd out awards recall; Fall/Awards
-    # opens softer but is the deliberate on-ramp into the real awards
-    # calendar. "Off-Peak" is a real strategy too, not a placeholder -- many
-    # mid-budget films release in an unremarkable week specifically to dodge
-    # summer/holiday crowding.
-    debut_season = st.selectbox(
+    widths = [0.45, 1.5, 1.25, 1.7, 0.95, 1.15, 1.75, 1.75, 1.5]
+    headers = ["Film", "Title", "Season", "Release", "Run (days)", "PVOD price", "Pay-1", "Pay-2", "Status"]
+    for c, h in zip(st.columns(widths), headers):
+        c.markdown(f'<div class="font-mono" style="font-size:12px;border-bottom:1px solid #252836;'
+                   f'padding-bottom:4px;">{h}</div>', unsafe_allow_html=True)
+
+    def _cell(col, text):
+        col.markdown(f'<div style="font-size:13px;padding-top:8px;line-height:1.35;">{text}</div>',
+                     unsafe_allow_html=True)
+
+    def _pay1_text(kw):
+        if kw.get("release_strategy") == "day_and_date" or kw.get("pay1_licensing", "keep") == "keep":
+            return "Peacock"
+        if kw.get("pay1_auction_winner"):
+            return f"{kw['pay1_auction_winner']} (bid)"
+        return platform_names.get(kw.get("pay1_platform"), "Licensed")
+
+    def _pay2_text(kw):
+        if kw.get("pay2_licensing", "keep") == "keep":
+            return "Peacock"
+        return platform_names.get(kw.get("pay2_platform"), "Licensed")
+
+    def _apply_pay2(cyc: int):
+        """on_change for an earlier film's Pay-2 cell: re-prices that film's
+        NPV with the same resolved draws, only the Pay-2 window changed."""
+        pick = ss.get(f"pay2_slate_{cyc}")
+        entry = next((r for r in ss.movie_log if r["cycle"] == cyc), None)
+        if entry is None or pick is None:
+            return
+        kw = entry["project_kwargs"]
+        new_kw = ({**kw, "pay2_licensing": "keep"} if pick == "keep"
+                  else {**kw, "pay2_licensing": "license_out", "pay2_platform": pick})
+        delta = _film_npv(entry, new_kw) - _film_npv(entry, kw)
+        mults = dict(pvod_mult=entry.get("pvod_mult", 1.0), theme_park_mult=entry.get("theme_park_mult", 1.0),
+                     ewom_mult=entry.get("ewom_mult", 1.0))
+        p_new = MovieProject(**new_kw)
+        entry["project_kwargs"] = new_kw
+        entry["npv"] += delta
+        entry["irr"] = p_new.irr(entry["multiplier"], entry["critical_score"], **mults)
+        entry["total_revenue"] = p_new.total_revenue(entry["multiplier"], entry["critical_score"], **mults)
+        entry["pay2_decided_cycle"] = ss.movie_cycle
+        entry["pay2_npv_delta"] = entry.get("pay2_npv_delta", 0.0) + delta
+
+    log_by_cycle = {r["cycle"]: r for r in ss.movie_log}
+    current_row = None
+    for cyc in range(1, CYCLES_TOTAL + 1):
+        row = st.columns(widths)
+        if cyc == ss.movie_cycle:
+            current_row = row     # filled in below, once the theatrical state is known
+            continue
+        _cell(row[0], str(cyc))
+        entry = log_by_cycle.get(cyc)
+        if entry is None:
+            _cell(row[1], f"<i>Greenlight in {_cycle_years_label(cyc)}</i>")
+            for c in row[2:]:
+                _cell(c, "—")
+            continue
+        kw = entry["project_kwargs"]
+        is_dd = kw.get("release_strategy") == "day_and_date"
+        _cell(row[1], escape(kw["title"]))
+        _cell(row[2], kw.get("debut_season", "Off-Peak"))
+        _cell(row[3], RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy")))
+        _cell(row[4], f"{MovieProject(**kw).window_days()}")
+        _cell(row[5], "—" if is_dd or not kw.get("pvod_chosen_price") else f"\\${kw['pvod_chosen_price']:.2f}")
+        _cell(row[6], _pay1_text(kw))
+        editable_pay2 = (not is_dd and cyc < ss.movie_cycle
+                         and entry.get("pay2_decided_cycle") in (None, ss.movie_cycle))
+        if editable_pay2:
+            keep_npv = _film_npv(entry, {**kw, "pay2_licensing": "keep"})
+            deltas = {k: _film_npv(entry, {**kw, "pay2_licensing": "license_out", "pay2_platform": k}) - keep_npv
+                      for k in LICENSING_PLATFORMS}
+            opts = ["keep"] + list(LICENSING_PLATFORMS)
+            decided = entry.get("pay2_decided_cycle") is not None
+            cur = ("keep" if kw.get("pay2_licensing", "keep") == "keep" else kw.get("pay2_platform"))
+            row[7].selectbox(
+                f"Pay-2 for Film {cyc}", opts, index=opts.index(cur) if decided and cur in opts else None,
+                placeholder="⚠ Choose…", key=f"pay2_slate_{cyc}", label_visibility="collapsed",
+                format_func=lambda k, deltas=deltas: ("Keep on Peacock" if k == "keep" else
+                                                     f"{platform_names[k]} ({'+' if deltas[k] >= 0 else '−'}${abs(deltas[k]):.1f}M)"),
+                on_change=_apply_pay2, args=(cyc,),
+                help="Pay-2 is due now for this film. The $ next to each platform is how much licensing to it "
+                     "changes this film's NPV versus keeping it on Peacock.")
+        elif is_dd:
+            _cell(row[7], "Peacock (D&amp;D)")
+        elif cyc > ss.movie_cycle:
+            _cell(row[7], "—")
+        else:
+            _cell(row[7], _pay2_text(kw))
+        _cell(row[8], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
+
+    # ── The current film's row ────────────────────────────────────────────────
+    _cell(current_row[0], f"<b>{ss.movie_cycle}</b>")
+    _cell(current_row[1], f"<b>{escape(title)}</b><br><span style='font-size:11px;'>this film</span>")
+
+    # Debut Season (Phase 5, 2026-08-05): release timing. Summer/Holiday open
+    # bigger but crowd out awards recall; Fall/Awards opens softer but is the
+    # awards on-ramp; Off-Peak is the neutral baseline.
+    debut_season = current_row[2].selectbox(
         "Debut Season", DEBUT_SEASONS,
         index=DEBUT_SEASONS.index(d.get("debut_season", "Off-Peak")) if d.get("debut_season") in DEBUT_SEASONS else 0,
+        label_visibility="collapsed",
         help="Summer Tentpole/Holiday open bigger (more audience, more competition) but a summer release "
-             "rarely gets recalled by awards voters even with great reviews. Fall/Awards opens softer but "
-             "is the real industry on-ramp into awards season. Off-Peak is neutral either way -- a genuine "
-             "strategy for dodging crowded weeks, not a placeholder.",
+             "rarely gets recalled by awards voters. Fall/Awards opens softer but is the industry on-ramp "
+             "into awards season. Off-Peak is neutral.",
     )
     ss.movie_draft["debut_season"] = debut_season
     project_base = MovieProject(**{**project.__dict__, "debut_season": debut_season})
-    season_open_mult = (SEASON_OPENING_MULT.get(debut_season, 1.0)
-                         * SEASON_GENRE_SYNERGY.get(debut_season, {}).get(genre, 1.0))
-    season_recall = SEASON_AWARDS_RECALL.get(debut_season, 1.0)
-    season_notes = []
-    if season_open_mult != 1.0:
-        season_notes.append(f"{'+' if season_open_mult > 1 else ''}{(season_open_mult - 1) * 100:.0f}% opening intensity")
-    if genre in AWARDS_ELIGIBLE_GENRES and season_recall != 1.0:
-        season_notes.append(f"{season_recall:.0%} awards-bump recall (vs. full recall for a well-timed release)")
-    if season_notes:
-        st.caption(f"📅 {' · '.join(season_notes)} for {genre} released {debut_season}.")
-
-    # Progressive windowing — Zach Schlessel's brief: the theatrical vs.
-    # streaming vs. PVOD tradeoff is a "Year 3 Introduction," not available
-    # from the start. Cycles before WINDOWING_UNLOCK_CYCLE are wide-
-    # theatrical only; the strategy choice itself doesn't exist yet.
-    windowing_unlocked = ss.movie_cycle >= WINDOWING_UNLOCK_CYCLE
-    if not windowing_unlocked:
-        ss.movie_draft["release_strategy"] = "wide_theatrical"   # defensive — no other choice is reachable
-        st.markdown(f"""
-        <div class="rounded-lg border border-line bg-surface2 p-4 mb-3" style="border-left:3px solid #ffa726;">
-          <div class="text-xs" style="color:#ffb74d;font-weight:600;margin-bottom:4px;">
-            🔒 Windowing strategy unlocks {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}
-          </div>
-          <div class="text-xs text-ink2">This early, every release is Wide Theatrical — the platform/
-          day-and-date tradeoff (and the streaming infrastructure that makes it viable) isn't part of
-          the studio's playbook yet. You'll get the full choice starting {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}.</div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(
-            '<p class="text-xs text-ink2 mb-3">The direct extension of TV/Streaming\'s linear-vs-SVOD Green Light call — '
-            'day-and-date trades theatrical box office for immediate, dollarized Peacock subscriber value. '
-            'Ground truth: 2021\'s WarnerMedia/HBO Max day-and-date experiment, and Universal\'s post-2020 '
-            'shortened theatrical window with AMC.</p>', unsafe_allow_html=True)
-
-    strategies_shown = RELEASE_STRATEGIES if windowing_unlocked else ["wide_theatrical"]
-    cols = st.columns(len(strategies_shown))
-    previews = {}
-    for i, strat in enumerate(strategies_shown):
-        p = MovieProject(**{**project_base.__dict__, "release_strategy": strat})
-        ra_npv = risk_adjusted_npv(p)
-        previews[strat] = (p, ra_npv)
-        with cols[i]:
-            c = SUCCESS if ra_npv >= 0 else DANGER
-            selected = ss.movie_draft.get("release_strategy", "wide_theatrical") == strat
-            border = "border:2px solid #1a6bb5;" if selected else "border:1px solid #252836;"
-            st.markdown(f"""
-            <div class="rounded-lg bg-surface2 p-4 h-full" style="{border}">
-              <div class="font-mono text-xs uppercase tracking-wider text-ink mb-2">{RELEASE_LABELS[strat]}</div>
-              <div class="text-2xl font-serif" style="color:{c};">{_fmt_money(ra_npv)}</div>
-              <div class="text-[10px] text-muted font-mono mt-1">risk-adjusted NPV</div>
-              <div class="text-xs text-ink2 mt-3">Window: {p.window_days()}d theatrical
-                {'(skipped — straight to Peacock)' if strat == 'day_and_date' else ''}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if windowing_unlocked:
-                if st.button(f"Choose {RELEASE_LABELS[strat]}", key=f"pick_{strat}", use_container_width=True):
-                    ss.movie_draft["release_strategy"] = strat
-                    st.rerun()
-
-    st.divider()
-    chosen = ss.movie_draft.get("release_strategy", "wide_theatrical")
-    st.markdown(f'<p class="text-sm text-ink2">Currently selected: <b class="text-ink">{RELEASE_LABELS[chosen]}</b></p>',
-                unsafe_allow_html=True)
-
-    # Pay-1 Window Licensing (2026-08-18) moved below -- see "Early Licensing
-    # Decision" after the Theatrical Mini-Run resolves. platform_labels is
-    # still defined here, ahead of Pay-2 immediately below, which also uses it.
-    platform_labels = {k: f"{v['name']} (~{v['fee_pct']:.0%} of base-case subscriber value)"
-                        for k, v in LICENSING_PLATFORMS.items()}
-
-    # ── Pay-2 Window Licensing ───────────────────────────────────────────────
-    # 2026-08-18, per explicit user question ("where is pay 2 window...and
-    # the full windowing for each of the movies?"). Real secondary window,
-    # well after Pay-1 exhausts -- see PAY2_WINDOW_MONTH. Same day-and-date
-    # exclusion as Pay-1.
-    if chosen != "day_and_date":
-        st.markdown('<div class="section-title mt-3">Pay-2 Window Licensing '
-                    '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;line-height:1.6;">'
-            '<b style="color:#ffffff;">Terms used here and in Pay-1 above:</b> '
-            '<b>Pay-1 window</b> = the first licensing window, right after theatrical, when the movie is at its most valuable. '
-            '<b>Pay-2 window</b> = a smaller, later window that only opens once Pay-1 has run its course. '
-            '<b>Subscriber value</b> = what the movie is worth to Peacock in acquired/retained subscribers if you keep it '
-            '(a dollar estimate built off its box office and genre). '
-            '<b>Base-case</b> = the middle, most-likely performance scenario (versus a bear/worst-case or bull/best-case). '
-            '<b>Flat fee / % of base-case subscriber value</b> = if you license a window out instead of keeping it, the '
-            'platform pays you a guaranteed dollar amount up front, sized as a percentage of that base-case subscriber-value '
-            'estimate (e.g. "40%" = a guaranteed fee worth 40% of what the title would likely be worth to you if you kept it) — '
-            'fixed and certain either way, unlike "Keep," where your actual payoff still depends on how the movie performs.'
-            '</div>', unsafe_allow_html=True)
-        st.caption(f"~{PAY2_WINDOW_MONTH/12:.0f} years after release, once Pay-1 exhausts, a real "
-                   f"secondary licensing window opens — smaller than Pay-1 (~{PAY2_VALUE_PCT_OF_PAY1:.0%} "
-                   f"of its scale), but real found money on a title that's otherwise just sitting in "
-                   f"library. \"Keep\" is a genuine, valid choice too — not every title needs a Pay-2 deal.")
-        pay2_labels = {
-            "keep": "Keep — no Pay-2 deal pursued",
-            "license_out": "License Out (Pay-2) — a real, smaller secondary window",
-        }
-        pay2_choice = st.selectbox(
-            "Pay-2 Window", PAY2_LICENSING_OPTIONS,
-            index=PAY2_LICENSING_OPTIONS.index(ss.movie_draft.get("pay2_licensing", "keep")),
-            format_func=lambda k: pay2_labels[k],
-            key="pay2_licensing_select",
-        )
-        ss.movie_draft["pay2_licensing"] = pay2_choice
-        if pay2_choice == "license_out":
-            pay2_platform = st.selectbox(
-                "Which Platform (Pay-2)", list(LICENSING_PLATFORMS.keys()),
-                index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay2_platform", DEFAULT_LICENSING_PLATFORM)),
-                format_func=lambda k: platform_labels[k],
-                key="pay2_platform_select",
-            )
-            ss.movie_draft["pay2_platform"] = pay2_platform
-    else:
-        ss.movie_draft["pay2_licensing"] = "keep"
-
-    # ── Theatrical Mini-Run ──────────────────────────────────────────────────
-    # 2026-08-18: real two-stage resolution -- instead of every draw
-    # resolving together at the final Simulate button, the theatrical
-    # outcome (box office, critical reception, and every independent risk
-    # axis -- Production Trouble, AI Tooling Setback, Ancillary Surprise,
-    # eWOM & Piracy) locks in HERE, before PVOD pricing or Pay-1 licensing
-    # exist as decisions -- per explicit user request ("we need a button
-    # for mini simulation for theatrical run"). Safe to resolve this early
-    # because every draw involved is a pure function of (team, cycle,
-    # genre, concept_type, ai_production_tools, source_material) -- see
-    # _resolve_movie_outcome's docstring. The Simulate button below reuses
-    # this exact locked result rather than re-rolling, so the two stages
-    # are provably consistent, not just "probably" -- same function, same
-    # inputs, same output (see tests/test_movies_page.py). Replaces the
-    # old Short/Standard/Extended tier picker with an exact day count (per
-    # explicit user request: "students can determine run based on # of
-    # days") -- run_days_box_office_mult() reproduces the tier picker's
-    # own calibrated multiplier exactly at the three anchor day counts.
-    st.markdown('<a id="theatrical"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title mt-3">🎬 Run Theatrical Simulation</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Pick exactly how many days this movie stays in theaters, then '
-        'run the mini-simulation to lock in its real opening — before you decide PVOD pricing or Pay-1 '
-        'licensing, the same way a real studio watches opening weekend before making those calls.</p>',
-        unsafe_allow_html=True)
-    default_days = ss.movie_draft.get("theatrical_run_days") or THEATRICAL_RUN_LENGTHS["Standard"]
-    theatrical_run_days = st.slider(
-        "Theatrical Run Length (days)", RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, int(default_days), step=1,
-        help=f"Short≈{THEATRICAL_RUN_LENGTHS['Short']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Short']:.2f}x) · "
-             f"Standard≈{THEATRICAL_RUN_LENGTHS['Standard']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Standard']:.2f}x) · "
-             f"Extended≈{THEATRICAL_RUN_LENGTHS['Extended']}d ({RUN_LENGTH_BOX_OFFICE_MULT['Extended']:.2f}x) — "
-             "longer runs capture more cumulative box office (diminishing returns, not linear) but delay "
-             "every downstream window, costing real NPV through discounting. Universal's own real "
-             "benchmark: at least 30 days if a film opens above $50M.",
+    ra_by_strategy = {s: risk_adjusted_npv(MovieProject(**{**project_base.__dict__, "release_strategy": s}))
+                      for s in strategies_shown}
+    cur_strat = d.get("release_strategy", "wide_theatrical")
+    if cur_strat not in strategies_shown:
+        cur_strat = strategies_shown[0]
+    release_key = f"release_strategy_{ss.movie_cycle}"
+    if ss.get(release_key) not in strategies_shown:
+        ss[release_key] = cur_strat   # seed once; the key alone then carries the student's pick
+    chosen = current_row[3].selectbox(
+        "Release Strategy", strategies_shown,
+        key=release_key,
+        # Plain labels on purpose: on older Streamlit (the local 1.45 install)
+        # a widget's identity includes its option labels, so live NPVs in
+        # them would reset the pick whenever a number moved. The NPV of each
+        # option is shown in the line under the table instead.
+        format_func=lambda s: RELEASE_LABELS[s],
+        disabled=not windowing_unlocked, label_visibility="collapsed",
+        help="Each option's risk-adjusted NPV for this film is listed under the table. Wide Theatrical suits tentpoles; "
+             "Platform opens small and expands (strongest for drama/awards); Day-and-Date premieres in theaters "
+             "and on Peacock together, giving up box office for subscriber value."
+             + ("" if windowing_unlocked else
+                f" Only Wide Theatrical is available until {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}."),
     )
+    ss.movie_draft["release_strategy"] = chosen
+
+    default_days = d.get("theatrical_run_days") or THEATRICAL_RUN_LENGTHS["Standard"]
+    theatrical_run_days = int(current_row[4].number_input(
+        "Theatrical Run Length (days)", RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, int(default_days), step=5,
+        label_visibility="collapsed",
+        help=f"Short≈{THEATRICAL_RUN_LENGTHS['Short']}d · Standard≈{THEATRICAL_RUN_LENGTHS['Standard']}d · "
+             f"Extended≈{THEATRICAL_RUN_LENGTHS['Extended']}d. Longer runs capture more box office (diminishing "
+             "returns) but delay every later window, which costs NPV through discounting. Universal's own "
+             "benchmark: at least 30 days if a film opens above $50M.",
+    ))
     ss.movie_draft["theatrical_run_days"] = theatrical_run_days
-    ss.movie_draft["theatrical_run_length"] = None   # superseded by the exact day count above
-    st.caption(f"Box-office multiplier at {theatrical_run_days} days: {run_days_box_office_mult(theatrical_run_days):.2f}x")
+    ss.movie_draft["theatrical_run_length"] = None   # superseded by the exact day count
 
     current_lock_inputs = {"genre": genre, "concept_type": concept_type,
-                            "ai_production_tools": ai_production_tools, "source_material": source_material}
+                           "ai_production_tools": ai_production_tools, "source_material": source_material}
     resolved_entry = ss.movie_theatrical_resolved.get(ss.movie_cycle)
-    if resolved_entry is not None and resolved_entry["locked_inputs"] != current_lock_inputs:
-        st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) "
-                "changed since you last ran the Theatrical Simulation — run it again to lock in a fresh result.")
+    inputs_changed = resolved_entry is not None and resolved_entry["locked_inputs"] != current_lock_inputs
+    if inputs_changed:
         resolved_entry = None
+    live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen, "debut_season": debut_season,
+                                   "theatrical_run_days": theatrical_run_days, "theatrical_run_length": None})
 
-    if resolved_entry is None:
-        if st.button("🎬 Run Theatrical Simulation", key=f"run_theatrical_{ss.movie_cycle}", use_container_width=True):
-            live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen,
-                                            "theatrical_run_days": theatrical_run_days,
-                                            "theatrical_run_length": None})
-            ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
-            st.rerun()
-        st.caption("Run the Theatrical Simulation above to unlock PVOD pricing and Pay-1 licensing decisions below.")
+    # PVOD price -- band sized off the REAL theatrical result, so it only
+    # exists after the Theatrical Sim. The input defaults from the price the
+    # student picked (pvod_selected_price), never from pvod_chosen_price,
+    # which also carries the Market Checks' post-cut price (2026-08-18 fix).
+    pvod_price = None
+    lo = hi = None
+    if chosen == "day_and_date":
+        _cell(current_row[5], "—")
+        ss.movie_draft["pvod_chosen_price"] = None
+        ss.movie_draft["pvod_selected_price"] = None
+    elif resolved_entry is None:
+        _cell(current_row[5], "<i>after Theatrical Sim</i>")
+        ss.movie_draft["pvod_chosen_price"] = None
+        ss.movie_draft["pvod_selected_price"] = None
     else:
-        r = resolved_entry
-        live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen,
-                                        "theatrical_run_days": theatrical_run_days,
-                                        "theatrical_run_length": None})
-        dom_bo = live_project.domestic_box_office(r["multiplier"])
-        stars = multiplier_to_stars(r["multiplier"], genre, concept_type)
-        star_str = "⭐" * stars + "☆" * (5 - stars)
-        bo_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
-        cs_c = SUCCESS if r["critical_score"] >= 55 else (WARN if r["critical_score"] >= 35 else DANGER)
-        event_notes = [n for n in (r["trouble_reason"], r["ai_setback_reason"],
-                                    r["ancillary_reason"], r["ewom_reason"]) if n]
-        events_html = "".join(f'<div class="text-[10px] text-muted mt-1">⚡ {e}</div>' for e in event_notes)
-        st.markdown(f"""
-        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="border-left:3px solid {SUCCESS};">
-          <div class="text-xs" style="color:{SUCCESS};font-weight:600;margin-bottom:4px;">✅ Theatrical Simulation Locked In</div>
-          <div class="flex gap-6 flex-wrap">
-            <div><div class="text-[9px] text-muted font-mono">DOMESTIC BOX OFFICE</div>
-              <div class="text-sm text-ink">${dom_bo:.1f}M</div></div>
-            <div><div class="text-[9px] text-muted font-mono">BOX-OFFICE SIGNAL</div>
-              <div class="text-sm" style="color:{bo_c};">{star_str}</div></div>
-            <div><div class="text-[9px] text-muted font-mono">CRITICAL RECEPTION</div>
-              <div class="text-sm" style="color:{cs_c};">{r['critical_score']:.0f}/100</div></div>
-            <div><div class="text-[9px] text-muted font-mono">RUN LENGTH</div>
-              <div class="text-sm text-ink">{theatrical_run_days}d</div></div>
-          </div>
-          {events_html}
-        </div>
-        """, unsafe_allow_html=True)
+        lo, hi = pvod_price_band(resolved_entry["multiplier"], genre, concept_type)
+        existing_price = d.get("pvod_selected_price")
+        default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
+            else round((lo + hi) / 2, 2)
+        pvod_price = float(current_row[5].number_input(
+            "PVOD Rental Price", float(lo), float(hi), float(default_price), step=0.50, format="%.2f",
+            label_visibility="collapsed",
+            help=f"Your band is \\${lo:.2f}–\\${hi:.2f}, sized off this film's real opening. Higher prices earn more "
+                 "per rental but sell fewer, and the market may reject a price near the top (see checks below)."))
+        ss.movie_draft["pvod_chosen_price"] = pvod_price
+        ss.movie_draft["pvod_selected_price"] = pvod_price
+    ss.movie_draft["pvod_dynamic_pricing"] = False
 
-    # ── Early Licensing Decision (Pay-1) ─────────────────────────────────────
-    # 2026-08-18: moved here from its old spot right after the release-
-    # strategy cards, per explicit user request ("even during first year,
-    # after theater run... they may need to think about licensing and such
-    # for following year") -- a real studio watches how a movie actually
-    # opened before deciding whether to keep it on Peacock or license it
-    # away, not before. Gated on the Theatrical Mini-Run having resolved,
-    # same posture as PVOD Pricing below. Doesn't apply to Day-and-Date --
-    # that strategy already commits the title to Peacock exclusivity as
-    # its core premise (enforced defensively in MovieProject.
-    # is_licensing_out() too, not just here).
-    if chosen != "day_and_date":
-        st.markdown('<div class="section-title mt-3">Pay-1 Window Licensing</div>', unsafe_allow_html=True)
-        if resolved_entry is None:
-            st.caption("Run the Theatrical Simulation above to make this call with a real result in hand.")
-        else:
-            def _clear_pay1_auction():
-                # Fires only on a real user interaction with the static
-                # picker below (Streamlit on_change semantics) -- an
-                # accepted competitive bid is a real, different deal, and
-                # touching the flat-fee picker means the student is
-                # choosing to walk away from it.
+    # Pay-1 -- keep on Peacock, license at a flat fee, or (below) take a
+    # competitive bid. An accepted bid shows up here as its own option.
+    pay1_key = f"pay1_pick_{ss.movie_cycle}"
+    if chosen == "day_and_date":
+        _cell(current_row[6], "Peacock (D&amp;D)")
+        ss.movie_draft["pay1_licensing"] = "keep"
+    elif resolved_entry is None:
+        _cell(current_row[6], "<i>after Theatrical Sim</i>")
+    else:
+        winner = d.get("pay1_auction_winner")
+        pay1_opts = ["keep"] + list(LICENSING_PLATFORMS) + (["bid"] if winner else [])
+
+        def _pay1_changed():
+            if ss.get(pay1_key) != "bid":
                 ss.movie_draft["pay1_auction_fee_m"] = None
                 ss.movie_draft["pay1_auction_winner"] = None
                 ss.movie_draft["pay1_auction_term_mo"] = None
-
-            pay1_labels = {
-                "keep": "Keep on Peacock — full subscriber value, tied to how the movie actually performs",
-                "license_out": "License to Another Platform — flat, guaranteed fee, paid sooner",
-            }
-            pay1_choice = st.selectbox(
-                "Pay-1 SVOD Window", PAY1_LICENSING_OPTIONS,
-                index=PAY1_LICENSING_OPTIONS.index(ss.movie_draft.get("pay1_licensing", "keep")),
-                format_func=lambda k: pay1_labels[k],
-                help="A real Pay-1 licensing deal, negotiated before release — cash now and sooner, but "
-                     "you give up the subscriber-value upside and the strategic value of owning the "
-                     "streaming relationship. You're making this call with your real theatrical result "
-                     "in hand, not a bear/base/bull guess.",
-                on_change=_clear_pay1_auction,
-            )
-            ss.movie_draft["pay1_licensing"] = pay1_choice
-            if pay1_choice == "license_out":
-                pay1_platform = st.selectbox(
-                    "Which Platform (Pay-1)", list(LICENSING_PLATFORMS.keys()),
-                    index=list(LICENSING_PLATFORMS.keys()).index(ss.movie_draft.get("pay1_platform", DEFAULT_LICENSING_PLATFORM)),
-                    format_func=lambda k: platform_labels[k],
-                    help="Different platforms pay different cuts — a real negotiation choice, not one flat rate.",
-                    on_change=_clear_pay1_auction,
-                )
-                ss.movie_draft["pay1_platform"] = pay1_platform
-
-            # ── Competitive Bidding — a second, alternative Pay-1 path ────────
-            # 2026-08-18, per explicit user request: "competition streaming
-            # services should bid for licensing." Sits alongside (not
-            # replacing) the flat-fee picker above, per explicit user
-            # decision. Bids are sized off the REAL resolved subscriber
-            # value (this project's actual theatrical result), not the
-            # flat picker's base-case guess -- real buyers who've already
-            # seen how the movie opened.
-            st.markdown('<div class="text-xs text-ink2 mt-3 mb-1">— or —</div>', unsafe_allow_html=True)
-            st.markdown('<div class="section-title mt-1" style="font-size:13px;">🏷️ Competitive Bidding</div>',
-                        unsafe_allow_html=True)
-            st.markdown(
-                '<p class="text-xs text-ink2 mb-2">Shop this window to rival platforms instead — unlike the '
-                'flat-fee deal above, these bids are sized off your ACTUAL theatrical result. Not every '
-                'platform bids every cycle.</p>', unsafe_allow_html=True)
-            def _run_bid_round(round_num: int) -> dict:
-                anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
-                # Game theory (2026-08-18): each bidder's appetite ties
-                # into the REAL background-slate data already generated
-                # for this team+cycle -- a strong slate makes "hot"
-                # (momentum) eligible to fire, a weak one makes "hungry"
-                # (scarcity) eligible -- see draw_licensing_bidder_appetite.
-                bg_slate = generate_background_slate(ss.team_name, ss.movie_cycle,
-                                                      studio_budget_m=ss.movie_studio_budget_m)
-                appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg_slate)
-                appetite_mult = {b: v["mult"] for b, v in appetite.items()}
-                bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value,
-                                           appetite_mult=appetite_mult, round_num=round_num)
-                return {"bids": bids, "result": resolve_licensing_auction(bids), "appetite": appetite,
-                        "round": round_num}
-
-            auction = ss.movie_licensing_auction.get(ss.movie_cycle)
-            if auction is None:
-                if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
-                             use_container_width=True):
-                    ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(1)
-                    st.rerun()
-            else:
-                result = auction["result"]
-                round_num = auction.get("round", 1)
-                if round_num > 1:
-                    st.markdown('<p class="text-xs text-ink2 mb-1">🔁 <b>Round 2</b> — you took the window back to '
-                                'market. The first round\'s offers are gone.</p>', unsafe_allow_html=True)
-                if not result["all_bids"]:
-                    st.caption("No platforms made an offer this round — the flat-fee deal above, or keeping the "
-                               "window on Peacock, are your options.")
-                else:
-                    st.markdown(
-                        '<p class="text-xs text-ink2 mb-2">Accept <b>any</b> offer, not just the highest. Each bid '
-                        'comes with a window term: when it ends, the movie returns to Peacock and you keep part of '
-                        f'its subscriber value ({PAY1_REVERSION_SHARE[12]:.0%} after a 12-month term, '
-                        f'{PAY1_REVERSION_SHARE[18]:.0%} after 18 months). A lower bid on a shorter term can be '
-                        'worth more.</p>', unsafe_allow_html=True)
-                    appetite = auction.get("appetite", {})
-                    sub_val = live_project.subscriber_value(resolved_entry["multiplier"])
-                    accepted = ss.movie_draft.get("pay1_auction_winner")
-                    for b in result["all_bids"]:
-                        state = appetite.get(b["bidder"], {}).get("state")
-                        flavor = licensing_appetite_flavor(b["bidder"], state)
-                        icon = "🔥" if state == "hot" else ("⚠" if state == "hungry" else "")
-                        term = b.get("term_mo")
-                        kept = sub_val * PAY1_REVERSION_SHARE.get(term, 0.0) if term else 0.0
-                        term_html = (f' · {term}-month term, ~${kept:.1f}M back to Peacock after'
-                                     if term else "")
-                        flavor_html = f'<div class="text-[10px] text-muted">{icon} {flavor}</div>' if flavor else ""
-                        bc1, bc2 = st.columns([3, 1])
-                        with bc1:
-                            st.markdown(
-                                f'<div class="text-xs py-1"><b>{b["bidder"]}</b> — '
-                                f'<span class="font-mono">${b["bid_m"]:.1f}M</span>{term_html}{flavor_html}</div>',
-                                unsafe_allow_html=True)
-                        with bc2:
-                            if accepted == b["bidder"]:
-                                st.markdown('<div class="text-xs py-1" style="color:#66bb6a;">✅ Accepted</div>',
-                                            unsafe_allow_html=True)
-                            elif st.button("Accept", key=f"accept_bid_{ss.movie_cycle}_{round_num}_{b['bidder']}",
-                                           use_container_width=True):
-                                ss.movie_draft["pay1_licensing"] = "license_out"
-                                ss.movie_draft["pay1_auction_fee_m"] = b["bid_m"]
-                                ss.movie_draft["pay1_auction_winner"] = b["bidder"]
-                                ss.movie_draft["pay1_auction_term_mo"] = term
-                                st.rerun()
-
-                # Take it back to market: once per cycle, only before accepting anything.
-                if round_num < LICENSING_MAX_ROUNDS and not ss.movie_draft.get("pay1_auction_winner"):
-                    lo, hi = LICENSING_RESHOP_MULT_RANGE
-                    st.markdown(
-                        '<p class="text-xs text-ink2 mt-2 mb-1">Not happy with these offers? You can reject all of '
-                        'them and take the window back to market <b>once</b>. Buyers know the title was passed over, '
-                        f'so new bids typically land {1 - hi:.0%}–{1 - lo:.0%} lower, and some platforms may not bid '
-                        'at all. These offers will be gone for good.</p>', unsafe_allow_html=True)
-                    if st.button("🔁 Reject All & Take It Back to Market", key=f"reshop_bids_{ss.movie_cycle}",
-                                 use_container_width=True):
-                        ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(round_num + 1)
-                        st.rerun()
-    else:
-        ss.movie_draft["pay1_licensing"] = "keep"
-        st.caption("Pay-1 licensing isn't available for Day-and-Date releases — that strategy already "
-                   "commits this title to Peacock exclusivity.")
-
-    # ── PVOD Pricing ──────────────────────────────────────────────────────────
-    # 2026-08-18: replaces the old pvod_dynamic_pricing on/off toggle with a
-    # real price-point choice, per explicit user request ("based on how
-    # this performs, they have lower/upper bounds for how much they can
-    # charge for PVOD"). Only computable once the Theatrical Mini-Run has
-    # resolved -- the band is sized off the REAL resolved multiplier, not a
-    # planning-stage guess (see pvod_price_band's docstring). day_and_date
-    # skips this window entirely, same as every other PVOD/licensing
-    # section (subscribers get it on Peacock instead).
-    if chosen != "day_and_date":
-        st.markdown('<div class="section-title mt-3">PVOD Pricing</div>', unsafe_allow_html=True)
-        if resolved_entry is None:
-            st.caption("Run the Theatrical Simulation above to see your real PVOD price band, sized off "
-                       "how this movie actually performed.")
-            ss.movie_draft["pvod_chosen_price"] = None
-            ss.movie_draft["pvod_selected_price"] = None
+        cur_pay1 = ("bid" if winner else "keep" if d.get("pay1_licensing", "keep") == "keep"
+                    else d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM))
+        if ss.get(pay1_key) not in pay1_opts:
+            ss[pay1_key] = cur_pay1   # seed once; the key alone then carries the student's pick
+        pay1_pick = current_row[6].selectbox(
+            "Pay-1 Window", pay1_opts, key=pay1_key,
+            label_visibility="collapsed", on_change=_pay1_changed,
+            format_func=lambda k: ("Keep on Peacock" if k == "keep" else
+                                   f"{winner} bid ${d.get('pay1_auction_fee_m') or 0:.1f}M" if k == "bid" else
+                                   f"{platform_names[k]} (~{LICENSING_PLATFORMS[k]['fee_pct']:.0%} fee)"),
+            help="Keep on Peacock: full subscriber value, tied to how the film performs. License: a flat, "
+                 "guaranteed fee (a % of base-case subscriber value), paid sooner. Or shop it to competitive "
+                 "bidders below the table.")
+        if pay1_pick == "keep":
+            ss.movie_draft["pay1_licensing"] = "keep"
+        elif pay1_pick == "bid":
+            ss.movie_draft["pay1_licensing"] = "license_out"
         else:
-            lo, hi = pvod_price_band(resolved_entry["multiplier"], genre, concept_type)
-            # 2026-08-18, real bug fix: the slider MUST default from a price
-            # the student actually picked (pvod_selected_price), never from
-            # pvod_chosen_price -- that field also carries the Market
-            # Acceptance Checks' post-cut EFFECTIVE price (see below), and
-            # reading it back here created a circular loop where a cut's own
-            # price change fed back into the slider, which then fed the
-            # invalidation check below on the very next render, silently
-            # wiping the just-resolved checkpoint history (and its
-            # pvod_market_mult haircut) as if the student had manually
-            # changed their price. Caught by direct AppTest verification of
-            # the Cut -> Simulate flow, not just pytest-green.
-            existing_price = ss.movie_draft.get("pvod_selected_price")
-            default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
-                else round((lo + hi) / 2, 2)
-            pvod_price = st.slider(
-                # `\\$` (rendered `\$`): two bare `$` in one label make Streamlit's
-                # markdown read everything between them as LaTeX math.
-                f"PVOD Rental Price — band \\${lo:.2f} to \\${hi:.2f}, sized off your theatrical performance",
-                lo, hi, float(default_price), step=0.50,
-                help="A stronger theatrical run supports a higher PVOD price ceiling — real demand can "
-                     "absorb a premium; a weaker one needs a lower price to move volume. Higher prices "
-                     "earn more per transaction but convert fewer of them (real price elasticity) — and "
-                     "pricing too aggressively carries its own real risk once the market gets a chance to "
-                     "weigh in (see the periodic Market Acceptance checks below).",
-            )
-            ss.movie_draft["pvod_chosen_price"] = pvod_price
-            ss.movie_draft["pvod_selected_price"] = pvod_price
-            st.caption(f"Band sized off your theatrical result: "
-                       f"{'a strong opening supports pricing toward the top of the band' if hi - pvod_price < pvod_price - lo else 'a softer opening means pricing toward the top of the band is a real gamble'}.")
+            ss.movie_draft["pay1_licensing"] = "license_out"
+            ss.movie_draft["pay1_platform"] = pay1_pick
+
+    # Pay-2 -- opens years after release, so it's decided next cycle (as
+    # this film's row up top), except on the final film.
+    if chosen == "day_and_date":
+        _cell(current_row[7], "Peacock (D&amp;D)")
+        ss.movie_draft["pay2_licensing"] = "keep"
+    elif not final_film:
+        _cell(current_row[7], "<i>decide next cycle</i>")
+        ss.movie_draft["pay2_licensing"] = "keep"
     else:
-        ss.movie_draft["pvod_chosen_price"] = None
-        ss.movie_draft["pvod_selected_price"] = None
-    ss.movie_draft["pvod_dynamic_pricing"] = False   # superseded by the banded price choice above
+        pay2_opts = ["keep"] + list(LICENSING_PLATFORMS)
+        cur_pay2 = ("keep" if d.get("pay2_licensing", "keep") == "keep"
+                    else d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM))
+        pay2_pick = current_row[7].selectbox(
+            "Pay-2 Window", pay2_opts, index=pay2_opts.index(cur_pay2) if cur_pay2 in pay2_opts else 0,
+            label_visibility="collapsed",
+            format_func=lambda k: ("Keep on Peacock" if k == "keep" else
+                                   f"{platform_names[k]} (~{LICENSING_PLATFORMS[k]['fee_pct']:.0%} fee)"),
+            help=f"Your final film, so decide Pay-2 now. It opens ~{PAY2_WINDOW_MONTH/12:.0f} years after "
+                 f"release, worth ~{PAY2_VALUE_PCT_OF_PAY1:.0%} of Pay-1's scale.")
+        ss.movie_draft["pay2_licensing"] = "keep" if pay2_pick == "keep" else "license_out"
+        if pay2_pick != "keep":
+            ss.movie_draft["pay2_platform"] = pay2_pick
+
+    # Status -- the Theatrical Sim button lives in the row itself.
+    if resolved_entry is None:
+        if current_row[8].button("🎬 Theatrical Sim", key=f"run_theatrical_{ss.movie_cycle}",
+                                 use_container_width=True,
+                                 help="Locks in this film's real opening, reviews and any surprises, so you can "
+                                      "set PVOD and Pay-1 with the result in hand."):
+            ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
+            st.rerun()
+    else:
+        dom_bo = live_project.domestic_box_office(resolved_entry["multiplier"])
+        _cell(current_row[8], f"✅ \\${dom_bo:.0f}M domestic<br>critics {resolved_entry['critical_score']:.0f}/100")
+
+    # ── Notes and follow-ups under the table ─────────────────────────────────
+    season_open_mult = (SEASON_OPENING_MULT.get(debut_season, 1.0)
+                        * SEASON_GENRE_SYNERGY.get(debut_season, {}).get(genre, 1.0))
+    season_recall = SEASON_AWARDS_RECALL.get(debut_season, 1.0)
+    notes = ["💡 Risk-adjusted NPV by release: " + " · ".join(
+        f"{RELEASE_LABELS[s]} {_fmt_money(ra_by_strategy[s])}" for s in strategies_shown)]
+    if season_open_mult != 1.0:
+        notes.append(f"📅 {debut_season}: {'+' if season_open_mult > 1 else ''}{(season_open_mult - 1) * 100:.0f}% "
+                     f"opening for {genre}")
+    if genre in AWARDS_ELIGIBLE_GENRES and season_recall != 1.0:
+        notes.append(f"{season_recall:.0%} awards recall")
+    if not windowing_unlocked:
+        notes.append(f"🔒 Platform and Day-and-Date unlock {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}")
+    notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
+                 f"box office")
+    st.caption(" · ".join(notes).replace("$", "\\$"))   # bare $ pairs render as LaTeX math
+    if inputs_changed:
+        st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) changed "
+                "since you ran the Theatrical Sim. Click 🎬 Theatrical Sim again to lock in a fresh result.")
+
+    if resolved_entry is not None:
+        r = resolved_entry
+        event_notes = [n for n in (r["trouble_reason"], r["ai_setback_reason"],
+                                   r["ancillary_reason"], r["ewom_reason"]) if n]
+        stars = multiplier_to_stars(r["multiplier"], genre, concept_type)
+        st.markdown(
+            f'<div style="font-size:13px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Theatrical Sim locked in:</b> '
+            f'{"⭐" * stars}{"☆" * (5 - stars)} audience demand · '
+            f'\\${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · critics {r["critical_score"]:.0f}/100 · '
+            f'{theatrical_run_days}-day run'
+            + "".join(f"<br>⚡ {escape(e)}" for e in event_notes) + '</div>', unsafe_allow_html=True)
 
     # ── PVOD Market Acceptance Checks ────────────────────────────────────────
     # 2026-08-18, per explicit user request: "the market may or may not
@@ -2428,6 +2345,94 @@ def _decisions(ss):
                     mult *= PVOD_HOLD_THROUGH_REJECTION_MULT if cp["response"] == "hold" else PVOD_CUT_RESPONSE_MULT
             ss.movie_draft["pvod_market_mult"] = mult
 
+    # ── Pay-1 Competitive Bidding (follow-up under the table) ─────────────────
+    # 2026-08-18, per explicit user request: rival platforms bid for the
+    # Pay-1 window, sized off this film's ACTUAL theatrical result. An
+    # accepted bid becomes the Pay-1 cell's own option in the table above.
+    if chosen != "day_and_date" and resolved_entry is not None:
+        st.markdown('<div class="section-title mt-3" style="font-size:13px;">🏷️ Pay-1: Shop It to Competitive Bidders '
+                    '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+
+        def _run_bid_round(round_num: int) -> dict:
+            anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
+            # Game theory (2026-08-18): each bidder's appetite ties into the
+            # real background slate -- see draw_licensing_bidder_appetite.
+            bg_slate = generate_background_slate(ss.team_name, ss.movie_cycle,
+                                                 studio_budget_m=ss.movie_studio_budget_m)
+            appetite = draw_licensing_bidder_appetite(ss.team_name, ss.movie_cycle, bg_slate)
+            appetite_mult = {b: v["mult"] for b, v in appetite.items()}
+            bids = draw_licensing_bids(ss.team_name, ss.movie_cycle, anchor_value,
+                                       appetite_mult=appetite_mult, round_num=round_num)
+            return {"bids": bids, "result": resolve_licensing_auction(bids), "appetite": appetite,
+                    "round": round_num}
+
+        def _accept_bid(bidder: str, fee: float, term):
+            # on_click, so it runs before the Pay-1 cell is drawn on the rerun.
+            ss.movie_draft["pay1_licensing"] = "license_out"
+            ss.movie_draft["pay1_auction_fee_m"] = fee
+            ss.movie_draft["pay1_auction_winner"] = bidder
+            ss.movie_draft["pay1_auction_term_mo"] = term
+            ss[pay1_key] = "bid"
+
+        auction = ss.movie_licensing_auction.get(ss.movie_cycle)
+        if auction is None:
+            st.markdown('<p class="text-xs text-ink2 mb-1">Instead of a flat fee, rival platforms bid on the Pay-1 '
+                        'window based on how this film actually opened. Not every platform bids.</p>',
+                        unsafe_allow_html=True)
+            if st.button("🏷️ Shop This Window to Competitive Bid", key=f"shop_bids_{ss.movie_cycle}",
+                         use_container_width=True):
+                ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(1)
+                st.rerun()
+        else:
+            result = auction["result"]
+            round_num = auction.get("round", 1)
+            if round_num > 1:
+                st.markdown('<p class="text-xs text-ink2 mb-1">🔁 <b>Round 2</b>: you took the window back to '
+                            'market. The first round\'s offers are gone.</p>', unsafe_allow_html=True)
+            if not result["all_bids"]:
+                st.caption("No platforms made an offer this round. Keep it on Peacock or take a flat fee in the "
+                           "Pay-1 cell above.")
+            else:
+                st.markdown(
+                    '<p class="text-xs text-ink2 mb-2">Accept <b>any</b> offer, not just the highest. When a bid\'s '
+                    'term ends, the film returns to Peacock and you keep part of its subscriber value '
+                    f'({PAY1_REVERSION_SHARE[12]:.0%} after 12 months, {PAY1_REVERSION_SHARE[18]:.0%} after 18), '
+                    'so a lower bid on a shorter term can be worth more.</p>', unsafe_allow_html=True)
+                appetite = auction.get("appetite", {})
+                sub_val = live_project.subscriber_value(resolved_entry["multiplier"])
+                accepted = ss.movie_draft.get("pay1_auction_winner")
+                for b in result["all_bids"]:
+                    state = appetite.get(b["bidder"], {}).get("state")
+                    flavor = licensing_appetite_flavor(b["bidder"], state)
+                    icon = "🔥" if state == "hot" else ("⚠" if state == "hungry" else "")
+                    term = b.get("term_mo")
+                    kept = sub_val * PAY1_REVERSION_SHARE.get(term, 0.0) if term else 0.0
+                    term_html = f' · {term}-month term, ~\\${kept:.1f}M back to Peacock after' if term else ""
+                    flavor_html = f'<div style="font-size:11px;">{icon} {flavor}</div>' if flavor else ""
+                    bc1, bc2 = st.columns([3, 1])
+                    bc1.markdown(f'<div style="font-size:13px;padding:4px 0;"><b>{b["bidder"]}</b>: '
+                                 f'\\${b["bid_m"]:.1f}M{term_html}{flavor_html}</div>', unsafe_allow_html=True)
+                    if accepted == b["bidder"]:
+                        bc2.markdown('<div style="font-size:13px;padding:4px 0;">✅ Accepted</div>',
+                                     unsafe_allow_html=True)
+                    else:
+                        bc2.button("Accept", key=f"accept_bid_{ss.movie_cycle}_{round_num}_{b['bidder']}",
+                                   use_container_width=True, on_click=_accept_bid,
+                                   args=(b["bidder"], b["bid_m"], term))
+
+            # Take it back to market: once per cycle, only before accepting anything.
+            if round_num < LICENSING_MAX_ROUNDS and not ss.movie_draft.get("pay1_auction_winner"):
+                lo_r, hi_r = LICENSING_RESHOP_MULT_RANGE
+                st.markdown(
+                    '<p class="text-xs text-ink2 mt-2 mb-1">Not happy with these offers? Reject all of them and take '
+                    'the window back to market <b>once</b>. Buyers know the title was passed over, so new bids '
+                    f'typically land {1 - hi_r:.0%}–{1 - lo_r:.0%} lower, and some platforms may not bid at all.</p>',
+                    unsafe_allow_html=True)
+                if st.button("🔁 Reject All & Take It Back to Market", key=f"reshop_bids_{ss.movie_cycle}",
+                             use_container_width=True):
+                    ss.movie_licensing_auction[ss.movie_cycle] = _run_bid_round(round_num + 1)
+                    st.rerun()
+
     st.divider()
 
     # ── Simulate ───────────────────────────────────────────────────────────────
@@ -2443,7 +2448,7 @@ def _decisions(ss):
     has_logline = len(ss.movie_draft.get("logline", "").strip()) >= 20
     # Required steps (2026-10-05): Partnerships / Scouted / Festivals /
     # Holding Deals gate Simulate alongside the pitch and theatrical run.
-    missing = [(i, label, todo) for i, (label, _, done, todo) in enumerate(_step_status(ss), start=1)
+    missing = [(i, label, todo) for i, label, _, done, todo in _numbered_steps(ss)
                if not done and label not in ("Greenlight", "Release")]
     can_simulate = (resolved_entry is not None and not pending_pvod_response and has_logline
                     and not missing)
@@ -2507,6 +2512,8 @@ def _decisions(ss):
             "ai_tooling_setback": ai_setback_reason,
             "ewom_piracy_swing": ewom_reason,
             "ewom_mult":         ewom_mult,
+            "pvod_mult":         pvod_mult,
+            "theme_park_mult":   theme_park_mult,
             "cut_buzz_awards":   cut_buzz_awards_hits > 0,
             "cut_buzz_sequel":   cut_buzz_sequel,
             "npv":              project.npv(multiplier, critical_score, pvod_mult=pvod_mult, theme_park_mult=theme_park_mult, ewom_mult=ewom_mult),

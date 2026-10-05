@@ -435,7 +435,7 @@ def build_movies():
     steps(doc, [
         "**Read the recap** of last cycle and your **🎬 Your Slate So Far** table (from cycle 2 on).",
         "**Follow the step bar** at the top of the page: ① Partnerships ② Scouted Concepts ③ Festivals ④ Greenlight ⑤ Holding Deals ⑥ Release ⑦ Simulate. Click any step to jump to it; each gets a ✓ when it's done.",
-        "**Run the Theatrical Simulation** (part of step 6) and respond to anything it asks.",
+        "**Fill in your film's row in the Release Plan table** (step 6), click **🎬 Theatrical Sim**, then set PVOD and Pay-1 and choose Pay-2 for any earlier film that's due.",
         "**Click ▶ Simulate → See Results** once every step has a ✓, read the results, then click **→ Start [next cycle]**.",
     ])
     callout(doc, "key",
@@ -508,19 +508,23 @@ def build_movies():
               "booked, and even a confirmed hold can fall through) or **Multi-Picture** (costs more, guaranteed for several cycles). "
               "Next cycle, any actor you hold or signed appears in Greenlight's **🎭 Lead Actor** list so you can cast them.")
 
-    doc.add_heading("6 · Release Strategy  (required)", level=2)
+    doc.add_heading("6 · Release Plan — Your Slate  (required)", level=2)
+    para(doc, "One table, **one row per film** in your slate, with each film's windows in the order they open: "
+              "Season → Release → Run (days) → PVOD price → Pay-1 → Pay-2 → Status. Earlier films' rows show what you "
+              "chose and how they did; later rows are placeholders until you greenlight them. Fill in **this film's row**:")
     steps(doc, [
-        "**Pick a Debut Season.** Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
-        "**Pick a release strategy** (from Cycle 3 on; Cycles 1–2 are Wide Theatrical only). **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens in about 600 theaters and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself, so it can win for horror and comedy.",
-        "**Click 🎬 Run Theatrical Simulation.** This is required, and it locks in how the movie does in theaters.",
-        "**Pay-1 Window Licensing**: keep the first streaming window on Peacock, license it for a flat fee, or click **🏷️ Shop This Window to Competitive Bid**. You can accept **any** bid, not just the highest: each comes with a 12- or 18-month term, and a shorter term returns the movie to Peacock sooner, so a lower bid can be worth more. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; the new bids usually come in lower.",
-        "**Set the PVOD price** (renting or buying at home while the movie is still new).",
-        "**PVOD Market Acceptance Checks**: if viewers reject your price, choose **Hold** (keep the price and accept fewer sales) or **Cut** (lower the price to win back volume).",
+        "**Season**: Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
+        "**Release** (from Cycle 3 on; earlier films are Wide Theatrical only). The line under the table shows each option's risk-adjusted NPV for this film. **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens small and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself.",
+        "**Run (days)**: how long the film stays in theaters. Longer runs earn more box office, with diminishing returns, but delay every later window.",
+        "**Click 🎬 Theatrical Sim** in the Status column. This is required, and it locks in how the movie does in theaters, its reviews, and any surprises.",
+        "**PVOD price** (renting or buying at home while the movie is still new): set it within the band your real opening supports. If viewers later reject your price, choose **Hold** (keep the price, accept fewer sales) or **Cut** (lower it to win back volume) under the table.",
+        "**Pay-1** (first streaming window): keep it on Peacock or license it to a platform for a flat fee. Or, under the table, click **🏷️ Shop This Window to Competitive Bid** and accept **any** bid, not just the highest: each has a 12- or 18-month term, and a shorter term returns the film to Peacock sooner. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; new bids usually come in lower.",
+        "**Pay-2** (second window, a couple of years after release): decided **the cycle after release**. Each new cycle, every earlier film whose Pay-2 is due shows a **⚠ Choose…** cell in its row. Each option shows how much it changes that film's NPV versus keeping it on Peacock, and your choice updates that film's result right away. On your **final** film, you choose Pay-2 in its own row.",
     ])
     callout(doc, "warn",
             "**7 · Simulate.** The **▶ Simulate** button stays locked until every step in the bar has a ✓: a signed partnership, an optioned "
-            "concept, a festival bid, an actor hold (except on your final film), a Logline, and the Theatrical Simulation, plus an answer "
-            "to any PVOD rejection. The list under the button names each missing step.")
+            "concept, a festival bid, an actor hold (except on your final film), a Logline, Pay-2 for any earlier film that's due, and the "
+            "Theatrical Sim, plus an answer to any PVOD rejection. The list under the button names each missing step.")
 
     page_break(doc)
     doc.add_heading("Step 3 — Read your results", level=1)
@@ -531,7 +535,7 @@ def build_movies():
         "**Revenue Waterfall**: the money from each window (theaters, PVOD, streaming, TV, library).",
         "**Deal Waterfall — Who Gets Paid**: how much went to theaters, talent, and financing partners before you.",
         "**Surprises**: production trouble, word-of-mouth or piracy swings, and unexpected merchandise wins.",
-        "**🎬 Your Slate So Far**: one row per film you've made, so you can compare them side by side. Other teams' results are on the leaderboard.",
+        "**🎬 Your Slate So Far**: one row per film you've made (including its run length), so you can compare them side by side. A film's NPV can still move one cycle later, when you choose its Pay-2 deal. Other teams' results are on the leaderboard.",
     ])
     para(doc, "Then click **→ Start [next cycle]**, or **← Redo** to replay that cycle.")
 
@@ -557,7 +561,7 @@ def build_movies():
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
         "**Sequel after sequel.** Franchise fatigue is real, and your diversification score drops.",
-        "**Forgetting the Theatrical Simulation.** You can't Simulate until you've run it.",
+        "**Forgetting the Theatrical Sim.** You can't Simulate until you've clicked 🎬 Theatrical Sim in the Release Plan table.",
         "**Missing a required step.** If ▶ Simulate is locked, check the step bar at the top for a step without a ✓.",
         "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
         "**Submitting too early.** Your first submission is your official score.",

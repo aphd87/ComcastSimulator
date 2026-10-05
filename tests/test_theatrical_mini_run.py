@@ -179,7 +179,7 @@ def _simulate_button(at):
 
 
 def _mini_run_button(at):
-    return next(b for b in at.button if "Run Theatrical Simulation" in b.label)
+    return next(b for b in at.button if (b.key or "").startswith("run_theatrical_"))
 
 
 def test_simulate_is_disabled_before_the_mini_run():
@@ -238,19 +238,21 @@ def test_pvod_chosen_price_higher_than_default_none_is_zero_effect():
 
 def test_pvod_slider_appears_only_after_mini_run_resolves():
     at = _movies_app()
-    assert not any("PVOD Rental Price" in s.label for s in at.slider)
+    # 2026-10-05: the PVOD price is a number cell in the Release Plan table.
+    assert not any("PVOD Rental Price" in n.label for n in at.number_input)
     _mini_run_button(at).click().run()
     assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
-    assert any("PVOD Rental Price" in s.label for s in at.slider)
+    assert any("PVOD Rental Price" in n.label for n in at.number_input)
 
 
 # ── Early Licensing Decision (Phase 3) ──────────────────────────────────────
 def test_pay1_licensing_selectbox_appears_only_after_mini_run_resolves():
     at = _movies_app()
-    assert not any("Pay-1 SVOD Window" in sb.label for sb in at.selectbox)
+    assert not any(sb.label == "Pay-1 Window" for sb in at.selectbox)
     _mini_run_button(at).click().run()
     assert not at.exception, f"Mini-run click raised: {list(at.exception)}"
-    assert any("Pay-1 SVOD Window" in sb.label for sb in at.selectbox)
+    pay1 = next(sb for sb in at.selectbox if sb.label == "Pay-1 Window")
+    assert pay1.value == "keep"
 
 
 # ── PVOD Market Acceptance Checks (Phase 4) ─────────────────────────────────
@@ -597,7 +599,8 @@ def test_changing_the_flat_picker_after_accepting_a_bid_clears_the_auction():
     accept_btn.click().run()
     assert at.session_state["movie_draft"]["pay1_licensing"] == "license_out"
 
-    pay1_sb = next(sb for sb in at.selectbox if sb.label == "Pay-1 SVOD Window")
+    pay1_sb = next(sb for sb in at.selectbox if sb.label == "Pay-1 Window")
+    assert pay1_sb.value == "bid"   # the accepted bid shows up as the Pay-1 cell's own option
     pay1_sb.set_value("keep").run()
     assert not at.exception, f"Switching back to Keep raised: {list(at.exception)}"
     draft = at.session_state["movie_draft"]
