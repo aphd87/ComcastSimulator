@@ -684,6 +684,18 @@ elif ss.active_section == "leaderboard":
 
 elif ss.active_section == "movies":
     # ── Movies — peer section, independent of TV network progress ──────────────
+    # All text white in the Movies simulation (2026-10-05, explicit user
+    # request: "ALL TEXT NEEDS TO BE WHITE"). Only injected while Movies is
+    # the active section, so TV pages keep their colors. Overrides inline and
+    # Tailwind text colors; chart marks (SVG) keep their fills.
+    st.markdown("""<style>
+    [data-testid="stApp"] *:not(svg):not(svg *),
+    div[data-baseweb="popover"] *, div[data-baseweb="tooltip"] * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    [data-testid="stApp"] svg text { fill: #ffffff !important; }
+    </style>""", unsafe_allow_html=True)
     # Studio card + biography + Mission Brief (2026-10-01), mirroring each TV
     # network's Network Biography and Mission Brief so Movies opens the same way.
     mcol1, mcol2 = st.columns([1, 2])
@@ -754,7 +766,7 @@ elif ss.active_section == "movies":
           <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
           <div style="font-size:15px;color:#4fc3f7;font-weight:600;margin-bottom:6px;">
-            Five films, ten years. Build a slate worth more than it costs.</div>
+            Four films, eight years. Build a slate worth more than it costs.</div>
           <div style="font-size:15px;color:#ffffff;line-height:1.7;">
             You run Universal's film slate: one film every two years, with a $3.5B studio budget that grows
             when your films earn and shrinks when they don't. Every dollar of budget and P&amp;A is spent

@@ -194,7 +194,7 @@ def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
             x=[actual_npv], y=[0], mode="markers+text",
             marker=dict(size=24, symbol="diamond", color=ACCENT, line=dict(width=2, color="#12141a")),
             text=["Actual"], textposition="bottom center",
-            textfont=dict(color=ACCENT, size=12),
+            textfont=dict(color="#ffffff", size=12),
             hovertemplate="Actual: $%{x:.1f}M<extra></extra>",
             showlegend=False,
         ))
