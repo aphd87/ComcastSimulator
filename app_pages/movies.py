@@ -205,23 +205,26 @@ def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
     fig.add_trace(go.Scatter(
         x=vals, y=[0, 0, 0], mode="markers+text",
         marker=dict(size=[16, 22, 16], color=colors, line=dict(width=2, color="#12141a")),
-        text=["Bear", "Base", "Bull"], textposition="top center",
+        # Dollar labels on each point (2026-10-05): the axis alone made
+        # students read values off tick marks.
+        text=[f"{name}<br>{_fmt_money(v)}" for name, v in zip(("Bear", "Base", "Bull"), vals)],
+        textposition="top center",
         textfont=dict(color="#ffffff", size=12),
-        hovertemplate="%{text}: $%{x:.1f}M<extra></extra>",
+        hovertemplate="%{text}<extra></extra>",
         showlegend=False,
     ))
     if actual_npv is not None:
         fig.add_trace(go.Scatter(
             x=[actual_npv], y=[0], mode="markers+text",
             marker=dict(size=24, symbol="diamond", color=ACCENT, line=dict(width=2, color="#12141a")),
-            text=["Actual"], textposition="bottom center",
+            text=[f"Actual {_fmt_money(actual_npv)}"], textposition="bottom center",
             textfont=dict(color="#ffffff", size=12),
-            hovertemplate="Actual: $%{x:.1f}M<extra></extra>",
+            hovertemplate="%{text}<extra></extra>",
             showlegend=False,
         ))
     fig.add_vline(x=0, line_dash="dash", line_color=WARN, opacity=0.4)
-    fig.update_layout(**base_layout(title, height=170))
-    fig.update_yaxes(visible=False, showgrid=False, range=[-1, 1])
+    fig.update_layout(**base_layout(title, height=200))
+    fig.update_yaxes(visible=False, showgrid=False, range=[-1.2, 1.6])
     return fig
 
 
@@ -1020,7 +1023,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
                                else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
                 opacity = "opacity:.45;" if poached_by else ""
                 st.markdown(f"""
-                <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;{opacity}">
+                <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;{opacity}">
                   <div class="text-sm font-semibold text-ink">{partner['name']}</div>
                   <div class="text-[10px] text-muted font-mono mb-2">{partner['specialty']} specialty</div>
                   <div class="text-[10px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
@@ -1120,7 +1123,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
                         if concept.get("hot_rival") and not optioned else "")
             stars_html = "⭐" * read["stars"] + "☆" * (5 - read["stars"])
             st.markdown(f"""
-            <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+            <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
               {hot_html}
               <div class="text-[10px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
@@ -1242,7 +1245,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
             interest_txt = (f"{interest_icon} <b>{interest}</b>: " + (", ".join(interested) + " screened it"
                             if interested else "no rival studio screened it"))
             st.markdown(f"""
-            <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+            <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
               <div class="text-[10px] text-muted font-mono mb-1">{film['festival_name']} · {film['genre']} · {film['concept_type']}</div>
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
               <div class="text-[10px] text-muted font-mono">Critics: {cs:.0f}/100 ({cs_tier}), already screened</div>
@@ -1388,7 +1391,7 @@ def _section_holding_deals(ss, resolved_hold_key):
                     bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
                                    else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
                     st.markdown(f"""
-                    <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+                    <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
                       <div class="text-sm font-semibold text-ink">{partner['name']} <span class="text-[10px] text-muted">
                         ({partner.get('gender', '')}, {partner.get('age', '?')}, {partner.get('ethnicity', '—')})</span></div>
                       <div class="text-[10px] text-muted font-mono mb-1">Best genres: {', '.join(partner.get('best_genres', [partner['specialty']]))}</div>
@@ -1465,9 +1468,39 @@ def _progress_bar(ss):
 
 
 # ── Main render ────────────────────────────────────────────────────────────────
+# Layout CSS (2026-10-05, per explicit user request):
+# - Pinned panel: Greenlight's right column (Capital at Risk + the Bear/Base/
+#   Bull range) sticks to the top of the screen while the team scrolls the
+#   inputs on the left, so they can watch the numbers move as they edit.
+# - Aligned cards: in a row of cards (Partnerships, Scouted Concepts,
+#   Festivals, Holding Deals) each card stretches to the tallest one, so the
+#   buttons underneath line up. Selectors cover current and older Streamlit
+#   test ids (stColumn / column, stElementContainer / element-container).
+_MOVIES_LAYOUT_CSS = """
+<style>
+div[data-testid="stHorizontalBlock"]:has(.capital-pin) { align-items: flex-start; }
+div[data-testid="stColumn"]:has(.capital-pin), div[data-testid="column"]:has(.capital-pin) {
+    position: sticky; top: 3.75rem; align-self: flex-start;
+    max-height: calc(100vh - 4.5rem); overflow-y: auto; z-index: 2;
+}
+div[data-testid="stColumn"]:has(.eq-card) > div, div[data-testid="column"]:has(.eq-card) > div,
+div[data-testid="stColumn"]:has(.eq-card) div[data-testid="stVerticalBlock"],
+div[data-testid="column"]:has(.eq-card) div[data-testid="stVerticalBlock"] { height: 100%; }
+div[data-testid="stElementContainer"]:has(.eq-card), div.element-container:has(.eq-card) { flex: 1 1 auto; }
+div[data-testid="stElementContainer"]:has(.eq-card) div[data-testid="stMarkdown"],
+div[data-testid="stElementContainer"]:has(.eq-card) div[data-testid="stMarkdownContainer"],
+div.element-container:has(.eq-card) div[data-testid="stMarkdownContainer"],
+div[data-testid="stElementContainer"]:has(.eq-card) div:has(.eq-card),
+div.element-container:has(.eq-card) div:has(.eq-card),
+.eq-card { height: 100%; }
+</style>
+"""
+
+
 def render():
     ss = st.session_state
     _init(ss)
+    st.markdown(_MOVIES_LAYOUT_CSS, unsafe_allow_html=True)
 
 
     _progress_bar(ss)
@@ -2033,7 +2066,10 @@ def _decisions(ss):
             _render_research_card(ss, project, logline)
 
     with right:
-        st.markdown('<div class="section-title">Capital at Risk</div>', unsafe_allow_html=True)
+        # Marker for the pinned-panel CSS (_MOVIES_LAYOUT_CSS): this column
+        # stays in view while the team scrolls the Capital inputs on the left.
+        st.markdown('<div class="capital-pin"></div><div class="section-title">Capital at Risk</div>',
+                    unsafe_allow_html=True)
         st.caption("Every dollar committed before a single ticket sells — production budget, P&A, "
                    "casting cost, and any rights acquisition, net of whatever your Financing "
                    "Structure and AI Production Tools choices discount. This is the number NPV is "

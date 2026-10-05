@@ -111,6 +111,7 @@ At registration each teammate picks a role. **🎮 Driver** makes every decision
 - **More decision tension:** Pay-2 gamble vs sure fee (locked, final); festival break-even bids and rival interest; scout's read and hot concepts; Platform / Day-and-Date from Film 2; partnership renewals; Universal Studios attraction offers after a hit.
 - **Universal library IP revival** and **Lead Actor** casting (an actor's relationship bonus applies only when cast).
 - **Deals count in the score** (fees subtract, festival films and attractions add), shown as a Deals column in Your Slate.
+- **Layout:** Greenlight's Capital at Risk panel and Bear / Base / Bull range stay pinned on screen while teams edit the inputs, with dollar labels on each point; card buttons (Partnerships, Scouted, Festivals, Holding Deals) line up across each row.
 - **Clearer results:** "What you decided → What happened → Why"; Your Slate table; Distribution Pipeline gained a Description column and is now a collapsed panel.
 - **Real competitor names**, with simulated-behavior wording; all text in the Movies section is white.
 - **Fixes:** festival films were priced off production budget alone, so lowball bids won risk-free (prices now track each film's value); Research could reveal every genre's draw from one purchase; festival bids raised the acquired film's own quality; incoherent concepts (e.g. Horror · Family/Kids); several display bugs.
