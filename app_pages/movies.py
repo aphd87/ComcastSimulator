@@ -55,6 +55,7 @@ from utils.movie_models import (
     festival_breakeven_bids, festival_interest,
     scout_read, SCOUTED_HOT_POACH_CHANCE,
     partner_renewal_fee, draw_partner_release_poach, PARTNER_RENEWAL_HIT_MULT, PARTNER_RELEASE_POACH_CHANCE,
+    THEME_PARK_ELIGIBLE_GENRES,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -891,13 +892,13 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     transition."""
     st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">1 · Studio Partnerships '
-                '<span class="text-xs text-muted">(required · Overall/First-Look Deal, signed once, lasts the whole slate)</span></div>',
+                '<span class="text-xs text-muted">(required · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Sign a standing deal with a production banner for '
-        'first-look access to whatever they\'re developing next -- benefits every remaining cycle '
-        'whose genre matches their specialty. A banner nobody signs can quietly get poached by a '
-        'rival studio.</p>',
+        'first-look access to whatever they\'re developing next: a bonus on every film in their '
+        'specialty genre. From the next cycle on they ask for a renewal fee each cycle (more after a '
+        'hit). A banner nobody signs can quietly get poached by a rival studio.</p>',
         unsafe_allow_html=True)
     _star_vs_critical_explainer()
 
@@ -2075,7 +2076,7 @@ def _decisions(ss):
     final_film = ss.movie_cycle >= CYCLES_TOTAL
     platform_names = {k: v["name"] for k, v in LICENSING_PLATFORMS.items()}
 
-    widths = [1.45, 1.55, 1.8, 0.9, 1.05, 1.75, 1.85, 1.45]
+    widths = [1.3, 1.85, 2.15, 0.85, 1.0, 1.55, 1.7, 1.35]
     headers = ["Film", "Season", "Release", "Run (days)", "PVOD price", "Pay-1", "Pay-2", "Status"]
     for c, h in zip(st.columns(widths), headers):
         c.markdown(f'<div class="font-mono" style="font-size:12px;border-bottom:1px solid #252836;'
@@ -2184,8 +2185,8 @@ def _decisions(ss):
             pick = row[6].selectbox(
                 f"Pay-2 for Film {cyc}", opts, index=None, placeholder="⚠ Choose…",
                 key=f"pay2_slate_{cyc}", label_visibility="collapsed",
-                format_func=lambda k: "Keep (gamble)" if k == "keep" else f"{platform_names[k]} (sure)",
-                help="Keep: the film stays in Peacock's catalog and earns whatever its catalog life turns out to be. "
+                format_func=lambda k: "🎲 Keep" if k == "keep" else f"✓ {platform_names[k].split()[0]}",
+                help="🎲 Keep (gamble): the film stays in Peacock's catalog and earns whatever its catalog life turns out to be. "
                      "License: a guaranteed fee now. The expected values and ranges are listed under the table. "
                      "Lock it in the Status column; locking is final.")
             if pick is None:
@@ -2351,7 +2352,7 @@ def _decisions(ss):
         pay2_pick = current_row[6].selectbox(
             "Pay-2 Window", pay2_opts, index=pay2_opts.index(cur_pay2) if cur_pay2 in pay2_opts else 0,
             label_visibility="collapsed",
-            format_func=lambda k: "Keep (gamble)" if k == "keep" else f"{platform_names[k]} (sure)",
+            format_func=lambda k: "🎲 Keep" if k == "keep" else f"✓ {platform_names[k].split()[0]}",
             help=f"Your final film, so decide Pay-2 now. It opens ~{PAY2_WINDOW_MONTH/12:.0f} years after "
                  "release. Keep: the film stays in Peacock's catalog and earns whatever its catalog life turns "
                  "out to be (better reviews, more value). License: a guaranteed fee, sized by that streamer's "
@@ -2765,9 +2766,15 @@ def _decision_result_card(result: dict):
                .get(label, f"Audience demand landed near {label}."))
     if result.get("talent_partner_bonus"):
         why.append(f"🤝 {result['talent_partner_bonus']} relationship bonus applied.")
-    why.append(f"🎭 Critics at {cs:.0f}: catalog value {0.7 + cs / 100 * 1.1:.1f}x; "
-               + ("theme-park/merch eligible" if cs >= THEME_PARK_CRITICAL_GATE
-                  else f"under {THEME_PARK_CRITICAL_GATE}, so no theme-park/merch revenue")
+    if result.get("theme_park", 0) > 0:
+        park = f"🎢 earned ${result['theme_park']:.1f}M in theme-park/merch"
+    elif kw["genre"] not in THEME_PARK_ELIGIBLE_GENRES and kw.get("concept_type") != "Family/Kids":
+        park = "no theme-park/merch (not a park genre)"
+    elif cs < THEME_PARK_CRITICAL_GATE:
+        park = f"no theme-park/merch (critics under {THEME_PARK_CRITICAL_GATE})"
+    else:
+        park = "no theme-park/merch (box office below the expected run)"
+    why.append(f"🎭 Critics at {cs:.0f}: catalog value {0.7 + cs / 100 * 1.1:.1f}x; {park}"
                + ("; 🏆 awards bump" if result.get("awards_contender") else "") + ".")
     for key, icon in (("production_trouble", "⚠"), ("ai_tooling_setback", "🤖"),
                       ("ancillary_surprise", "🎢"), ("ewom_piracy_swing", "📱")):
