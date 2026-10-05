@@ -1,6 +1,6 @@
 # The Slate — Media Portfolio Simulation
 
-A Streamlit business simulation that teaches media portfolio economics through Comcast/NBCUniversal's networks (**TV / Streaming**: Oxygen → Bravo → Peacock) and Universal Pictures (**Movies**: a five-film slate). Each TV network runs its own calendar era (2012 onward); Movies runs on two-year production cycles.
+A Streamlit business simulation that teaches media portfolio economics through Comcast/NBCUniversal's networks (**TV / Streaming**: Oxygen → Bravo → Peacock) and Universal Pictures (**Movies**: a four-film slate). Each TV network runs its own calendar era (2012 onward); Movies runs on two-year production cycles.
 
 Full design intent, mechanics, and session history: see `DESIGN_NOTES.md`.
 
@@ -58,13 +58,17 @@ The app creates its tables automatically: `slate_leaderboard`, `slate_team_state
 - **Scoring:** OCF margin 35%, show ROI 25%, genre mix 15%, marketing efficiency 15%, renewal quality 10%. Pass = level OCF margin at or above the network's target.
 
 ### Movies (Universal Pictures)
-- **Five films, one per two-year cycle** (Year 1 greenlight & produce = the *t* = 0 investment; Year 2 release).
-- **A logline is required** before a film can be simulated.
-- **Budget buys quality:** each genre has a typical budget (shown to students); P&A and screens saturate past a genre-sized point.
-- **Release strategy** (from Film 3): Wide suits tentpoles, Platform suits drama and awards titles, Day-and-Date suits horror and comedy.
-- **Financing:** tax incentive, or presale, which works as insurance and pays off for high-variance films.
-- **Pay-1 window:** keep it on Peacock, take a flat license, or shop it to competitive bid. Students can accept any bid (shorter terms return the film sooner), or reject all bids and go back to market once.
-- **Scoring:** risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Each film's graded NPV is **75% decisions + 25% luck** (what it actually earned). Pass = the **decisions-only** (risk-adjusted) NPV averages above $0, so luck moves the score but can't pass a slate; a team that changes nothing always fails.
+- **Four films, one per two-year cycle** (Year 1 greenlight & produce = the *t* = 0 investment; Year 2 release): eight in-game years, sized for a 45–60 minute class session.
+- **A step bar** at the top of each film's page (1 Partnerships · 2 Scouted Concepts · 3 Festivals · 4 Greenlight · 5 Holding Deals · 6 Release · 7 Simulate) ticks off each step. **Every step is required**; Simulate stays locked until all are done, and the list under the button names what's missing.
+- **1 · Studio Partnerships:** sign a production banner (+Star Power or +Critical Reception in its genre), then renew it each cycle (more after a hit) or let it go, likely to a rival.
+- **2 · Scouted Concepts:** six concepts per cycle, each with a scout's read (demand stars ±1, risk band, NPV as scouted); one or two are "hot" with a named rival circling.
+- **3 · Festival Acquisitions:** sealed bids against Disney, Warner Bros., Paramount and Sony Pictures, with an analysts' break-even bid and a rival-interest signal per film.
+- **4 · Greenlight a New Movie:** concept, optional **Universal library IP revival** (Jaws, Back to the Future, the Universal Monsters, Shrek, Bourne…, each once per slate), **Lead Actor** (cast any actor you hold or signed), pitch, budget, P&A, screens, financing. **Budget buys quality**; P&A and screens saturate past a genre-sized point. Paid Research covers the Genre + Concept Type it was bought for.
+- **5 · Holding Deals:** lock an actor for the next film (cheap, risky Hold or safe Multi-Picture Deal).
+- **6 · Release Plan:** one table, one row per film, windows in order: Season, Release (Wide / Platform / Day-and-Date from Film 2), run length, 🎬 Theatrical Sim, PVOD price (with market-rejection checks), Pay-1 (Peacock, flat licence, or competitive bids with terms and one re-shop). **Pay-2** comes due the cycle after release as a locked, final choice: 🎲 Keep (catalog gamble) vs a streamer's guaranteed fee. After a hit, a one-time **🎢 Universal Studios attraction** Build / Pass offer.
+- **Results:** a "What you decided → What happened → Why" card naming every driver and random event, plus the **Your Slate** table (each film's NPV and its Deals).
+- **Scoring:** risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Each film's graded NPV is **75% decisions + 25% luck** (what it actually earned), **plus that cycle's deals** (partnership and renewal fees, holds, festival films won, attractions). Pass = the **decisions-only** (risk-adjusted) NPV averages above $0, so luck can't pass a slate; a team that changes nothing always fails.
+- Rival studios and streamers are real companies (Disney, Warner Bros., Paramount, Sony Pictures; Netflix, Amazon Prime Video, Apple TV+, HBO Max); everything they bid, sign or earn is simulated, and the app says so.
 
 ### Peer Pitch Board
 Every pitch a team commits is shared with the other teams in **its own school + class section**: TV shows greenlit from a team's own pitch, and every film a team makes (logline, numbers, and how it actually did). Students see it on the Leaderboard page (**📋 Pitch Board**) and in a "👀 See what other teams in your class have pitched" box beside each pitch form.
@@ -94,9 +98,23 @@ At registration each teammate picks a role. **🎮 Driver** makes every decision
 
 ## Development
 
-- Run the tests with the same Python the app uses locally: `python -m pytest -q` (about 520 tests).
+- Run the tests with the same Python the app uses locally: `python -m pytest -q` (about 525 tests). This machine also has an older Anaconda Streamlit (1.45); run the suite on both.
+- **After a push that changes `app_pages/`, reboot the app on Streamlit Cloud** (Manage app → Reboot). Cloud has served a stale `app_pages/movies.py` after pushes even when `app.py` updated. A local `streamlit run` also doesn't reload edited `app_pages` modules; restart it.
+- On older Streamlit, a widget's identity includes its option labels: don't put live numbers in selectbox labels.
 - **Changing Movies economics?** Re-run the engine balance check (random-strategy sweep, one-lever sensitivities, greedy hill-climb, slate scores) — not just the tests. See `DESIGN_NOTES.md`.
 - All random draws use `utils/seeding.stable_seed` (deterministic across server restarts); never seed with Python's built-in `hash()`.
+
+## Changes on 2026-10-05 (Movies)
+
+- **Four films** (was five); one step bar; Partnerships, Scouted Concepts, Festivals and Holding Deals are **required** steps.
+- **Release Plan table** replaces the long release section: one row per film, windows in real order (theaters → PVOD → Pay-1 → Pay-2).
+- **More decision tension:** Pay-2 gamble vs sure fee (locked, final); festival break-even bids and rival interest; scout's read and hot concepts; Platform / Day-and-Date from Film 2; partnership renewals; Universal Studios attraction offers after a hit.
+- **Universal library IP revival** and **Lead Actor** casting (an actor's relationship bonus applies only when cast).
+- **Deals count in the score** (fees subtract, festival films and attractions add), shown as a Deals column in Your Slate.
+- **Clearer results:** "What you decided → What happened → Why"; Your Slate table; Distribution Pipeline gained a Description column and is now a collapsed panel.
+- **Real competitor names**, with simulated-behavior wording; all text in the Movies section is white.
+- **Fixes:** Research could reveal every genre's draw from one purchase; festival bids raised the acquired film's own quality; incoherent concepts (e.g. Horror · Family/Kids); several display bugs.
+- Student guide and instructor plan updated to match.
 
 ## Changes on 2026-10-01
 

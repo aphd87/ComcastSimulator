@@ -527,6 +527,7 @@ def build_movies():
         "**PVOD price** (renting or buying at home while the movie is still new): set it within the band your real opening supports. If viewers later reject your price, choose **Hold** (keep the price, accept fewer sales) or **Cut** (lower it to win back volume) under the table.",
         "**Pay-1** (first streaming window): keep it on Peacock or license it to a platform for a flat fee. Or, under the table, click **🏷️ Shop This Window to Competitive Bid** and accept **any** bid, not just the highest: each has a 12- or 18-month term, and a shorter term returns the film to Peacock sooner. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; new bids usually come in lower.",
         "**Pay-2** (second window, about 4 years after release): decided **the cycle after release**, when a **⚠ Choose…** cell appears in that film's row. It's a **gamble versus a sure thing**. **🎲 Keep** (the gamble): the film stays in Peacock's catalog and earns whatever its catalog life turns out to be; better reviews make it worth more, and the line under the table shows its expected value and likely range. **✓ Amazon / ✓ Netflix** (the sure thing): a guaranteed fee from Amazon Prime Video or Netflix, whose offers change each cycle. Pick one, then click **💼 Lock Pay-2** in the Status column. Locking is final and reveals Keep's outcome. On your **final** film, you choose Pay-2 in its own row and the outcome is revealed at Simulate.",
+        "**🎢 Attraction offers** (after a hit): if an earlier film earned theme-park money (an action, sci-fi, animated or family film that hit its expected run with critics at 40+), a card under the table offers to **build a Universal Studios attraction**. It shows the cost (about 35% of the film's domestic box office, $40–150M), the expected payoff and its likely range. Sequels and family films, and better reviews, make it worth more, and making a **Sequel** in that genre later adds 30%. Click **🎢 Build** or **Pass**: one chance, the outcome is revealed when you build, and it counts in your score.",
     ])
     callout(doc, "warn",
             "**7 · Simulate.** The **▶ Simulate** button stays locked until every step in the bar has a ✓: a signed partnership, an optioned "
@@ -552,7 +553,10 @@ def build_movies():
     doc.add_heading("How you're scored", level=1)
     para(doc, "Your score is out of 100 points and has four parts. **Passing** depends on your decisions alone: your films' risk-adjusted NPV (before luck) must average above $0, so leaving the defaults alone always fails. "
               "Each film's graded NPV is **75% your decisions** (risk-adjusted, so the bear case counts) and **25% luck** (what the film "
-              "actually earned). A breakout helps and a flop hurts, but good decisions still matter most.")
+              "actually earned). A breakout helps and a flop hurts, but good decisions still matter most. "
+              "**Deals count too:** partnership and renewal fees, actor holds, festival films you win, and attractions you build "
+              "are added to the film made that cycle (fees subtract, wins add). The Your Slate table shows each film's NPV and its "
+              "Deals side by side.")
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
         ["**Risk-adjusted NPV**", "45%", "+$200M average per movie", "Your movies create value after accounting for risk (plus a little luck)."],
         ["**Capital efficiency**", "20%", "6× revenue per marketing dollar", "You got a lot back for what you spent."],

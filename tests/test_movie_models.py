@@ -1817,3 +1817,33 @@ def test_partner_renewal_costs_more_after_a_hit():
     assert not hit and hit2
     assert up == pytest.approx(base * PARTNER_RENEWAL_HIT_MULT, abs=0.11)
     assert partner_renewal_fee("meridian", None)[0] == base
+
+
+def test_deals_count_in_the_score_and_can_cost_a_pass():
+    good = MovieProject(title="t", genre="Animated", budget_m=110, pa_spend_m=70, star_power=60,
+                        screens=4000, cycle=1, concept_type="Family/Kids")
+    projs = [MovieProject(**{**good.__dict__, "cycle": c}) for c in range(1, 5)]
+    base = compute_movie_score(projs, [60] * 4)
+    with_fees = compute_movie_score(projs, [60] * 4, deal_adjustments=[-20.0] * 4)
+    assert with_fees["avg_decision_npv_m"] == pytest.approx(base["avg_decision_npv_m"] - 20.0)
+    assert with_fees["total"] < base["total"]
+    huge_fees = compute_movie_score(projs, [60] * 4, deal_adjustments=[-1000.0] * 4)
+    assert not huge_fees["passed"]
+    # Actual deal outcomes only move the 25% luck part.
+    lucky = compute_movie_score(projs, [60] * 4, actual_npvs=[50.0] * 4, deal_adjustments=[0.0] * 4,
+                                deal_adjustments_actual=[40.0] * 4)
+    plain = compute_movie_score(projs, [60] * 4, actual_npvs=[50.0] * 4)
+    assert lucky["avg_decision_npv_m"] == pytest.approx(plain["avg_decision_npv_m"])
+    assert lucky["avg_ra_npv_m"] > plain["avg_ra_npv_m"]
+
+
+def test_attraction_offers_scale_with_franchise_and_reviews():
+    from utils.movie_models import attraction_offer, draw_attraction_payoff_mult, ATTRACTION_COST_RANGE
+    new_ip = attraction_offer("New IP", 200, 55)
+    sequel = attraction_offer("Sequel", 200, 55)
+    acclaimed = attraction_offer("New IP", 200, 85)
+    assert sequel["expected"] > new_ip["expected"] and acclaimed["expected"] > new_ip["expected"]
+    assert ATTRACTION_COST_RANGE[0] <= attraction_offer("New IP", 10, 50)["cost"] <= ATTRACTION_COST_RANGE[1]
+    assert attraction_offer("New IP", 5000, 50)["cost"] == ATTRACTION_COST_RANGE[1]
+    assert new_ip["p10"] < new_ip["expected"] < new_ip["p90"]
+    assert draw_attraction_payoff_mult("T", 2) == draw_attraction_payoff_mult("T", 2)

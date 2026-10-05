@@ -772,7 +772,8 @@ elif ss.active_section == "movies":
             before a single ticket sells. You're graded on <b style="color:#ffffff;">risk-adjusted NPV</b>,
             weighing your bad outcome, not just your hopeful one; 25% of each film's grade is what it actually
             earned. To <b style="color:#ffffff;">pass</b>, your decisions alone (risk-adjusted NPV, before luck) must average
-            above $0: luck moves your score, but it can't pass a slate for you.
+            above $0: luck moves your score, but it can't pass a slate for you. Deals count too: partnership fees,
+            actor holds, festival films and attractions add to or subtract from the film made that cycle.
             <div style="font-size:13px;margin-top:8px;">Rival studios (Disney, Warner Bros., Paramount, Sony Pictures)
             and streaming bidders (Netflix, Amazon Prime Video, Apple TV+, HBO Max) are real companies. Everything
             they bid, sign, or earn in this game is simulated, not real data.</div>

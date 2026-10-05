@@ -56,6 +56,7 @@ from utils.movie_models import (
     scout_read, SCOUTED_HOT_POACH_CHANCE,
     partner_renewal_fee, draw_partner_release_poach, PARTNER_RENEWAL_HIT_MULT, PARTNER_RELEASE_POACH_CHANCE,
     THEME_PARK_ELIGIBLE_GENRES,
+    attraction_offer, draw_attraction_payoff_mult, ATTRACTION_SEQUEL_BONUS,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -98,6 +99,11 @@ def _init(ss):
         ss.movie_overall_deal_signed_cycle = ss.get("movie_cycle", 1) if ss.get("movie_overall_deal") else None
     if "movie_overall_renewed_through" not in ss:
         ss.movie_overall_renewed_through = 0
+    # Deal ledger (2026-10-05, per explicit user request that deals count in
+    # the grade): {cycle: [{"label", "decision", "actual"}]} -- every fee paid
+    # and every festival film won that cycle, credited to that cycle's film.
+    if not isinstance(ss.get("movie_deal_ledger"), dict):
+        ss.movie_deal_ledger = {}
     if not isinstance(ss.get("movie_partner_releases"), dict):
         ss.movie_partner_releases = {}   # {cycle: {"partner": key, "rival": name or None}}
     if not isinstance(ss.get("movie_talent_holds"), dict):
@@ -370,6 +376,9 @@ def _step_status(ss) -> list:
     pay2 = [("Pay-2 (earlier films)", "release", False,
              "choose Pay-2 for each earlier film in the Release Plan table")] \
         if _pending_pay2_films(ss) else []
+    if _pending_attractions(ss):
+        pay2.append(("Attraction (earlier hit)", "release", False,
+                     "decide Build or Pass on the 🎢 attraction offer under the Release Plan"))
     return [
         ("Partnerships", "talent", partnerships,
          "renew or replace your Studio Partnership" if ss.get("movie_overall_deal")
@@ -381,6 +390,41 @@ def _step_status(ss) -> list:
     ] + pay2 + [
         ("Release", "release", release, "run the Theatrical Simulation"),
     ]
+
+
+def _book_deal(ss, label: str, decision_m: float, actual_m: "float | None" = None):
+    """Record a deal against this cycle's film (fees negative, acquisitions
+    and attractions positive). actual_m defaults to decision_m (a fee is a
+    fee)."""
+    ss.setdefault("movie_deal_ledger", {}).setdefault(ss.movie_cycle, []).append(
+        {"label": label, "decision": float(decision_m),
+         "actual": float(decision_m if actual_m is None else actual_m)})
+
+
+def _deal_totals(ss, cycle: int) -> tuple:
+    """(decision $M, actual $M) of every deal booked in a cycle. An
+    attraction earns its sequel bonus once a LATER film in the slate is a
+    Sequel in the same genre (keeping the franchise alive)."""
+    deals = ss.get("movie_deal_ledger", {}).get(cycle, [])
+    dec = sum(d["decision"] for d in deals)
+    act = sum(d["actual"] for d in deals)
+    for d in deals:
+        bonus = d.get("sequel_bonus")
+        if bonus and any(r["cycle"] > bonus["after_cycle"]
+                         and r["project_kwargs"].get("concept_type") == "Sequel"
+                         and r["project_kwargs"].get("genre") == bonus["genre"]
+                         for r in ss.get("movie_log", [])):
+            dec += bonus["decision"]
+            act += bonus["actual"]
+    return dec, act
+
+
+def _pending_attractions(ss) -> list:
+    """Earlier films that earned theme-park revenue and haven't had their
+    attraction decision yet (2026-10-05). The final film is never offered
+    one -- there's no later cycle to decide it in."""
+    return [r for r in sorted(ss.get("movie_log", []), key=lambda r: r["cycle"])
+            if r["cycle"] < ss.movie_cycle and r.get("theme_park", 0) > 0 and not r.get("attraction_decided")]
 
 
 def _partner_renewal_due(ss) -> bool:
@@ -396,7 +440,7 @@ def _numbered_steps(ss) -> list:
     1-6; the Pay-2 step for earlier films lives inside section 6."""
     out, n = [], 0
     for label, anchor, done, todo in _step_status(ss):
-        if label.startswith("Pay-2"):
+        if label.startswith("Pay-2") or label.startswith("Attraction"):
             out.append((6, label, anchor, done, todo))
         else:
             n += 1
@@ -454,13 +498,16 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
             "Opening Wknd":    f"${p.opening_weekend():.0f}M",
             "Worldwide B.O.":  f"${worldwide:.0f}M",
             "Critics":         f"{r['critical_score']:.0f}/100",
-            "NPV":             _fmt_money(r["npv"]),
+            "Film NPV":        _fmt_money(r["npv"]),
+            "Deals":           _fmt_money(_deal_totals(ss, r["cycle"])[1]),
             "Result":          "✅ Made money" if r["npv"] >= 0 else "❌ Lost money",
         })
-    total = sum(r["npv"] for r in log)
+    total = sum(r["npv"] + _deal_totals(ss, r["cycle"])[1] for r in log)
     st.markdown(f'<div class="section-title">{title} '
-                f'<span class="text-xs text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV '
+                f'<span class="text-xs text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV incl. deals '
                 f'{_fmt_money(total)})</span></div>', unsafe_allow_html=True)
+    st.caption("Deals = partnership and renewal fees, actor holds, festival films won and attractions built "
+               "that cycle. They count in your score alongside each film's NPV.")
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
@@ -941,6 +988,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         if rc1.button(f"✅ Renew for ${fee:.1f}M", key=f"renew_partner_{ss.movie_cycle}", use_container_width=True):
             ss.movie_overall_renewed_through = ss.movie_cycle
             ss.movie_talent_total_spend += fee
+            _book_deal(ss, f"Renewed {partner['name']}", -fee)
             st.rerun()
         if rc2.button("👋 Let them go", key=f"release_partner_{ss.movie_cycle}", use_container_width=True):
             key = ss.movie_overall_deal
@@ -985,6 +1033,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
                     ss.movie_overall_deal = key
                     ss.movie_overall_deal_signed_cycle = ss.movie_cycle
                     ss.movie_talent_total_spend += partner["deal_cost_m"]
+                    _book_deal(ss, f"Signed {partner['name']}", -partner["deal_cost_m"])
                     st.rerun()
 
     if ss.movie_talent_total_spend > 0:
@@ -1236,6 +1285,13 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                     outcome = resolve_festival_acquisition_outcome(film, auction["winner"], auction["winning_bid_m"])
                     if auction["team_won"]:
                         ss.movie_festival_log[fid] = outcome
+                        # Credit the acquisition to this cycle's film: its
+                        # risk-adjusted value for the decision part, its
+                        # actual NPV for the luck part.
+                        _book_deal(ss, f"Won {outcome['festival_name']}: {outcome['title']}",
+                                   risk_adjusted_npv(MovieProject(**outcome["project_kwargs"]),
+                                                     outcome["critical_score"]),
+                                   outcome["npv"])
                     else:
                         ss.movie_festival_rival_log[fid] = outcome
                     st.rerun()
@@ -1349,6 +1405,7 @@ def _section_holding_deals(ss, resolved_hold_key):
                     with bcol1:
                         if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
                             ss.movie_talent_total_spend += partner["hold_cost_m"]
+                            _book_deal(ss, f"Hold on {partner['name']}", -partner["hold_cost_m"])
                             rival = draw_rival_claim(ss.team_name, ss.movie_cycle, key)
                             if rival:
                                 ss.movie_talent_holds[key] = {"status": "rival_claimed",
@@ -1359,6 +1416,7 @@ def _section_holding_deals(ss, resolved_hold_key):
                     with bcol2:
                         if st.button("Multi-Picture", key=f"multi_{key}", use_container_width=True):
                             ss.movie_talent_total_spend += partner["multi_picture_cost_m"]
+                            _book_deal(ss, f"Multi-picture deal: {partner['name']}", -partner["multi_picture_cost_m"])
                             ss.movie_multi_picture_deals[key] = ss.movie_cycle
                             st.rerun()
 
@@ -2392,6 +2450,49 @@ def _decisions(ss):
     if pay2_notes:
         st.markdown('<div style="font-size:13px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
                     + '</div>', unsafe_allow_html=True)
+
+    # 🎢 Universal Studios attraction offers (2026-10-05): a real, one-time
+    # Build / Pass bet after a film that earned theme-park revenue.
+    for entry in _pending_attractions(ss):
+        kw = entry["project_kwargs"]
+        offer = attraction_offer(kw.get("concept_type", "New IP"), entry.get("domestic_bo", 0.0),
+                                 entry["critical_score"])
+        st.markdown(f"""
+        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;font-size:13px;line-height:1.55;">
+          <div class="text-sm font-semibold">🎢 Film {entry['cycle']} "{escape(kw['title'])}" was a hit: build a Universal
+          Studios attraction?</div>
+          Cost now: <b>${offer['cost']:.1f}M</b>. Expected payoff ${offer['expected']:.1f}M (likely ${offer['p10']:.1f}M to
+          ${offer['p90']:.1f}M), so roughly {_fmt_money(offer['expected'] - offer['cost'])} expected, from
+          {_fmt_money(offer['p10'] - offer['cost'])} to {_fmt_money(offer['p90'] - offer['cost'])}. Franchises (sequels,
+          family films) and better reviews make it worth more; a later <b>Sequel</b> in {kw['genre']} adds
+          {ATTRACTION_SEQUEL_BONUS:.0%} to the payoff. One chance: decide now. It counts in your score.
+        </div>
+        """, unsafe_allow_html=True)
+        ac1, ac2 = st.columns(2)
+        if ac1.button(f"🎢 Build for ${offer['cost']:.1f}M", key=f"build_attr_{entry['cycle']}",
+                      use_container_width=True):
+            realized = offer["expected"] * draw_attraction_payoff_mult(ss.team_name, entry["cycle"])
+            entry["attraction_decided"] = "built"
+            entry["attraction_payoff"] = realized
+            ss.setdefault("movie_deal_ledger", {}).setdefault(ss.movie_cycle, []).append({
+                "label": f"Attraction for {kw['title']}",
+                "decision": offer["expected"] - offer["cost"],
+                "actual": realized - offer["cost"],
+                "sequel_bonus": {"genre": kw["genre"], "after_cycle": entry["cycle"],
+                                 "decision": ATTRACTION_SEQUEL_BONUS * offer["expected"],
+                                 "actual": ATTRACTION_SEQUEL_BONUS * realized},
+            })
+            st.rerun()
+        if ac2.button("Pass", key=f"pass_attr_{entry['cycle']}", use_container_width=True):
+            entry["attraction_decided"] = "passed"
+            st.rerun()
+    for entry in sorted(ss.movie_log, key=lambda r: r["cycle"]):
+        if entry.get("attraction_decided") == "built" and entry.get("attraction_payoff") is not None:
+            cost = attraction_offer(entry["project_kwargs"].get("concept_type", "New IP"),
+                                    entry.get("domestic_bo", 0.0), entry["critical_score"])["cost"]
+            st.caption(f"🎢 Film {entry['cycle']} attraction built: payoff \\${entry['attraction_payoff']:.1f}M on a "
+                       f"\\${cost:.1f}M build ({_fmt_money(entry['attraction_payoff'] - cost).replace('$', chr(92) + '$')}). "
+                       f"A later {entry['project_kwargs']['genre']} Sequel lifts it {ATTRACTION_SEQUEL_BONUS:.0%}.")
     if inputs_changed:
         st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) changed "
                 "since you ran the Theatrical Sim. Click 🎬 Theatrical Sim again to lock in a fresh result.")
@@ -2717,7 +2818,7 @@ def _decisions(ss):
 
 
 # ── Phase 2: Results ──────────────────────────────────────────────────────────
-def _decision_result_card(result: dict):
+def _decision_result_card(result: dict, ss=None):
     """What you decided → what happened → why, side by side (2026-10-05,
     per explicit user request for "clear decisions with clear results").
     Every 'why' line is computed from the same engine the result came from,
@@ -2776,6 +2877,11 @@ def _decision_result_card(result: dict):
         park = "no theme-park/merch (box office below the expected run)"
     why.append(f"🎭 Critics at {cs:.0f}: catalog value {0.7 + cs / 100 * 1.1:.1f}x; {park}"
                + ("; 🏆 awards bump" if result.get("awards_contender") else "") + ".")
+    deals = (ss.get("movie_deal_ledger", {}).get(result["cycle"], []) if ss is not None else [])
+    if deals:
+        total = sum(d["actual"] for d in deals)
+        why.append(f"💼 Deals this cycle, counted in your score: {_fmt_money(total)} ("
+                   + "; ".join(f"{d['label']} {_fmt_money(d['actual'])}" for d in deals) + ").")
     for key, icon in (("production_trouble", "⚠"), ("ai_tooling_setback", "🤖"),
                       ("ancillary_surprise", "🎢"), ("ewom_piracy_swing", "📱")):
         if result.get(key):
@@ -2842,7 +2948,7 @@ def _results(ss):
     </div>
     """, unsafe_allow_html=True)
 
-    _decision_result_card(result)
+    _decision_result_card(result, ss)
 
     # ── Bear/Base/Bull range with the real outcome marked on it ───────────────
     # 2026-08-24, per a QA-pass finding: previously this was narrated in
@@ -3043,8 +3149,11 @@ def _complete(ss):
     critical_scores = [r["critical_score"] for r in sorted_log]
     # 25% of each film's graded NPV is what it actually earned (MOVIE_LUCK_WEIGHT).
     actual_npvs = [r.get("npv") for r in sorted_log]
+    deal_dec = [_deal_totals(ss, r["cycle"])[0] for r in sorted_log]
+    deal_act = [_deal_totals(ss, r["cycle"])[1] for r in sorted_log]
     score = compute_movie_score(projects, critical_scores,
-                                actual_npvs=actual_npvs if all(v is not None for v in actual_npvs) else None)
+                                actual_npvs=actual_npvs if all(v is not None for v in actual_npvs) else None,
+                                deal_adjustments=deal_dec, deal_adjustments_actual=deal_act)
 
     total_c = SUCCESS if score["total"] >= 70 else (WARN if score["total"] >= 50 else DANGER)
     npv_c = SUCCESS if score["avg_ra_npv_m"] >= 0 else DANGER
@@ -3065,9 +3174,9 @@ def _complete(ss):
         <div><div class="text-[9px] text-muted font-mono">SCORE</div>
           <div class="text-3xl font-serif" style="color:{total_c};">{score['total']:.0f}</div>
           <div class="text-[9px] text-muted font-mono">/ 100 pts</div></div>
-        <div><div class="text-[9px] text-muted font-mono">TALENT DEAL SPEND</div>
-          <div class="text-3xl font-serif" style="color:{WARN};">${ss.get('movie_talent_total_spend', 0.0):.1f}M</div>
-          <div class="text-[9px] text-muted font-mono">tracked separately, not folded into Score above</div></div>
+        <div><div class="text-[9px] text-muted font-mono">DEALS &amp; FEES (IN THE SCORE)</div>
+          <div class="text-3xl font-serif">{_fmt_money(sum(deal_act))}</div>
+          <div class="text-[9px] text-muted font-mono">partnerships, renewals, holds, festival films</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)

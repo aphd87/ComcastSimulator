@@ -975,7 +975,7 @@ def test_your_slate_table_renders_at_cycle_3_with_two_prior_cycles():
     assert any("Your Slate So Far" in md.value for md in at.markdown)
     slate = next(df.value for df in at.dataframe if "Lead" in df.value.columns)
     assert len(slate) == 2
-    assert {"Opening Wknd", "Worldwide B.O.", "Critics", "NPV", "Result"} <= set(slate.columns)
+    assert {"Opening Wknd", "Worldwide B.O.", "Critics", "Film NPV", "Deals", "Result"} <= set(slate.columns)
 
 
 def test_your_slate_table_absent_at_cycle_1_with_no_prior_cycles():

@@ -335,7 +335,12 @@ def build_plan():
         ["**Release strategy**", "Wide for tentpoles; Platform for drama and awards; Day-and-Date for horror and comedy (from Film 2)."],
         ["**Financing**", "Tax incentive almost always helps. Presale is insurance: pays off for high-variance films, a bad trade for likely hits."],
         ["**Pay-1 window**", "Any bid can be accepted; shorter terms return the film to Peacock sooner. One go-back-to-market round per film."],
-        ["**Scoring**", "Risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Graded NPV = 75% decisions + 25% luck."],
+        ["**Pay-2 window**", "Decided the cycle after release and locked: 🎲 Keep (catalog gamble, better with good reviews) vs a streamer's sure fee."],
+        ["**Festivals**", "Bid against the analysts' break-even; hot films draw more rivals (winner's curse). Dramas are often bargains, tentpoles overpriced."],
+        ["**Partnerships**", "Sign once, then renew each cycle (pricier after a hit) or let go. Fees count in the score."],
+        ["**Library IP / Lead Actor**", "Reviving a Universal title lifts the opening (once per slate, legacy fee). A held actor's bonus applies only when cast."],
+        ["**Attractions**", "After a park-genre hit: Build / Pass a Universal Studios attraction. Roughly break-even on average; better for sequels and family films."],
+        ["**Scoring**", "Risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Graded NPV = 75% decisions + 25% luck, plus each cycle's deals (fees, festival films, attractions)."],
         ["**A team that changes nothing**", "Always fails (score in the high 30s): passing depends on decisions alone. A good contrast for Board 2."],
     ], [1.7, 4.8])
     callout(doc, "tip",

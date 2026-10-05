@@ -555,6 +555,50 @@ THEME_PARK_CRITICAL_GATE       = 40     # minimum resolved critical_score (0-100
 # genre to begin with, so this never actually fires for Indie-Horror).
 THEME_PARK_CONCEPT_MULT = {"Sequel": 1.0, "New IP": 0.4, "Family/Kids": 0.85}
 
+# ── Universal Studios attraction -- a real decision after a hit ─────────────
+# 2026-10-05, per explicit user request ("do we have theme park options for
+# applicable movies in the following years? Does that at all come up if a
+# movie [is] a major hit?"). The merch/licensing stream above is automatic;
+# this is a separate, optional bet offered the cycle after a film that
+# earned theme-park revenue: build a ride/land at Universal's parks for an
+# upfront cost, for an uncertain long-run payoff. Expected value is roughly
+# break-even -- better for franchises (Sequel, Family/Kids) and well-
+# reviewed films -- with a wide lognormal spread revealed when the team
+# decides. A later Sequel in the same genre keeps the franchise alive and
+# lifts the attraction's payoff by ATTRACTION_SEQUEL_BONUS. Values are
+# present-value $M at decision time; illustrative calibration, not data.
+ATTRACTION_COST_PCT_OF_DOMESTIC = 0.35
+ATTRACTION_COST_RANGE           = (40.0, 150.0)
+ATTRACTION_BASE_RATIO           = 0.85   # expected payoff / cost for an unproven New IP at 50/100 reviews
+ATTRACTION_FRANCHISE_BONUS      = 0.30   # + for Sequel or Family/Kids films (proven, repeatable IP)
+ATTRACTION_CRITIC_SLOPE         = 0.50   # + per 100 review points above 50
+ATTRACTION_SIGMA                = 0.50   # lognormal spread of the realized payoff
+ATTRACTION_SEQUEL_BONUS         = 0.30   # payoff lift if a later film is a Sequel in the same genre
+
+
+def attraction_offer(concept_type: str, domestic_bo_m: float, critical_score: float) -> dict:
+    """Cost, expected payoff, and a p10-p90 range for building an
+    attraction off a hit film (all $M, present value)."""
+    lo, hi = ATTRACTION_COST_RANGE
+    cost = round(min(max(ATTRACTION_COST_PCT_OF_DOMESTIC * domestic_bo_m, lo), hi), 1)
+    ratio = (ATTRACTION_BASE_RATIO
+             + (ATTRACTION_FRANCHISE_BONUS if concept_type in ("Sequel", "Family/Kids") else 0.0)
+             + ATTRACTION_CRITIC_SLOPE * max(0.0, critical_score - 50.0) / 100.0)
+    expected = cost * ratio
+    s = ATTRACTION_SIGMA
+    return {"cost": cost, "expected": expected,
+            "p10": expected * float(np.exp(-s * s / 2 - 1.2816 * s)),
+            "p90": expected * float(np.exp(-s * s / 2 + 1.2816 * s))}
+
+
+def draw_attraction_payoff_mult(team_name: str, film_cycle: int) -> float:
+    """Realized payoff relative to expected (mean 1.0), seeded per team +
+    film so it can't be re-rolled."""
+    seed = (stable_seed(team_name) + film_cycle * 21937 + 677) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    s = ATTRACTION_SIGMA
+    return float(np.exp(rng.normal(-s * s / 2, s)))
+
 
 def draw_critical_reception(team_name: str, cycle: int, genre: str,
                              ai_production_tools: bool = False) -> float:
@@ -2260,7 +2304,8 @@ MOVIE_LUCK_WEIGHT = 0.25
 
 
 def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[list] = None,
-                        actual_npvs: Optional[list] = None) -> dict:
+                        actual_npvs: Optional[list] = None, deal_adjustments: Optional[list] = None,
+                        deal_adjustments_actual: Optional[list] = None) -> dict:
     """Composite score across a slate of MovieProjects (one per cycle
     played so far). Weights mirror utils/game_state.py::compute_score's
     pattern but with Day 2's own components — see DESIGN_NOTES.md.
@@ -2268,7 +2313,15 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
     critical_scores, when given, must be the same length as projects (the
     already-resolved reception per cycle — see draw_critical_reception) so
     the final score reflects real awards-season/library value actually
-    earned, not just the hypothetical bear/base box-office scenarios."""
+    earned, not just the hypothetical bear/base box-office scenarios.
+
+    deal_adjustments / deal_adjustments_actual (2026-10-05, per explicit
+    user request that deals count in the grade): per film, the $M the
+    studio's deals that cycle added or cost -- partnership and renewal
+    fees, actor holds, festival acquisitions, attractions. The decision
+    version (risk-adjusted / expected values) feeds the pass line and the
+    75% decisions part; the actual version feeds the 25% luck part.
+    None = no deals, exactly the previous behavior."""
     if not projects:
         return {"total": 0.0, "risk_adjusted_npv": 0.0, "capital_efficiency": 0.0,
                  "strategic_fit": 0.0, "portfolio_diversification": 0.0, "passed": False}
@@ -2276,6 +2329,11 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
         critical_scores = [None] * len(projects)
 
     ra_npvs = [risk_adjusted_npv(p, cs) for p, cs in zip(projects, critical_scores)]
+    if deal_adjustments is not None and len(deal_adjustments) == len(ra_npvs):
+        ra_npvs = [ra + adj for ra, adj in zip(ra_npvs, deal_adjustments)]
+    if (actual_npvs is not None and deal_adjustments_actual is not None
+            and len(deal_adjustments_actual) == len(actual_npvs)):
+        actual_npvs = [a + adj for a, adj in zip(actual_npvs, deal_adjustments_actual)]
     # Passing depends on decisions alone (2026-10-01, per user: a team that
     # changes nothing must always fail -- "you need to try"). Luck moves the
     # score below, but can never carry a slate over the pass line.
