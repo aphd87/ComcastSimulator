@@ -174,10 +174,10 @@ def build_plan():
     doc.add_heading("THE 60-MINUTE PLAY BLOCK (minutes 12–72)", level=1)
     table(doc, ["Clock", "Where teams should be", "What to watch for"], [
         ["**12–24**", "Register; Film 1 (Years 1–2)", "Teams leaving the defaults alone. The default film is an under-funded tentpole."],
-        ["**24–36**", "Film 2", "Budgets far below the genre's typical budget (gold hint under Production Budget)."],
-        ["**36–48**", "Film 3 — **release strategies unlock**", "Everyone defaulting to Wide. Who considered Platform for a drama, or Day-and-Date for horror?"],
-        ["**48–60**", "Film 4", "Pay-1: anyone take a lower bid on a shorter term? Anyone go back to market?"],
-        ["**60–70**", "Film 5 → **View Final Slate**", "Teams submitting without reading the Score Breakdown."],
+        ["**24–36**", "Film 2 — **release strategies unlock**", "Everyone defaulting to Wide. Who considered Platform for a drama, or Day-and-Date for horror?"],
+        ["**36–48**", "Film 3", "Budgets far below the genre's typical budget (gold hint under Production Budget). Pay-2 calls: who gambled on Keep, and why?"],
+        ["**48–60**", "Film 4 (final film: Pay-2 decided in its own row)", "Pay-1: anyone take a lower bid on a shorter term? Anyone go back to market?"],
+        ["**60–70**", "**View Final Slate**", "Teams submitting without reading the Score Breakdown."],
         ["**70–72**", "**Submit Official Score**", "First submission is official."],
     ], [0.9, 2.5, 3.1])
     para(doc, "**Questions to ask while circulating:**")
@@ -332,7 +332,7 @@ def build_plan():
         ["**Production budget**", "Close to the genre's typical budget (gold hint). Far below looks cheap; far above has diminishing returns."],
         ["**P&A**", "Essential but saturating; the sweet spot is roughly 0.5–1× the typical budget."],
         ["**Screens**", "Up to the genre's audience (also hinted). Beyond that, mostly empty seats."],
-        ["**Release strategy**", "Wide for tentpoles; Platform for drama and awards; Day-and-Date for horror and comedy (from Film 3)."],
+        ["**Release strategy**", "Wide for tentpoles; Platform for drama and awards; Day-and-Date for horror and comedy (from Film 2)."],
         ["**Financing**", "Tax incentive almost always helps. Presale is insurance: pays off for high-variance films, a bad trade for likely hits."],
         ["**Pay-1 window**", "Any bid can be accepted; shorter terms return the film to Peacock sooner. One go-back-to-market round per film."],
         ["**Scoring**", "Risk-adjusted NPV 45%, capital efficiency 20%, strategic fit 20%, diversification 15%. Graded NPV = 75% decisions + 25% luck."],

@@ -205,7 +205,7 @@ def test_festival_section_renders_three_targets_with_revealed_reception():
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
     assert "Film Festival Acquisitions" in text
-    assert "Critical Reception:" in text   # already shown, before any bid
+    assert "Critics:" in text and "Break-even bid" in text   # reviews + valuation shown before any bid
     for fest in FESTIVALS.values():
         assert fest["name"] in text
     assert len(at.number_input) >= len(FESTIVALS)
@@ -224,8 +224,8 @@ def test_bid_shows_live_ratio_against_the_asking_anchor():
     bid_input.set_value(anchor * 2.0).run()
     assert not at.exception
     text = "\n".join(md.value for md in at.markdown)
-    assert "2.0x the" in text
-    assert "winner's-curse risk" in text
+    # 2026-10-05: the live feedback compares the bid to the analysts' break-even range.
+    assert "you need a breakout to make money" in text
 
 
 def test_submitting_a_bid_resolves_the_auction_one_way_or_the_other():

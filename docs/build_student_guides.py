@@ -453,10 +453,12 @@ def build_movies():
     doc.add_heading("Distribution Pipeline — Slate Scorecard  (read only)", level=2)
     para(doc, "Shows where each of your earlier movies is now earning money (in theaters, PVOD, streaming, and so on).")
 
-    doc.add_heading("1 · Studio Partnerships  (required, sign once)", level=2)
-    para(doc, "Sign a long-term deal with a production company. Once signed it lasts your whole slate and gives every movie in that company's "
-              "specialty genre either **+Star Power** or **+Critical Reception**. Click **Sign** to commit. "
-              "**Watch out:** companies you wait on can be signed by a rival studio and lost for good.")
+    doc.add_heading("1 · Studio Partnerships  (required: sign, then renew or replace each cycle)", level=2)
+    para(doc, "Sign a long-term deal with a production company. It gives every movie in that company's specialty genre either "
+              "**+Star Power** or **+Critical Reception**. Click **Sign** to commit. From the next cycle on, the company asks for a "
+              "**renewal fee** each cycle, and more after a hit, since they know their worth. **Renew**, or **Let them go**: the bonus "
+              "ends, and a rival studio will probably sign them on the spot. You can then sign a different company at its full price. "
+              "Companies nobody signs can also be taken by a rival.")
     callout(doc, "key",
             "**⭐ Star Power vs 🎭 Critical Reception.** Star Power means a bigger **opening weekend** (up to +30% at 100): "
             "predictable money that arrives first. Critical Reception means **longer legs**: higher library value, theme-park "
@@ -464,14 +466,19 @@ def build_movies():
             "shift upward. Pick the partner that matches how your movies make money.")
 
     doc.add_heading("2 · Scouted Concepts  (required, option at least one)", level=2)
-    para(doc, "Your scouts bring you **6** ready-made movie ideas each cycle. Click **Option This Concept** on at least one; it fills in "
-              "your Greenlight form, and you can still change anything there. You still make only one movie per cycle, so optioning a "
-              "second idea just overwrites the form. Ideas you skip may be made by a rival studio before the next cycle.")
+    para(doc, "Your scouts bring you **6** ready-made movie ideas each cycle. Each card has a **scout's read**: an audience-demand "
+              "estimate in stars (it can be off by one star; paid Research gives the real signal), how risky the genre is (Steady, "
+              "Moderate, Volatile), and what the concept earns as scouted on a weak and an expected run. Click **Option This Concept** "
+              "on at least one; it fills in your Greenlight form, and you can still change anything there. Ideas you skip may be made by "
+              "a rival studio before the next cycle; one marked **🔥 [Studio] is circling** is very likely to be gone.")
 
     doc.add_heading("3 · Film Festival Acquisitions  (required, bid on at least one)", level=2)
-    para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Enter a bid on at least one and click "
-              "**Submit Bid**. Bids are sealed: rival studios bid too, and the highest bid wins and pays what it bid. You see the result "
-              "right away. A film you win joins your pipeline as an extra release; it does **not** use your greenlight slot.")
+    para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Each card shows your analysts' "
+              "**break-even bid**: the most you can pay and still make money on a weak run, and on an expected run. It also shows how "
+              "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on at least one and click **Submit Bid**. Bids are "
+              "sealed: the highest bid wins and pays what it bid. Hot films draw more bidders, so winning one often means overpaying "
+              "(the **winner's curse**). You see the result, and what the film went on to earn, right away. A film you win joins your "
+              "pipeline as an extra release; it does **not** use your greenlight slot.")
 
     doc.add_heading("4 · Greenlight a New Movie  (required, one slot per cycle)", level=2)
     para(doc, "This is the core decision. It has three parts:")
@@ -514,12 +521,12 @@ def build_movies():
               "chose and how they did; later rows are placeholders until you greenlight them. Fill in **this film's row**:")
     steps(doc, [
         "**Season**: Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
-        "**Release** (from Cycle 3 on; earlier films are Wide Theatrical only). The line under the table shows each option's risk-adjusted NPV for this film. **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens small and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself.",
+        "**Release** (from Film 2 on; Film 1 is Wide Theatrical only). The line under the table shows each option's risk-adjusted NPV for this film. **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens small and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself.",
         "**Run (days)**: how long the film stays in theaters. Longer runs earn more box office, with diminishing returns, but delay every later window.",
         "**Click 🎬 Theatrical Sim** in the Status column. This is required, and it locks in how the movie does in theaters, its reviews, and any surprises.",
         "**PVOD price** (renting or buying at home while the movie is still new): set it within the band your real opening supports. If viewers later reject your price, choose **Hold** (keep the price, accept fewer sales) or **Cut** (lower it to win back volume) under the table.",
         "**Pay-1** (first streaming window): keep it on Peacock or license it to a platform for a flat fee. Or, under the table, click **🏷️ Shop This Window to Competitive Bid** and accept **any** bid, not just the highest: each has a 12- or 18-month term, and a shorter term returns the film to Peacock sooner. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; new bids usually come in lower.",
-        "**Pay-2** (second window, a couple of years after release): decided **the cycle after release**. Each new cycle, every earlier film whose Pay-2 is due shows a **⚠ Choose…** cell in its row. Each option shows how much it changes that film's NPV versus keeping it on Peacock, and your choice updates that film's result right away. On your **final** film, you choose Pay-2 in its own row.",
+        "**Pay-2** (second window, about 4 years after release): decided **the cycle after release**, when a **⚠ Choose…** cell appears in that film's row. It's a **gamble versus a sure thing**. **Keep (gamble)**: the film stays in Peacock's catalog and earns whatever its catalog life turns out to be; better reviews make it worth more, and the line under the table shows its expected value and likely range. **License (sure)**: a guaranteed fee from Amazon Prime Video or Netflix, whose offers change each cycle. Pick one, then click **💼 Lock Pay-2** in the Status column. Locking is final and reveals Keep's outcome. On your **final** film, you choose Pay-2 in its own row and the outcome is revealed at Simulate.",
     ])
     callout(doc, "warn",
             "**7 · Simulate.** The **▶ Simulate** button stays locked until every step in the bar has a ✓: a signed partnership, an optioned "

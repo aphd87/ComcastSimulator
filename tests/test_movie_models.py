@@ -12,6 +12,7 @@ import math
 import pytest
 
 from utils.movie_models import (
+    YEARS_PER_CYCLE,
     MovieProject, risk_adjusted_npv, capital_efficiency, strategic_fit_score,
     compute_movie_score, portfolio_diversification_score, draw_actual_multiplier, nearest_scenario_label,
     genre_scenario_multipliers, scenario_multipliers_for, SCENARIO_MULTIPLIERS,
@@ -838,7 +839,9 @@ class TestProgressiveWindowing:
         assert 1 < WINDOWING_UNLOCK_CYCLE <= CYCLES_TOTAL
 
     def test_unlock_cycle_matches_the_briefs_year_3_framing(self):
-        assert WINDOWING_UNLOCK_CYCLE == 3
+        # Film 2 starts in Year 3 (2-year cycles) -- moved from 3 to 2 on 2026-10-05.
+        assert WINDOWING_UNLOCK_CYCLE == 2
+        assert (WINDOWING_UNLOCK_CYCLE - 1) * YEARS_PER_CYCLE + 1 == 3
 
 
 # ── Theme park / merchandise revenue stream ──────────────────────────────────
@@ -1744,3 +1747,73 @@ def test_every_library_ip_names_real_genres_and_every_actor_has_a_star_power():
         assert ip["genres"] and set(ip["genres"]) <= set(GENRES)
         assert ip["opening_boost"] > 1.0 and ip["legacy_fee_m"] > 0
     assert set(TALENT_BASE_STAR_POWER) == set(TALENT_PARTNERS)
+
+
+# ── More-intensity mechanics (2026-10-05) ────────────────────────────────────
+def test_pay2_keep_is_worth_nothing_until_decided_then_a_review_driven_gamble():
+    from utils.movie_models import (pay2_keep_expected_mult, pay2_revival_quantiles, draw_pay2_revival,
+                                    risk_adjusted_npv)
+    p = MovieProject(title="t", genre="Action/Tentpole", budget_m=150, pa_spend_m=90, star_power=60,
+                     screens=4000, cycle=1)
+    assert p.pay2_value(70) == 0.0                                   # untouched default: no catalog value
+    kept = MovieProject(**{**p.__dict__, "pay2_decided": True})
+    assert kept.pay2_value(70) > kept.pay2_value(30) > 0             # better reviews, more catalog value
+    assert pay2_keep_expected_mult(80) > pay2_keep_expected_mult(20)
+    lo, hi = pay2_revival_quantiles()
+    assert lo < 1.0 < hi
+    assert draw_pay2_revival("T", 1) == draw_pay2_revival("T", 1)   # seeded: can't be re-rolled
+    lucky = MovieProject(**{**kept.__dict__, "pay2_keep_mult": hi})
+    assert lucky.npv("base", 60) > kept.npv("base", 60)
+    assert risk_adjusted_npv(lucky, 60) == pytest.approx(risk_adjusted_npv(kept, 60))   # luck isn't graded
+    licensed = MovieProject(**{**p.__dict__, "pay2_licensing": "license_out", "pay2_platform": "streamco"})
+    from utils.movie_models import PAY1_LICENSE_DISCOUNT, PAY2_OFFER_MULT_RANGE
+    pay1_fee = p.subscriber_value("base") * PAY1_LICENSE_DISCOUNT
+    assert 0 < licensed.pay2_value() < pay1_fee                     # Pay-2 stays smaller than Pay-1
+    best_offer = MovieProject(**{**licensed.__dict__, "pay2_fee_mult": PAY2_OFFER_MULT_RANGE[1]})
+    assert best_offer.pay2_value() < pay1_fee * PAY2_OFFER_MULT_RANGE[1]
+
+
+def test_festival_breakeven_is_the_npv_at_a_zero_price_and_interest_counts_rivals():
+    from utils.movie_models import (generate_festival_slate, festival_breakeven_bids, festival_interest,
+                                    resolve_festival_acquisition_outcome)
+    film = generate_festival_slate("Team Alpha", 1)[0]
+    weak, expected = festival_breakeven_bids(film)
+    assert 0 <= weak <= expected
+    # Paying exactly the expected-run break-even leaves ~zero NPV on an expected run.
+    at_breakeven = resolve_festival_acquisition_outcome(film, "You", expected)
+    p = MovieProject(**at_breakeven["project_kwargs"])
+    assert p.npv("base", film["critical_score"]) == pytest.approx(0.0, abs=0.2)
+    assert festival_interest([])[0] == "Quiet"
+    assert festival_interest([{"bidder": "Disney", "bid_m": 1}, {"bidder": "Sony Pictures", "bid_m": 1}])[0] == "Warm"
+    assert festival_interest([{"bidder": b, "bid_m": 1} for b in ("Disney", "Paramount", "Warner Bros.")])[0] == "Hot"
+
+
+def test_scouts_flag_hot_concepts_and_read_them_within_one_star():
+    from utils.movie_models import (generate_scouted_concepts, scout_read, draw_actual_multiplier,
+                                    multiplier_to_stars, SCOUTED_HOT_PER_CYCLE)
+    for team in ("Team Alpha", "Team Beta", "Team Gamma"):
+        concepts = generate_scouted_concepts(team, 2)
+        n_hot = sum(1 for c in concepts if c["hot_rival"])
+        assert SCOUTED_HOT_PER_CYCLE[0] <= n_hot <= SCOUTED_HOT_PER_CYCLE[1]
+        for c in concepts:
+            read = scout_read(team, c)
+            true = multiplier_to_stars(draw_actual_multiplier(team, 2, c["genre"], c["concept_type"]),
+                                       c["genre"], c["concept_type"])
+            assert abs(read["stars"] - true) <= 1
+            assert read["risk"] in ("Steady", "Moderate", "Volatile")
+            assert read["npv_weak"] <= read["npv_expected"]
+
+
+def test_hot_concepts_get_poached_far_more_often():
+    hot = sum(1 for i in range(1500) if draw_scouted_poach(f"T{i}", "2_0", hot=True))
+    cold = sum(1 for i in range(1500) if draw_scouted_poach(f"T{i}", "2_0"))
+    assert hot > cold * 1.8
+
+
+def test_partner_renewal_costs_more_after_a_hit():
+    from utils.movie_models import partner_renewal_fee, PARTNER_RENEWAL_HIT_MULT
+    base, hit = partner_renewal_fee("meridian", -5.0)
+    up, hit2 = partner_renewal_fee("meridian", 12.0)
+    assert not hit and hit2
+    assert up == pytest.approx(base * PARTNER_RENEWAL_HIT_MULT, abs=0.11)
+    assert partner_renewal_fee("meridian", None)[0] == base

@@ -7,6 +7,7 @@ revenue visibility yet) -> Release Strategy (the linear-vs-SVOD tension
 from Day 1's Green Light tab, extended to theatrical/day-and-date/platform)
 -> Results (actual outcome resolves against a hidden bull/base/bear draw).
 """
+from dataclasses import replace
 from html import escape
 
 import streamlit as st
@@ -50,6 +51,10 @@ from utils.movie_models import (
     draw_festival_acquisition_bids, resolve_festival_acquisition, resolve_festival_acquisition_outcome,
     describe_pipeline_movie, STAR_POWER_BOOST_MAX, THEME_PARK_CRITICAL_GATE,
     UNIVERSAL_LIBRARY_IP, library_ip_opening_boost, TALENT_BASE_STAR_POWER,
+    draw_pay2_revival, draw_pay2_offer_mults, pay2_revival_quantiles,
+    festival_breakeven_bids, festival_interest,
+    scout_read, SCOUTED_HOT_POACH_CHANCE,
+    partner_renewal_fee, draw_partner_release_poach, PARTNER_RENEWAL_HIT_MULT, PARTNER_RELEASE_POACH_CHANCE,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -85,6 +90,15 @@ def _init(ss):
     # studio has permanently signed while unclaimed by the team.
     if "movie_overall_deal" not in ss:
         ss.movie_overall_deal = None
+    # Renewals (2026-10-05): the cycle the current banner deal was signed, and
+    # the last cycle it was renewed through. Sessions that signed before this
+    # existed count as signed this cycle, so nobody is asked mid-cycle.
+    if "movie_overall_deal_signed_cycle" not in ss:
+        ss.movie_overall_deal_signed_cycle = ss.get("movie_cycle", 1) if ss.get("movie_overall_deal") else None
+    if "movie_overall_renewed_through" not in ss:
+        ss.movie_overall_renewed_through = 0
+    if not isinstance(ss.get("movie_partner_releases"), dict):
+        ss.movie_partner_releases = {}   # {cycle: {"partner": key, "rival": name or None}}
     if not isinstance(ss.get("movie_talent_holds"), dict):
         ss.movie_talent_holds = {}
     if not isinstance(ss.get("movie_rival_exclusive"), dict):
@@ -339,7 +353,8 @@ def _step_status(ss) -> list:
     required while it's actually possible (e.g. every banner already
     poached, or no next film to hold an actor for)."""
     cyc = ss.movie_cycle
-    partnerships = bool(ss.movie_overall_deal) or all(k in ss.movie_rival_exclusive for k in STUDIO_PARTNERS)
+    partnerships = ((bool(ss.movie_overall_deal) and not _partner_renewal_due(ss))
+                    or all(k in ss.movie_rival_exclusive for k in STUDIO_PARTNERS))
     scouted = any(str(cid).startswith(f"{cyc}_") for cid in ss.movie_scouted_optioned)
     fest_ids = {f["id"] for f in generate_festival_slate(ss.team_name, cyc)}
     festivals = any(i in ss.movie_festival_log or i in ss.movie_festival_rival_log for i in fest_ids)
@@ -355,7 +370,9 @@ def _step_status(ss) -> list:
              "choose Pay-2 for each earlier film in the Release Plan table")] \
         if _pending_pay2_films(ss) else []
     return [
-        ("Partnerships", "talent", partnerships, "sign a Studio Partnership"),
+        ("Partnerships", "talent", partnerships,
+         "renew or replace your Studio Partnership" if ss.get("movie_overall_deal")
+         else "sign a Studio Partnership"),
         ("Scouted Concepts", "scouted", scouted, "option at least one Scouted Concept"),
         ("Festivals", "festivals", festivals, "bid on at least one festival film"),
         ("Greenlight", "greenlight", greenlight, "write your pitch / logline"),
@@ -363,6 +380,14 @@ def _step_status(ss) -> list:
     ] + pay2 + [
         ("Release", "release", release, "run the Theatrical Simulation"),
     ]
+
+
+def _partner_renewal_due(ss) -> bool:
+    """A signed banner asks for renewal every cycle after the one it was
+    signed in, until renewed for this cycle (2026-10-05)."""
+    signed = ss.get("movie_overall_deal_signed_cycle")
+    return (bool(ss.get("movie_overall_deal")) and signed is not None and signed < ss.movie_cycle
+            and ss.get("movie_overall_renewed_through", 0) < ss.movie_cycle)
 
 
 def _numbered_steps(ss) -> list:
@@ -884,15 +909,56 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         </div>
         """, unsafe_allow_html=True)
 
-    if ss.movie_overall_deal:
+    released = ss.movie_partner_releases.get(ss.movie_cycle)
+    if released:
+        gone = (f"{released['rival']} signed them right away." if released.get("rival")
+                else "No rival has signed them yet; you can sign a banner below.")
+        st.markdown(f'<div style="font-size:13px;margin-bottom:8px;">👋 You let '
+                    f'<b>{STUDIO_PARTNERS[released["partner"]]["name"]}</b> go. {gone}</div>',
+                    unsafe_allow_html=True)
+
+    renewal_due = _partner_renewal_due(ss)
+    if renewal_due:
+        partner = STUDIO_PARTNERS[ss.movie_overall_deal]
+        prev = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle - 1), None)
+        fee, hit = partner_renewal_fee(ss.movie_overall_deal, prev["npv"] if prev else None)
+        bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
+                       else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
+        why = ("Your last film made money, so they know their worth: the fee is up "
+               f"{(PARTNER_RENEWAL_HIT_MULT - 1):.0%}." if hit else "Your last film didn't make money, so they're "
+               "asking the standard renewal.")
+        st.markdown(f"""
+        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;">
+          <div class="text-sm font-semibold">🤝 Renewal due: {partner['name']} wants ${fee:.1f}M to stay on</div>
+          <div style="font-size:13px;line-height:1.5;margin-top:4px;">They give {bonus_label} on
+          {partner['specialty']} films. {why} Let them go and the bonus ends; there's a
+          ~{PARTNER_RELEASE_POACH_CHANCE:.0%} chance a rival signs them on the spot. You could then sign a
+          different banner at its full price.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        rc1, rc2 = st.columns(2)
+        if rc1.button(f"✅ Renew for ${fee:.1f}M", key=f"renew_partner_{ss.movie_cycle}", use_container_width=True):
+            ss.movie_overall_renewed_through = ss.movie_cycle
+            ss.movie_talent_total_spend += fee
+            st.rerun()
+        if rc2.button("👋 Let them go", key=f"release_partner_{ss.movie_cycle}", use_container_width=True):
+            key = ss.movie_overall_deal
+            rival = draw_partner_release_poach(ss.team_name, key, ss.movie_cycle)
+            if rival:
+                ss.movie_rival_exclusive[key] = rival
+            ss.movie_partner_releases[ss.movie_cycle] = {"partner": key, "rival": rival}
+            ss.movie_overall_deal = None
+            ss.movie_overall_deal_signed_cycle = None
+            st.rerun()
+    elif ss.movie_overall_deal:
         partner = STUDIO_PARTNERS[ss.movie_overall_deal]
         bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
                        else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
         st.markdown(f"""
         <div class="rounded-lg border border-line bg-surface2 p-3 mb-3">
           <div class="text-sm" style="color:{ACCENT};">🤝 Overall Deal active: <b>{partner['name']}</b>
-          ({partner['specialty']} specialty) — {bonus_label} on {partner['specialty']} projects for the
-          rest of your slate.</div>
+          ({partner['specialty']} specialty) — {bonus_label} on {partner['specialty']} projects. They'll ask for a
+          renewal fee each cycle.</div>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -916,6 +982,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
                 """, unsafe_allow_html=True)
                 if not poached_by and st.button("Sign", key=f"sign_overall_{key}", use_container_width=True):
                     ss.movie_overall_deal = key
+                    ss.movie_overall_deal_signed_cycle = ss.movie_cycle
                     ss.movie_talent_total_spend += partner["deal_cost_m"]
                     st.rerun()
 
@@ -945,7 +1012,9 @@ def _resolve_scouted_concept_transitions(ss) -> dict:
                 cid = concept["id"]
                 if cid in ss.movie_scouted_optioned or cid in ss.movie_scouted_poached:
                     continue
-                rival = draw_scouted_poach(ss.team_name, cid)
+                rival = draw_scouted_poach(ss.team_name, cid, hot=bool(concept.get("hot_rival")))
+                if rival and concept.get("hot_rival"):
+                    rival = concept["hot_rival"]   # the studio that was circling is the one that takes it
                 if rival:
                     outcome = resolve_scouted_outcome(concept, rival)
                     ss.movie_scouted_poached[cid] = outcome
@@ -972,9 +1041,10 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     st.markdown(
         f'<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface {SCOUTED_CONCEPTS_PER_CYCLE} concepts '
         'every cycle. <b>Option at least one</b>: it fills in your Greenlight form below, and you can still '
-        'change anything there. You make only one movie per cycle, so optioning a second concept just '
-        f'overwrites the form. Each concept you skip has a ~{SCOUTED_POACH_CHANCE:.0%} chance a rival '
-        'studio makes it instead.</p>', unsafe_allow_html=True)
+        'change anything there. Each card has the <b>scout\'s read</b>: a demand estimate (it can be off by a '
+        'star; paid Research gives the real signal), how volatile the genre is, and what the concept earns as '
+        f'scouted. Each concept you skip has a ~{SCOUTED_POACH_CHANCE:.0%} chance a rival makes it instead, '
+        f'~{SCOUTED_HOT_POACH_CHANCE:.0%} for one a rival is already circling.</p>', unsafe_allow_html=True)
 
     for cid, outcome in newly_poached.items():
         npv_ok = outcome["npv"] >= 0
@@ -993,11 +1063,21 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     for col, concept in zip(cols, concepts):
         with col:
             optioned = concept["id"] in ss.movie_scouted_optioned
+            # Scout's read + hot badge (2026-10-05, per explicit user request for more intensity).
+            read = scout_read(ss.team_name, concept)
+            hot_html = (f'<div style="font-size:12px;margin-bottom:4px;">🔥 <b>{concept["hot_rival"]} is circling</b>: '
+                        f'~{SCOUTED_HOT_POACH_CHANCE:.0%} chance it\'s gone next cycle</div>'
+                        if concept.get("hot_rival") and not optioned else "")
+            stars_html = "⭐" * read["stars"] + "☆" * (5 - read["stars"])
             st.markdown(f"""
             <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
+              {hot_html}
               <div class="text-[10px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
               <div class="text-[10px] text-muted font-mono">Est. Budget: ${concept['budget_m']:.0f}M</div>
+              <div style="font-size:12px;margin-top:6px;line-height:1.5;">🔭 <b>Scout's read</b>: {stars_html} demand (±1 star)
+                · {read['risk']} risk<br>As scouted: {_fmt_money(read['npv_weak'])} (weak run) to
+                {_fmt_money(read['npv_expected'])} (expected run)</div>
               {'<div class="text-[10px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
             </div>
             """, unsafe_allow_html=True)
@@ -1071,8 +1151,10 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each offer one finished film with '
         'its reviews already known. <b>Bid on at least one</b>. Bids are sealed: rivals bid too, the '
-        'highest bid wins and pays what it bid. A film you win joins your pipeline as an extra release; '
-        'it doesn\'t use your greenlight slot.</p>', unsafe_allow_html=True)
+        'highest bid wins and pays what it bid. Your analysts give each film a <b>break-even bid</b>: '
+        'pay more than that and the film loses money unless it breaks out. Hot films draw more rival '
+        'bidders, so winning one often means overpaying (the winner\'s curse). A film you win joins your '
+        'pipeline as an extra release; it doesn\'t use your greenlight slot.</p>', unsafe_allow_html=True)
 
     for fid, outcome in newly_resolved.items():
         team_won = fid in ss.movie_festival_log
@@ -1100,20 +1182,34 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
             resolved = ss.movie_festival_log.get(fid) or ss.movie_festival_rival_log.get(fid)
             cs = film["critical_score"]
             cs_tier = "Acclaimed" if cs >= 75 else ("Well Reviewed" if cs >= 55 else ("Mixed" if cs >= 35 else "Panned"))
+            # 2026-10-05 (explicit user request for more intensity): a real
+            # valuation and a read on rival interest, so a bid is a call, not a guess.
+            be_bear, be_base = festival_breakeven_bids(film)
+            rival_bids = draw_festival_acquisition_bids(ss.team_name, ss.movie_cycle, fid,
+                                                        film["asking_anchor_m"], appetite_mult)
+            interest, interested = festival_interest(rival_bids)
+            interest_icon = {"Hot": "🔥", "Warm": "👀", "Quiet": "😴"}[interest]
+            interest_txt = (f"{interest_icon} <b>{interest}</b>: " + (", ".join(interested) + " screened it"
+                            if interested else "no rival studio screened it"))
             st.markdown(f"""
             <div class="rounded-lg border border-line bg-surface p-3" style="height:100%;">
               <div class="text-[10px] text-muted font-mono mb-1">{film['festival_name']} · {film['genre']} · {film['concept_type']}</div>
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
-              <div class="text-[10px] text-muted font-mono">Critical Reception: {cs:.0f}/100 ({cs_tier}) — already screened, already known</div>
-              <div class="text-[10px] text-muted font-mono">Est. Asking Value: ${film['asking_anchor_m']:.1f}M</div>
+              <div class="text-[10px] text-muted font-mono">Critics: {cs:.0f}/100 ({cs_tier}), already screened</div>
+              <div class="text-[10px] text-muted font-mono">Asking price: ${film['asking_anchor_m']:.1f}M</div>
+              <div style="font-size:12px;margin-top:6px;line-height:1.45;">📈 Break-even bid: <b>${be_bear:.1f}M</b> (weak run)
+                to <b>${be_base:.1f}M</b> (expected run)</div>
+              <div style="font-size:12px;line-height:1.45;">{interest_txt}</div>
             </div>
             """, unsafe_allow_html=True)
             if resolved is not None:
                 won = fid in ss.movie_festival_log
                 if won:
-                    st.success(f"✅ Acquired for ${resolved['acquisition_cost_m']:.1f}M.")
+                    st.success(f"✅ Acquired for \\${resolved['acquisition_cost_m']:.1f}M. Its NPV for you: "
+                               f"{_fmt_money(resolved['npv']).replace('$', chr(92) + '$')}.")
                 else:
-                    st.error(f"❌ {resolved['winner']} won at ${resolved['acquisition_cost_m']:.1f}M.")
+                    st.error(f"❌ {resolved['winner']} won at \\${resolved['acquisition_cost_m']:.1f}M. Its NPV for "
+                             f"them: {_fmt_money(resolved['npv']).replace('$', chr(92) + '$')}.")
             else:
                 bid = st.number_input(f"Your bid ($M)", min_value=0.0, value=float(film["asking_anchor_m"]),
                                        step=0.5, key=f"festival_bid_{fid}",
@@ -1123,14 +1219,15 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                 # pass, same fix as TV's Sports Rights bid input) -- the
                 # default already equals the anchor, but the ratio should
                 # keep updating as the student edits the bid.
-                if bid > 0 and film["asking_anchor_m"] > 0:
-                    _bid_ratio = bid / film["asking_anchor_m"]
-                    _ratio_c = SUCCESS if _bid_ratio <= 1.0 else (WARN if _bid_ratio <= 1.5 else DANGER)
-                    st.markdown(
-                        f'<div style="font-size:11px;color:{_ratio_c};margin:-6px 0 6px;">'
-                        f'→ {_bid_ratio:.1f}x the ${film["asking_anchor_m"]:.1f}M asking value'
-                        f'{" — real winner\'s-curse risk" if _bid_ratio > 1.5 else ""}</div>',
-                        unsafe_allow_html=True)
+                if bid > 0:
+                    if bid <= be_bear:
+                        verdict = "below the weak-run break-even: profitable even if it underperforms"
+                    elif bid <= be_base:
+                        verdict = "profitable on an expected run, a loss on a weak one"
+                    else:
+                        verdict = "above the expected-run break-even: you need a breakout to make money"
+                    st.markdown(f'<div style="font-size:12px;margin:-6px 0 6px;">→ ${bid:.1f}M is {verdict}.</div>',
+                                unsafe_allow_html=True)
                 if st.button("Submit Bid", key=f"festival_submit_{fid}", use_container_width=True):
                     rival_bids = draw_festival_acquisition_bids(ss.team_name, ss.movie_cycle, fid,
                                                                   film["asking_anchor_m"], appetite_mult)
@@ -1995,21 +2092,53 @@ def _decisions(ss):
             return f"{kw['pay1_auction_winner']} (bid)"
         return platform_names.get(kw.get("pay1_platform"), "Licensed")
 
-    def _pay2_text(kw):
+    def _pay2_text(entry):
+        kw = entry["project_kwargs"]
+        if entry.get("pay2_outcome"):
+            return entry["pay2_outcome"]
         if kw.get("pay2_licensing", "keep") == "keep":
             return "Peacock"
         return platform_names.get(kw.get("pay2_platform"), "Licensed")
 
-    def _apply_pay2(cyc: int):
-        """on_change for an earlier film's Pay-2 cell: re-prices that film's
-        NPV with the same resolved draws, only the Pay-2 window changed."""
+    # Pay-2 (2026-10-05 rework, per explicit user request for more intensity):
+    # Keep is a gamble on the film's catalog life (expected value rises with
+    # reviews, realized value revealed on lock); licensing is a guaranteed fee
+    # whose size depends on each streamer's appetite THIS cycle. Locking is
+    # final, so a team can't peek at the draw and switch.
+    pay2_offers = draw_pay2_offer_mults(ss.team_name, ss.movie_cycle)
+    rev_lo, rev_hi = pay2_revival_quantiles()
+
+    def _pay2_choices(entry) -> dict:
+        """NPV effect of each Pay-2 option for a logged film, versus not
+        having made the call: Keep's expected / p10 / p90, and each
+        streamer's guaranteed offer this cycle."""
+        kw = entry["project_kwargs"]
+        base_kw = {**kw, "pay2_decided": False, "pay2_licensing": "keep",
+                   "pay2_keep_mult": None, "pay2_fee_mult": None}
+        undecided = _film_npv(entry, base_kw)
+        keep = {q: _film_npv(entry, {**base_kw, "pay2_decided": True, "pay2_keep_mult": m}) - undecided
+                for q, m in (("exp", None), ("p10", rev_lo), ("p90", rev_hi))}
+        offers = {k: _film_npv(entry, {**base_kw, "pay2_decided": True, "pay2_licensing": "license_out",
+                                       "pay2_platform": k, "pay2_fee_mult": pay2_offers[k]}) - undecided
+                  for k in LICENSING_PLATFORMS}
+        return {"keep": keep, "offers": offers}
+
+    def _lock_pay2(cyc: int):
+        """Lock an earlier film's Pay-2 call: realize Keep's catalog draw or
+        the chosen streamer's offer, and re-price the film with the same
+        resolved draws -- only the Pay-2 window changes. Final."""
         pick = ss.get(f"pay2_slate_{cyc}")
         entry = next((r for r in ss.movie_log if r["cycle"] == cyc), None)
-        if entry is None or pick is None:
+        if entry is None or pick is None or entry.get("pay2_decided_cycle") is not None:
             return
         kw = entry["project_kwargs"]
-        new_kw = ({**kw, "pay2_licensing": "keep"} if pick == "keep"
-                  else {**kw, "pay2_licensing": "license_out", "pay2_platform": pick})
+        base_kw = {**kw, "pay2_decided": True, "pay2_keep_mult": None, "pay2_fee_mult": None}
+        if pick == "keep":
+            revival = draw_pay2_revival(ss.team_name, cyc)
+            new_kw = {**base_kw, "pay2_licensing": "keep", "pay2_keep_mult": revival}
+        else:
+            new_kw = {**base_kw, "pay2_licensing": "license_out", "pay2_platform": pick,
+                      "pay2_fee_mult": pay2_offers[pick]}
         delta = _film_npv(entry, new_kw) - _film_npv(entry, kw)
         mults = dict(pvod_mult=entry.get("pvod_mult", 1.0), theme_park_mult=entry.get("theme_park_mult", 1.0),
                      ewom_mult=entry.get("ewom_mult", 1.0))
@@ -2020,9 +2149,15 @@ def _decisions(ss):
         entry["total_revenue"] = p_new.total_revenue(entry["multiplier"], entry["critical_score"], **mults)
         entry["pay2_decided_cycle"] = ss.movie_cycle
         entry["pay2_npv_delta"] = entry.get("pay2_npv_delta", 0.0) + delta
+        if pick == "keep":
+            read = "strong" if revival >= 1.25 else ("as expected" if revival >= 0.8 else "weak")
+            entry["pay2_outcome"] = f"Kept: catalog {read} ({_fmt_money(delta)})"
+        else:
+            entry["pay2_outcome"] = f"{platform_names[pick]} ({_fmt_money(delta)})"
 
     log_by_cycle = {r["cycle"]: r for r in ss.movie_log}
     current_row = None
+    pay2_notes = []
     for cyc in range(1, CYCLES_TOTAL + 1):
         row = st.columns(widths)
         if cyc == ss.movie_cycle:
@@ -2042,30 +2177,36 @@ def _decisions(ss):
         _cell(row[3], f"{MovieProject(**kw).window_days()}")
         _cell(row[4], "—" if is_dd or not kw.get("pvod_chosen_price") else f"${kw['pvod_chosen_price']:.2f}")
         _cell(row[5], _pay1_text(kw))
-        editable_pay2 = (not is_dd and cyc < ss.movie_cycle
-                         and entry.get("pay2_decided_cycle") in (None, ss.movie_cycle))
-        if editable_pay2:
-            keep_npv = _film_npv(entry, {**kw, "pay2_licensing": "keep"})
-            deltas = {k: _film_npv(entry, {**kw, "pay2_licensing": "license_out", "pay2_platform": k}) - keep_npv
-                      for k in LICENSING_PLATFORMS}
+        pay2_due = not is_dd and cyc < ss.movie_cycle and entry.get("pay2_decided_cycle") is None
+        if pay2_due:
+            ch = _pay2_choices(entry)
             opts = ["keep"] + list(LICENSING_PLATFORMS)
-            decided = entry.get("pay2_decided_cycle") is not None
-            cur = ("keep" if kw.get("pay2_licensing", "keep") == "keep" else kw.get("pay2_platform"))
-            row[6].selectbox(
-                f"Pay-2 for Film {cyc}", opts, index=opts.index(cur) if decided and cur in opts else None,
-                placeholder="⚠ Choose…", key=f"pay2_slate_{cyc}", label_visibility="collapsed",
-                format_func=lambda k, deltas=deltas: ("Keep on Peacock" if k == "keep" else
-                                                     f"{platform_names[k]} ({'+' if deltas[k] >= 0 else '−'}${abs(deltas[k]):.1f}M)"),
-                on_change=_apply_pay2, args=(cyc,),
-                help="Pay-2 is due now for this film. The $ next to each platform is how much licensing to it "
-                     "changes this film's NPV versus keeping it on Peacock.")
-        elif is_dd:
-            _cell(row[6], "Peacock (D&amp;D)")
-        elif cyc > ss.movie_cycle:
-            _cell(row[6], "—")
+            pick = row[6].selectbox(
+                f"Pay-2 for Film {cyc}", opts, index=None, placeholder="⚠ Choose…",
+                key=f"pay2_slate_{cyc}", label_visibility="collapsed",
+                format_func=lambda k: "Keep (gamble)" if k == "keep" else f"{platform_names[k]} (sure)",
+                help="Keep: the film stays in Peacock's catalog and earns whatever its catalog life turns out to be. "
+                     "License: a guaranteed fee now. The expected values and ranges are listed under the table. "
+                     "Lock it in the Status column; locking is final.")
+            if pick is None:
+                _cell(row[7], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
+            else:
+                row[7].button("💼 Lock Pay-2", key=f"lock_pay2_{cyc}", on_click=_lock_pay2, args=(cyc,),
+                              use_container_width=True, help="Final: reveals Keep's catalog outcome, or signs the deal.")
+            offers_txt = " · ".join(f"{platform_names[k]} {_fmt_money(v)} guaranteed"
+                                    for k, v in ch["offers"].items())
+            pay2_notes.append(
+                f"💼 <b>Film {cyc} Pay-2</b> (critics {entry['critical_score']:.0f}/100): Keep ≈ "
+                f"{_fmt_money(ch['keep']['exp'])} expected, likely range {_fmt_money(ch['keep']['p10'])} to "
+                f"{_fmt_money(ch['keep']['p90'])} · or license: {offers_txt}. Better reviews make Keep worth more.")
         else:
-            _cell(row[6], _pay2_text(kw))
-        _cell(row[7], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
+            if is_dd:
+                _cell(row[6], "Peacock (D&amp;D)")
+            elif cyc > ss.movie_cycle:
+                _cell(row[6], "—")
+            else:
+                _cell(row[6], escape(_pay2_text(entry)))
+            _cell(row[7], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
 
     # ── The current film's row ────────────────────────────────────────────────
     _cell(current_row[0], f"<b>{ss.movie_cycle} · {escape(title)}</b><br><span style='font-size:11px;'>this film</span>")
@@ -2210,10 +2351,11 @@ def _decisions(ss):
         pay2_pick = current_row[6].selectbox(
             "Pay-2 Window", pay2_opts, index=pay2_opts.index(cur_pay2) if cur_pay2 in pay2_opts else 0,
             label_visibility="collapsed",
-            format_func=lambda k: ("Keep on Peacock" if k == "keep" else
-                                   f"{platform_names[k]} (~{LICENSING_PLATFORMS[k]['fee_pct']:.0%} fee)"),
+            format_func=lambda k: "Keep (gamble)" if k == "keep" else f"{platform_names[k]} (sure)",
             help=f"Your final film, so decide Pay-2 now. It opens ~{PAY2_WINDOW_MONTH/12:.0f} years after "
-                 f"release, worth ~{PAY2_VALUE_PCT_OF_PAY1:.0%} of Pay-1's scale.")
+                 "release. Keep: the film stays in Peacock's catalog and earns whatever its catalog life turns "
+                 "out to be (better reviews, more value). License: a guaranteed fee, sized by that streamer's "
+                 "appetite this cycle. The outcome is revealed at Simulate.")
         ss.movie_draft["pay2_licensing"] = "keep" if pay2_pick == "keep" else "license_out"
         if pay2_pick != "keep":
             ss.movie_draft["pay2_platform"] = pay2_pick
@@ -2246,6 +2388,9 @@ def _decisions(ss):
     notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
                  f"box office")
     st.caption(" · ".join(notes).replace("$", "\\$"))   # bare $ pairs render as LaTeX math
+    if pay2_notes:
+        st.markdown('<div style="font-size:13px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
+                    + '</div>', unsafe_allow_html=True)
     if inputs_changed:
         st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) changed "
                 "since you ran the Theatrical Sim. Click 🎬 Theatrical Sim again to lock in a fresh result.")
@@ -2474,6 +2619,15 @@ def _decisions(ss):
         st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
         project = _current_project(ss)
+        if ss.movie_cycle >= CYCLES_TOTAL and project.release_strategy != "day_and_date":
+            # Final film: its Pay-2 call was made in its Release Plan row, so
+            # realize it now -- Keep's catalog draw, or the streamer's offer.
+            if project.pay2_licensing == "keep":
+                project = replace(project, pay2_decided=True,
+                                  pay2_keep_mult=draw_pay2_revival(ss.team_name, ss.movie_cycle))
+            else:
+                project = replace(project, pay2_decided=True, pay2_fee_mult=draw_pay2_offer_mults(
+                    ss.team_name, ss.movie_cycle).get(project.pay2_platform, 1.0))
         current_inputs = {"genre": project.genre, "concept_type": project.concept_type,
                            "ai_production_tools": project.ai_production_tools,
                            "source_material": project.source_material}

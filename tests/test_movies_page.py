@@ -885,7 +885,7 @@ def test_optioning_a_scouted_concept_prefills_the_greenlight_draft():
 
 def test_scouted_concept_poach_notice_and_scorecard_row_when_poached(monkeypatch):
     import app_pages.movies as movies_module
-    monkeypatch.setattr(movies_module, "draw_scouted_poach", lambda team, cid: "Paragon Pictures")
+    monkeypatch.setattr(movies_module, "draw_scouted_poach", lambda team, cid, hot=False: "Paragon Pictures")
 
     def script():
         import streamlit as st
@@ -992,22 +992,30 @@ def test_release_plan_lets_you_choose_pay2_for_earlier_films_and_reprices_their_
     caption_text = " ".join(c.value for c in at.caption)
     assert "Pay-2 (earlier films)" in caption_text                # gates Simulate until chosen
 
-    from utils.movie_models import MovieProject, LICENSING_PLATFORMS
+    from utils.movie_models import MovieProject, LICENSING_PLATFORMS, draw_pay2_offer_mults
     film1 = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
     npv_before = film1["npv"]
     platform = next(iter(LICENSING_PLATFORMS))
     kw = film1["project_kwargs"]
-    expected_delta = (MovieProject(**{**kw, "pay2_licensing": "license_out", "pay2_platform": platform})
+    offer = draw_pay2_offer_mults("AppTest Team", 3)[platform]
+    expected_delta = (MovieProject(**{**kw, "pay2_decided": True, "pay2_licensing": "license_out",
+                                      "pay2_platform": platform, "pay2_fee_mult": offer})
                       .npv(film1["multiplier"], film1["critical_score"])
                       - MovieProject(**kw).npv(film1["multiplier"], film1["critical_score"]))
+    assert expected_delta > 0
 
     pay2_cells["Pay-2 for Film 1"].set_value(platform).run()
+    assert not at.exception, list(at.exception)
+    assert next(r for r in at.session_state["movie_log"] if r["cycle"] == 1).get("pay2_decided_cycle") is None
+    at.button(key="lock_pay2_1").click().run()    # choosing isn't final until it's locked
     assert not at.exception, list(at.exception)
     film1 = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
     assert film1["project_kwargs"]["pay2_licensing"] == "license_out"
     assert film1["project_kwargs"]["pay2_platform"] == platform
+    assert film1["project_kwargs"]["pay2_fee_mult"] == pytest.approx(offer)
     assert film1["pay2_decided_cycle"] == 3
     assert film1["npv"] == pytest.approx(npv_before + expected_delta)
+    assert not any(sb.label == "Pay-2 for Film 1" for sb in at.selectbox)   # final: no longer editable
 
 
 def test_research_only_covers_the_genre_and_concept_it_was_bought_for():

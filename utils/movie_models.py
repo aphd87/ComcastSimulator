@@ -17,7 +17,7 @@ see DESIGN_NOTES.md's "Day 2" section for the full rationale:
 from __future__ import annotations
 import numpy as np
 from utils.seeding import stable_seed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -182,8 +182,9 @@ BASE_WINDOW_DAYS      = 90     # 2012-era theatrical exclusivity norm
 WINDOW_SHRINK_PER_CYCLE_DAYS = 15   # real-world post-2012 compression, applied per cycle (1->2->3)
 CYCLES_TOTAL          = 4   # 2026-10-05: 5 -> 4 per explicit user request (fits one class session)
 YEARS_PER_CYCLE        = 2
-WINDOWING_UNLOCK_CYCLE = 3   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" —
-                              # cycles before this are wide-theatrical only, no strategy choice yet
+WINDOWING_UNLOCK_CYCLE = 2   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" — film 2
+                              # starts in Year 3. Was 3 (Years 5-6) until 2026-10-05, when the slate
+                              # shrank to 4 films and the user asked for more real release decisions.
 
 # ── Balance pass (2026-10-01) ────────────────────────────────────────────────
 # An engine-level QA run found one recipe won every team and cycle: a $20M
@@ -939,6 +940,33 @@ def draw_hold_forfeit(team_name: str, cycle_placed: int, partner_key: str) -> Op
     return reasons[int(rng.integers(0, len(reasons)))]
 
 
+# Studio Partnership renewals (2026-10-05, per explicit user request for
+# more intensity: partnerships used to be one decision on film 1 and then
+# nothing). From the cycle after signing, the banner asks for a renewal fee
+# every cycle -- a share of the original deal, more after a hit, because a
+# winning studio has less leverage. Renew, or let them go: a released
+# banner is likely snapped up by a rival, and the bonus is gone either way.
+PARTNER_RENEWAL_PCT          = 0.35   # renewal fee as a share of the original deal cost
+PARTNER_RENEWAL_HIT_MULT     = 1.50   # ...this much more if your last film made money
+PARTNER_RELEASE_POACH_CHANCE = 0.60   # chance a rival signs a banner you let go
+
+
+def partner_renewal_fee(partner_key: str, last_film_npv: Optional[float]) -> tuple[float, bool]:
+    """(renewal fee $M, whether the hit surcharge applies)."""
+    base = STUDIO_PARTNERS[partner_key]["deal_cost_m"] * PARTNER_RENEWAL_PCT
+    hit = last_film_npv is not None and last_film_npv > 0
+    return round(base * (PARTNER_RENEWAL_HIT_MULT if hit else 1.0), 1), hit
+
+
+def draw_partner_release_poach(team_name: str, partner_key: str, cycle: int) -> Optional[str]:
+    """Whether a rival signs a banner the team just let go. Own seed."""
+    seed = (stable_seed(team_name) + cycle * 6763 + stable_seed(partner_key) % 3989 + 457) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    if rng.random() > PARTNER_RELEASE_POACH_CHANCE:
+        return None
+    return RIVAL_STUDIOS[int(rng.integers(0, len(RIVAL_STUDIOS)))]
+
+
 def draw_rival_poach(team_name: str, partner_key: str, cycle: int) -> Optional[str]:
     """Per-(team, partner, cycle) chance a rival studio signs an EXCLUSIVE
     deal with a partner the team hasn't claimed by that cycle -- the actual
@@ -1210,15 +1238,67 @@ def resolve_licensing_auction(rival_bids: list[dict]) -> dict:
 # secondary window after Pay-1 exhausts, which this engine never modeled;
 # a title just sat in library forever after Pay-1. Pay-2 is a real,
 # materially smaller secondary licensing window (real-world Pay-2 deals
-# are worth a fraction of Pay-1) -- "keep" here means the studio chose NOT
-# to pursue a Pay-2 deal at all (real, valid choice: hold the title
-# exclusively rather than diversify revenue further), not "keep it on
-# Peacock" the way Pay-1's "keep" does (Pay-1 "keep" retains real ongoing
-# subscriber value; there's no equivalent ongoing value to retain by
-# cycle 4, so Pay-2 "keep" is simply "no additional revenue here").
+# are worth a fraction of Pay-1). Until 2026-10-05 "keep" meant no Pay-2
+# revenue at all; it now means keeping the title in Peacock's catalog for
+# its (uncertain) catalog value -- see the rework note below.
 PAY2_LICENSING_OPTIONS  = ["keep", "license_out"]
 PAY2_WINDOW_MONTH        = 48.0   # ~4 years post-release -- well past Pay-1's exhausted exclusivity
-PAY2_VALUE_PCT_OF_PAY1   = 0.30   # Pay-2 deals are real but materially smaller than Pay-1
+#
+# 2026-10-05 rework, per explicit user request for more intensity ("Pay-2
+# barely matters" -- licensing moved a film's NPV by ~$0.2-2M and "keep"
+# was worth exactly $0). Now a real risk-vs-certainty call:
+# - License: a guaranteed fee = base-case subscriber value x PAY2_VALUE_
+#   PCT_OF_PAY1 x the platform's fee_pct x that platform's appetite THIS
+#   cycle (draw_pay2_offer_mults) -- certain, and it varies by streamer.
+# - Keep on Peacock: the title stays in Peacock's catalog and earns
+#   whatever its catalog life turns out to be. Expected value rises with
+#   reviews (pay2_keep_expected_mult), and the realized value is a
+#   mean-preserving lognormal draw (draw_pay2_revival) -- a well-reviewed
+#   film can find a second life, a panned one fades. The draw is revealed
+#   the moment the team locks the decision, which is final.
+# Keep earns only once the team has made the Pay-2 call (pay2_decided): an
+# untouched default is worth $0, exactly as before, so a slate that changes
+# nothing still fails. Risk-adjusted scoring values a decided Keep at its
+# expected value; only the film's actual NPV uses the realized draw.
+# Illustrative calibration, not studio data.
+PAY2_VALUE_PCT_OF_PAY1   = 0.80   # Pay-2 pool vs Pay-1 subscriber value -- kept below Pay-1, as in practice
+PAY2_KEEP_BASE_MULT      = 0.25   # expected Keep share of the pool for a 0/100-reviewed film...
+PAY2_KEEP_CRITIC_SLOPE   = 0.60   # ...rising with reviews (0.55 at 50/100, 0.85 at 100/100)
+PAY2_REVIVAL_SIGMA       = 0.70   # lognormal spread of the catalog-revival draw (p10 ~0.32x, p90 ~1.92x of expected)
+PAY2_OFFER_MULT_RANGE    = (0.75, 1.35)   # each streamer's Pay-2 appetite this cycle
+
+
+def pay2_keep_expected_mult(critical_score: Optional[float]) -> float:
+    """Expected Keep share of the Pay-2 pool, rising with reviews. A film
+    with no resolved reviews yet (planning stage) is valued at 50/100."""
+    cs = 50.0 if critical_score is None else critical_score
+    return PAY2_KEEP_BASE_MULT + PAY2_KEEP_CRITIC_SLOPE * (cs / 100.0)
+
+
+def pay2_revival_quantiles() -> tuple[float, float]:
+    """p10 / p90 of the revival multiplier (relative to expected), for the
+    range shown to students before they choose."""
+    s = PAY2_REVIVAL_SIGMA
+    return float(np.exp(-s * s / 2 - 1.2816 * s)), float(np.exp(-s * s / 2 + 1.2816 * s))
+
+
+def draw_pay2_revival(team_name: str, film_cycle: int) -> float:
+    """Realized catalog-revival multiplier for a kept film -- mean 1.0
+    (relative to its expected value), seeded per team + film so it can't
+    be re-rolled."""
+    seed = (stable_seed(team_name) + film_cycle * 27449 + 863) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    s = PAY2_REVIVAL_SIGMA
+    return float(np.exp(rng.normal(-s * s / 2, s)))
+
+
+def draw_pay2_offer_mults(team_name: str, cycle: int) -> dict:
+    """Each licensing platform's Pay-2 appetite this cycle -- seeded per
+    team + cycle, so the offers on the table are stable within a cycle."""
+    seed = (stable_seed(team_name) + cycle * 31337 + 1499) % (2 ** 31)
+    rng = np.random.default_rng(seed)
+    lo, hi = PAY2_OFFER_MULT_RANGE
+    return {k: float(rng.uniform(lo, hi)) for k in LICENSING_PLATFORMS}
 
 # ── Theatrical Run Length ────────────────────────────────────────────────────
 # 2026-08-18, per explicit user question ("we should also think about how
@@ -1457,6 +1537,11 @@ class MovieProject:
     pvod_dynamic_pricing: bool = False               # see PVOD_PRICE_PREMIUM/DISCOUNT above
     pvod_chosen_price: Optional[float] = None         # see pvod_price_band above -- takes priority
                                                        # over pvod_dynamic_pricing when set
+    production_budget_m: Optional[float] = None        # what an acquired film cost to MAKE (drives production value);
+                                                       # None = budget_m. Festival buys set budget_m to the price paid.
+    pay2_decided: bool = False                         # the team has made its Pay-2 call (Keep earns only then)
+    pay2_keep_mult: Optional[float] = None             # realized catalog-revival draw once Pay-2 Keep is locked
+    pay2_fee_mult: Optional[float] = None              # licensing platform's Pay-2 appetite when the deal was struck
     library_ip: Optional[str] = None                  # UNIVERSAL_LIBRARY_IP key -- a revived library title
     lead_actor: Optional[str] = None                  # display-only: TALENT_PARTNERS key or None (unnamed cast)
 
@@ -1522,7 +1607,11 @@ class MovieProject:
         its genre's typical budget (2026-10-01). 1.0 at the typical budget."""
         typical = GENRE_TYPICAL_BUDGET_M.get(self.genre, 60.0)
         lo, hi = PRODUCTION_VALUE_RANGE
-        return min(max((max(self.budget_m, 0.1) / typical) ** PRODUCTION_VALUE_ELASTICITY, lo), hi)
+        # An acquired, already-made film's quality comes from what it cost to
+        # MAKE, not what the buyer paid (2026-10-05 fix: a festival bid used
+        # to raise the film's own production value).
+        made_for = self.production_budget_m if self.production_budget_m is not None else self.budget_m
+        return min(max((max(made_for, 0.1) / typical) ** PRODUCTION_VALUE_ELASTICITY, lo), hi)
 
     def effective_screens(self) -> float:
         """Screens that actually pull an audience: anything past the genre's
@@ -1791,17 +1880,26 @@ class MovieProject:
         window to license away either)."""
         return self.pay2_licensing == "license_out" and self.release_strategy != "day_and_date"
 
-    def pay2_value(self) -> float:
-        """A real, materially smaller secondary licensing window after
-        Pay-1 exhausts (2026-08-18) -- see PAY2_WINDOW_MONTH/PAY2_VALUE_PCT_
-        OF_PAY1's own comments for the full rationale. Computed off the BASE
-        case subscriber value, same "negotiated before release" posture as
-        pay1_license_fee(). 0.0 when pay2_licensing == "keep" (a real,
-        valid choice not to pursue a Pay-2 deal at all) or for day_and_date."""
-        if not self.is_licensing_out_pay2():
+    def pay2_value(self, critical_score: Optional[float] = None) -> float:
+        """The Pay-2 window's value, ~4 years after release (see the Pay-2
+        block's comment for the 2026-10-05 rework). Licensed: a guaranteed
+        fee sized off the BASE-case subscriber value, the platform's
+        fee_pct and its appetite this cycle (pay2_fee_mult). Kept on
+        Peacock: the expected catalog share for these reviews, times the
+        realized revival draw once the decision is locked (pay2_keep_mult;
+        None = expected value)."""
+        pool = self.subscriber_value("base") * PAY2_VALUE_PCT_OF_PAY1
+        if self.is_licensing_out_pay2():
+            fee_pct = LICENSING_PLATFORMS.get(self.pay2_platform,
+                                              LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
+            return pool * fee_pct * (self.pay2_fee_mult if self.pay2_fee_mult is not None else 1.0)
+        # Keep only earns once the team has actually made the Pay-2 call
+        # (pay2_decided) -- an untouched default earns nothing, so a slate
+        # that changes nothing still can't pass on catalog value alone.
+        if not self.pay2_decided:
             return 0.0
-        fee_pct = LICENSING_PLATFORMS.get(self.pay2_platform, LICENSING_PLATFORMS[DEFAULT_LICENSING_PLATFORM])["fee_pct"]
-        return self.subscriber_value("base") * PAY2_VALUE_PCT_OF_PAY1 * fee_pct
+        keep_mult = self.pay2_keep_mult if self.pay2_keep_mult is not None else 1.0
+        return pool * pay2_keep_expected_mult(critical_score) * keep_mult
 
     def library_longtail(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """Small, deferred EST/library licensing tail — a fixed fraction of
@@ -1940,12 +2038,10 @@ class MovieProject:
         if theme_park > 0:
             flows.append((30.0, theme_park))   # attractions/merchandise take real time to develop and license
 
-        pay2 = self.pay2_value()
+        pay2 = self.pay2_value(critical_score)
         if pay2 > 0:
-            # 2026-08-18: a real secondary licensing window, well after
-            # Pay-1 exhausts (see PAY2_WINDOW_MONTH) -- 0.0 by default
-            # (pay2_licensing="keep"), so this is a true no-op for every
-            # existing caller.
+            # The Pay-2 window, well after Pay-1 exhausts (PAY2_WINDOW_MONTH):
+            # a licence fee, or the film's catalog value if kept (2026-10-05).
             flows.append((PAY2_WINDOW_MONTH, pay2))
 
         if self.ai_production_tools:
@@ -2044,7 +2140,11 @@ def risk_adjusted_npv(project: MovieProject, critical_score: Optional[float] = N
     just an optimistic expected value. See DESIGN_NOTES.md 'Variance is
     graded, not hidden.' critical_score, when the outcome has actually been
     resolved, folds in the real (already-known) reception rather than
-    scoring purely on hypothetical box-office scenarios."""
+    scoring purely on hypothetical box-office scenarios. A kept Pay-2
+    window is valued at its expected catalog value here, never its
+    realized revival draw -- that luck belongs to the actual NPV."""
+    if project.pay2_keep_mult is not None:
+        project = replace(project, pay2_keep_mult=None)
     bear = project.npv("bear", critical_score)
     base = project.npv("base", critical_score)
     return bear_weight * bear + (1 - bear_weight) * base
@@ -2482,11 +2582,50 @@ def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
             "pa_spend_m":       round(budget * 0.5, 0),
             "star_power":       40,
             "screens":          2500,
+            "hot_rival":        None,
         })
+    # Hot concepts (2026-10-05, per explicit user request for more
+    # intensity): one or two a cycle have a named rival circling, and face a
+    # much higher poach chance -- option now or likely lose it. Own seed, so
+    # the concepts above are unchanged.
+    hot_rng = np.random.default_rng((seed + 70001) % (2 ** 31))
+    n_hot = int(hot_rng.integers(SCOUTED_HOT_PER_CYCLE[0], SCOUTED_HOT_PER_CYCLE[1] + 1))
+    for idx in hot_rng.choice(len(concepts), size=n_hot, replace=False):
+        concepts[int(idx)]["hot_rival"] = RIVAL_STUDIOS[int(hot_rng.integers(0, len(RIVAL_STUDIOS)))]
     return concepts
 
 
-def draw_scouted_poach(team_name: str, concept_id: str) -> Optional[str]:
+SCOUTED_HOT_PER_CYCLE    = (1, 2)
+SCOUTED_HOT_POACH_CHANCE = 0.80   # a concept a named rival is circling is very likely gone next cycle
+SCOUT_STAR_NOISE         = 1      # the scout's audience-demand read is off by up to this many stars
+
+
+def scout_read(team_name: str, concept: dict) -> dict:
+    """A scout's read on a concept (2026-10-05, per explicit user request
+    for more intensity): enough to tell concepts apart, not enough to
+    replace paid Research.
+    - risk: how wide this genre + concept type's outcomes swing
+      (steady / moderate / volatile, from its bear-bull spread)
+    - stars: the true audience-demand signal (the same draw Research and
+      Simulate use) blurred by up to SCOUT_STAR_NOISE stars, seeded per
+      concept so the read is stable
+    - npv_weak / npv_expected: the concept as scouted (its budget, P&A,
+      stars, screens), on a weak and an expected run"""
+    genre, ctype = concept["genre"], concept["concept_type"]
+    bounds = scenario_multipliers_for(genre, ctype)
+    spread = (bounds["bull"] - bounds["bear"]) / max(bounds["base"], 1e-9)
+    risk = "Steady" if spread < 0.8 else ("Moderate" if spread < 1.0 else "Volatile")
+    true_stars = multiplier_to_stars(draw_actual_multiplier(team_name, concept["cycle"], genre, ctype), genre, ctype)
+    rng = np.random.default_rng((stable_seed(team_name) + stable_seed(concept["id"]) % 6007 + 9311) % (2 ** 31))
+    stars = min(5, max(1, true_stars + int(rng.integers(-SCOUT_STAR_NOISE, SCOUT_STAR_NOISE + 1))))
+    project = MovieProject(title="scout", genre=genre, budget_m=concept["budget_m"],
+                           pa_spend_m=concept["pa_spend_m"], star_power=concept["star_power"],
+                           screens=concept["screens"], cycle=concept["cycle"], concept_type=ctype,
+                           source_material=concept["source_material"])
+    return {"risk": risk, "stars": stars, "npv_weak": project.npv("bear"), "npv_expected": project.npv("base")}
+
+
+def draw_scouted_poach(team_name: str, concept_id: str, hot: bool = False) -> Optional[str]:
     """One-time chance a rival studio picks up a scouted concept the team
     never optioned -- own independent seed namespace (never perturbs
     draw_rival_poach's STUDIO_PARTNERS sequence, or anything else). Called
@@ -2496,7 +2635,7 @@ def draw_scouted_poach(team_name: str, concept_id: str) -> Optional[str]:
     else None."""
     seed = (stable_seed(team_name) + stable_seed(concept_id) % 7919 + 4001) % (2 ** 31)
     rng = np.random.default_rng(seed)
-    if rng.random() > SCOUTED_POACH_CHANCE:
+    if rng.random() > (SCOUTED_HOT_POACH_CHANCE if hot else SCOUTED_POACH_CHANCE):
         return None
     return RIVAL_STUDIOS[int(rng.integers(0, len(RIVAL_STUDIOS)))]
 
@@ -2657,6 +2796,49 @@ def draw_festival_acquisition_bids(team_name: str, cycle: int, film_id: str, anc
     return bids
 
 
+def festival_breakeven_bids(film: dict) -> tuple[float, float]:
+    """The bid at which a festival film breaks even (NPV = 0) if its run
+    comes in weak (bear) vs as expected (base) -- 2026-10-05, per explicit
+    user request for more intensity at festivals: teams bid against a real
+    valuation instead of blind. The acquisition price is paid up front at
+    t=0. Solved numerically on the exact project the acquisition creates
+    (resolve_festival_acquisition_outcome records the price as budget_m,
+    which also feeds production value), so paying exactly the break-even
+    bid really does leave NPV at ~$0."""
+    cs = film["critical_score"]
+
+    def npv_at(bid: float, scenario: str) -> float:
+        return MovieProject(
+            title=film["title"], genre=film["genre"], budget_m=bid,
+            pa_spend_m=round(film["budget_m"] * FESTIVAL_MARKETING_PCT_OF_BUDGET, 1),
+            star_power=0, screens=FESTIVAL_SCREENS_BY_FESTIVAL.get(film["festival"], 700),
+            cycle=film["cycle"], release_strategy="platform", concept_type=film["concept_type"],
+            production_budget_m=film["budget_m"],
+        ).npv(scenario, cs)
+
+    def solve(scenario: str) -> float:
+        if npv_at(0.0, scenario) <= 0:
+            return 0.0
+        lo, hi = 0.0, 50.0
+        while npv_at(hi, scenario) > 0 and hi < 2000:
+            lo, hi = hi, hi * 2
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if npv_at(mid, scenario) > 0 else (lo, mid)
+        return round((lo + hi) / 2, 1)
+
+    return solve("bear"), solve("base")
+
+
+def festival_interest(rival_bids: list[dict]) -> tuple[str, list[str]]:
+    """What a studio would actually hear on the ground before bidding: how
+    many rivals screened the film and how keen they seem -- never their
+    amounts (sealed bids). Returns (level, interested rival names)."""
+    names = [b["bidder"] for b in rival_bids]
+    level = "Hot" if len(names) >= 3 else ("Warm" if len(names) == 2 else "Quiet")
+    return level, names
+
+
 def resolve_festival_acquisition(team_bid_m: float, rival_bids: list[dict]) -> dict:
     """The team is a BUYER here, competing against real rival bids -- same
     structural shape as utils/sports_models.py's Sports Rights
@@ -2703,6 +2885,7 @@ def resolve_festival_acquisition_outcome(film: dict, winner_label: str, acquirer
         pa_spend_m=round(film["budget_m"] * FESTIVAL_MARKETING_PCT_OF_BUDGET, 1),
         star_power=0, screens=FESTIVAL_SCREENS_BY_FESTIVAL.get(film["festival"], 700),
         cycle=film["cycle"], release_strategy="platform", concept_type=film["concept_type"],
+        production_budget_m=film["budget_m"],
     )
     seed_team = f"__festival__{film['id']}"
     multiplier = draw_actual_multiplier(seed_team, film["cycle"], film["genre"], film["concept_type"])
