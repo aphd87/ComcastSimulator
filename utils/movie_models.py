@@ -2435,6 +2435,21 @@ SCOUTED_LOGLINE_BY_GENRE = {
 }
 
 
+FAMILY_FRIENDLY_GENRES = {"Animated", "Comedy", "Sci-Fi/Fantasy", "Action/Tentpole"}
+
+
+def coherent_concept_type(genre: str, concept_type: str) -> str:
+    """2026-10-05 QA fix: generated concepts paired things like "Horror ·
+    Family/Kids" or "Comedy · Indie-Horror". Indie-Horror needs Horror;
+    Family/Kids needs a genre a family audience shows up for. Anything else
+    falls back to New IP."""
+    if concept_type == "Indie-Horror" and genre != "Horror":
+        return "New IP"
+    if concept_type == "Family/Kids" and genre not in FAMILY_FRIENDLY_GENRES:
+        return "New IP"
+    return concept_type
+
+
 def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
     """Deterministic per-(team, cycle) list of SCOUTED_CONCEPTS_PER_CYCLE
     candidate concepts -- the pool the student can Option (pre-fill their
@@ -2450,9 +2465,11 @@ def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
     concepts = []
     for i in range(SCOUTED_CONCEPTS_PER_CYCLE):
         genre = GENRES[int(rng.integers(0, len(GENRES)))]
-        concept_type = CONCEPT_TYPES[int(rng.integers(0, len(CONCEPT_TYPES)))]
+        concept_type = coherent_concept_type(genre, CONCEPT_TYPES[int(rng.integers(0, len(CONCEPT_TYPES)))])
         source_material = SOURCE_MATERIALS[int(rng.integers(0, len(SOURCE_MATERIALS)))]
         budget = float(rng.uniform(20, 150))
+        if concept_type == "Indie-Horror":
+            budget = min(budget, INDIE_HORROR_BUDGET_CAP_M)
         concepts.append({
             "id":               f"{cycle}_{i}",
             "cycle":            cycle,
@@ -2593,7 +2610,8 @@ def generate_festival_slate(team_name: str, cycle: int) -> list[dict]:
     slate = []
     for key, fest in FESTIVALS.items():
         genre = fest["genres"][int(rng.integers(0, len(fest["genres"])))]
-        concept_type = fest["concept_types"][int(rng.integers(0, len(fest["concept_types"])))]
+        concept_type = coherent_concept_type(
+            genre, fest["concept_types"][int(rng.integers(0, len(fest["concept_types"])))])
         budget = float(rng.uniform(*fest["budget_range"]))
         film_id = f"{cycle}_{key}"
         seed_team = f"__festival__{film_id}"

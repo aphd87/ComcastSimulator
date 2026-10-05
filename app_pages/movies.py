@@ -163,7 +163,7 @@ def _init(ss):
 
 # ── Small helpers ────────────────────────────────────────────────────────────
 def _fmt_money(v: float) -> str:
-    return f"${v:+.1f}M" if v < 0 else f"${v:.1f}M"
+    return f"−${abs(v):.1f}M" if v < 0 else f"${v:.1f}M"
 
 
 def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
@@ -719,6 +719,19 @@ def _section_distribution_pipeline(ss):
     st.divider()
 
 
+def _research_covers(bought, genre: str, concept_type: str) -> bool:
+    """Research is bought for one Genre + Concept Type (2026-10-05 QA fix:
+    a single purchase used to reveal the seeded draw for every combination
+    as the dropdowns changed). Legacy sessions stored a bare True."""
+    if bought is True:
+        return True
+    return bool(bought) and bought.get("genre") == genre and bought.get("concept_type") == concept_type
+
+
+def _research_label(bought) -> str:
+    return "this concept" if bought is True else f"{bought.get('genre')} · {bought.get('concept_type')}"
+
+
 def _render_research_card(ss, project: MovieProject, logline: str):
     """Paid Research preview, 2026-10-05 rewrite per explicit user request
     ("clearer metrics... should consider the title, genre, concept type and
@@ -788,8 +801,8 @@ def _render_research_card(ss, project: MovieProject, logline: str):
         📚 {src_line}<br>🎭 {' · '.join(implications)}
       </div>
       <div style="font-size:12px;line-height:1.5;margin-top:6px;">
-        Live: demand and critics follow your Genre and Concept Type; the dollar figures also follow Source
-        Material, Production Budget, P&amp;A, Star Power and Screens, so change them and watch these move.
+        Demand and critics are for this Genre and Concept Type. The dollar figures follow Source Material,
+        Production Budget, P&amp;A, Star Power and Screens, so change those and watch these move.
         Your title and pitch are how the movie is presented to the class; they don't change the numbers.
         Release Strategy, Production Trouble, the AI Tooling Setback, Ancillary Markets Surprise, and
         eWOM &amp; Piracy still apply on top of this at Simulate.
@@ -1165,7 +1178,7 @@ def _section_holding_deals(ss, resolved_hold_key):
              border:1px solid rgba({'102,187,106' if ok else '239,83,80'},.3);">
           <div class="text-sm font-semibold" style="color:{SUCCESS if ok else DANGER};">
             {'✅' if ok else '❌'} Holding Deal Update — {TALENT_PARTNERS[resolved_hold_key]['name']}</div>
-          <div class="text-xs text-ink2 mt-1">{'The window held together — available this cycle if it fits your genre.' if ok else h['forfeit_reason']}</div>
+          <div class="text-xs text-ink2 mt-1">{'The window held together. Cast them as 🎭 Lead Actor in Greenlight (step 4) this cycle; their bonus applies in one of their best genres.' if ok else h['forfeit_reason']}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1300,14 +1313,6 @@ def render():
     ss = st.session_state
     _init(ss)
 
-    st.markdown("""
-    <div class="rounded-lg border border-line bg-surface2 px-4 py-3 mb-4 text-sm text-ink2" style="border-left:3px solid #1a6bb5;">
-    💡 <b class="text-ink">Universal Pictures.</b> A movie isn't a portfolio of amortized shows — it's
-    one concentrated bet. Cost is paid entirely upfront; revenue arrives as a windowed waterfall
-    (theatrical → PVOD → Peacock → library) that you can't fully see coming. You're graded on
-    <b class="text-ink">risk-adjusted NPV</b>, not a margin percentage.
-    </div>
-    """, unsafe_allow_html=True)
 
     _progress_bar(ss)
 
@@ -1477,7 +1482,12 @@ def _decisions(ss):
     # Rendered after the transitions above so its statuses are current.
     _step_bar(ss)
 
-    _section_distribution_pipeline(ss)
+    # Context, not a decision (2026-10-05 QA): collapsed so step 1 is the
+    # first thing a team sees under the step bar. Your own films are in the
+    # Your Slate table above.
+    with st.expander("📊 Distribution Pipeline: every film in the studio's pipeline and where it sits in "
+                     "its run (context, not scored)", expanded=False):
+        _section_distribution_pipeline(ss)
 
     # A standing Studio Partnership should shape what gets greenlit, not the
     # other way around -- rendered before Greenlight, same placement
@@ -1623,10 +1633,9 @@ def _decisions(ss):
         # eWOM & Piracy -- those are separate, later risk axes, same as TV's
         # Research never previewing draw_production_risk_event.
         research_ip_note = (
-            "for this Sequel — how much of the franchise's built-in awareness is actually "
-            "carrying through this cycle, not just this one entry's fresh reception"
-            if concept_type == "Sequel" else "for this New IP concept — you have no franchise "
-            "track record to lean on, so this is your only signal before you commit"
+            "for this Sequel: how much of the franchise's built-in awareness is still carrying through"
+            if concept_type == "Sequel" else
+            f"for this {genre} · {concept_type} concept, your only hard signal before you commit"
         )
         st.markdown('<div class="section-title mt-3">🔎 Research '
                     '<span class="text-xs text-muted">(optional — '
@@ -1634,17 +1643,22 @@ def _decisions(ss):
                     unsafe_allow_html=True)
         st.markdown(
             f'<p class="text-xs text-ink2 mt-1 mb-1">Pay ${RESEARCH_FEE_M:.0f}M (added to P&A spend) to '
-            f'preview the actual box-office and critical-reception signals {research_ip_note}, before '
-            f'committing your budget. Works the same way whether the concept is brand-new or an '
-            f'established franchise entry.</p>',
+            f'preview the actual audience-demand and critics signals {research_ip_note}. Research covers '
+            f'the Genre and Concept Type you buy it for; switching either needs new research.</p>',
             unsafe_allow_html=True)
         # The paid card renders into this slot AFTER the Capital inputs below
         # are read, so its dollar metrics use the full current draft (title,
         # genre, concept type, source material, budget, P&A, stars, screens).
         research_slot = st.container()
-        if not ss.movie_research_paid.get(ss.movie_cycle):
+        bought = ss.movie_research_paid.get(ss.movie_cycle)
+        research_covers_this = _research_covers(bought, genre, concept_type)
+        if bought and not research_covers_this:
+            st.markdown(f'<div style="font-size:13px;margin-bottom:6px;">🔎 Your research covers '
+                        f'<b>{escape(_research_label(bought))}</b>. You changed the concept, so buy new research '
+                        f'to see this one.</div>', unsafe_allow_html=True)
+        if not research_covers_this:
             if st.button(f"🔎 Pay for Research (${RESEARCH_FEE_M:.0f}M)", key=f"movie_research_{ss.movie_cycle}"):
-                ss.movie_research_paid[ss.movie_cycle] = True
+                ss.movie_research_paid[ss.movie_cycle] = {"genre": genre, "concept_type": concept_type}
                 ss.movie_draft["pa_spend_m"] = float(d.get("pa_spend_m", 40.0)) + RESEARCH_FEE_M
                 st.rerun()
 
@@ -1858,7 +1872,7 @@ def _decisions(ss):
     ss.movie_draft = draft
     project = _current_project(ss)
 
-    if ss.movie_research_paid.get(ss.movie_cycle):
+    if _research_covers(ss.movie_research_paid.get(ss.movie_cycle), genre, concept_type):
         with research_slot:
             _render_research_card(ss, project, logline)
 
@@ -1964,8 +1978,8 @@ def _decisions(ss):
     final_film = ss.movie_cycle >= CYCLES_TOTAL
     platform_names = {k: v["name"] for k, v in LICENSING_PLATFORMS.items()}
 
-    widths = [0.45, 1.5, 1.25, 1.7, 0.95, 1.15, 1.75, 1.75, 1.5]
-    headers = ["Film", "Title", "Season", "Release", "Run (days)", "PVOD price", "Pay-1", "Pay-2", "Status"]
+    widths = [1.45, 1.55, 1.8, 0.9, 1.05, 1.75, 1.85, 1.45]
+    headers = ["Film", "Season", "Release", "Run (days)", "PVOD price", "Pay-1", "Pay-2", "Status"]
     for c, h in zip(st.columns(widths), headers):
         c.markdown(f'<div class="font-mono" style="font-size:12px;border-bottom:1px solid #252836;'
                    f'padding-bottom:4px;">{h}</div>', unsafe_allow_html=True)
@@ -2014,21 +2028,20 @@ def _decisions(ss):
         if cyc == ss.movie_cycle:
             current_row = row     # filled in below, once the theatrical state is known
             continue
-        _cell(row[0], str(cyc))
         entry = log_by_cycle.get(cyc)
         if entry is None:
-            _cell(row[1], f"<i>Greenlight in {_cycle_years_label(cyc)}</i>")
-            for c in row[2:]:
+            _cell(row[0], f"{cyc} · <i>greenlight in {_cycle_years_label(cyc)}</i>")
+            for c in row[1:]:
                 _cell(c, "—")
             continue
         kw = entry["project_kwargs"]
         is_dd = kw.get("release_strategy") == "day_and_date"
-        _cell(row[1], escape(kw["title"]))
-        _cell(row[2], kw.get("debut_season", "Off-Peak"))
-        _cell(row[3], RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy")))
-        _cell(row[4], f"{MovieProject(**kw).window_days()}")
-        _cell(row[5], "—" if is_dd or not kw.get("pvod_chosen_price") else f"\\${kw['pvod_chosen_price']:.2f}")
-        _cell(row[6], _pay1_text(kw))
+        _cell(row[0], f"{cyc} · {escape(kw['title'])}")
+        _cell(row[1], kw.get("debut_season", "Off-Peak"))
+        _cell(row[2], RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy")))
+        _cell(row[3], f"{MovieProject(**kw).window_days()}")
+        _cell(row[4], "—" if is_dd or not kw.get("pvod_chosen_price") else f"${kw['pvod_chosen_price']:.2f}")
+        _cell(row[5], _pay1_text(kw))
         editable_pay2 = (not is_dd and cyc < ss.movie_cycle
                          and entry.get("pay2_decided_cycle") in (None, ss.movie_cycle))
         if editable_pay2:
@@ -2038,7 +2051,7 @@ def _decisions(ss):
             opts = ["keep"] + list(LICENSING_PLATFORMS)
             decided = entry.get("pay2_decided_cycle") is not None
             cur = ("keep" if kw.get("pay2_licensing", "keep") == "keep" else kw.get("pay2_platform"))
-            row[7].selectbox(
+            row[6].selectbox(
                 f"Pay-2 for Film {cyc}", opts, index=opts.index(cur) if decided and cur in opts else None,
                 placeholder="⚠ Choose…", key=f"pay2_slate_{cyc}", label_visibility="collapsed",
                 format_func=lambda k, deltas=deltas: ("Keep on Peacock" if k == "keep" else
@@ -2047,21 +2060,20 @@ def _decisions(ss):
                 help="Pay-2 is due now for this film. The $ next to each platform is how much licensing to it "
                      "changes this film's NPV versus keeping it on Peacock.")
         elif is_dd:
-            _cell(row[7], "Peacock (D&amp;D)")
+            _cell(row[6], "Peacock (D&amp;D)")
         elif cyc > ss.movie_cycle:
-            _cell(row[7], "—")
+            _cell(row[6], "—")
         else:
-            _cell(row[7], _pay2_text(kw))
-        _cell(row[8], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
+            _cell(row[6], _pay2_text(kw))
+        _cell(row[7], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
 
     # ── The current film's row ────────────────────────────────────────────────
-    _cell(current_row[0], f"<b>{ss.movie_cycle}</b>")
-    _cell(current_row[1], f"<b>{escape(title)}</b><br><span style='font-size:11px;'>this film</span>")
+    _cell(current_row[0], f"<b>{ss.movie_cycle} · {escape(title)}</b><br><span style='font-size:11px;'>this film</span>")
 
     # Debut Season (Phase 5, 2026-08-05): release timing. Summer/Holiday open
     # bigger but crowd out awards recall; Fall/Awards opens softer but is the
     # awards on-ramp; Off-Peak is the neutral baseline.
-    debut_season = current_row[2].selectbox(
+    debut_season = current_row[1].selectbox(
         "Debut Season", DEBUT_SEASONS,
         index=DEBUT_SEASONS.index(d.get("debut_season", "Off-Peak")) if d.get("debut_season") in DEBUT_SEASONS else 0,
         label_visibility="collapsed",
@@ -2079,7 +2091,7 @@ def _decisions(ss):
     release_key = f"release_strategy_{ss.movie_cycle}"
     if ss.get(release_key) not in strategies_shown:
         ss[release_key] = cur_strat   # seed once; the key alone then carries the student's pick
-    chosen = current_row[3].selectbox(
+    chosen = current_row[2].selectbox(
         "Release Strategy", strategies_shown,
         key=release_key,
         # Plain labels on purpose: on older Streamlit (the local 1.45 install)
@@ -2097,7 +2109,7 @@ def _decisions(ss):
     ss.movie_draft["release_strategy"] = chosen
 
     default_days = d.get("theatrical_run_days") or THEATRICAL_RUN_LENGTHS["Standard"]
-    theatrical_run_days = int(current_row[4].number_input(
+    theatrical_run_days = int(current_row[3].number_input(
         "Theatrical Run Length (days)", RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, int(default_days), step=5,
         label_visibility="collapsed",
         help=f"Short≈{THEATRICAL_RUN_LENGTHS['Short']}d · Standard≈{THEATRICAL_RUN_LENGTHS['Standard']}d · "
@@ -2124,11 +2136,11 @@ def _decisions(ss):
     pvod_price = None
     lo = hi = None
     if chosen == "day_and_date":
-        _cell(current_row[5], "—")
+        _cell(current_row[4], "—")
         ss.movie_draft["pvod_chosen_price"] = None
         ss.movie_draft["pvod_selected_price"] = None
     elif resolved_entry is None:
-        _cell(current_row[5], "<i>after Theatrical Sim</i>")
+        _cell(current_row[4], "<i>after Theatrical Sim</i>")
         ss.movie_draft["pvod_chosen_price"] = None
         ss.movie_draft["pvod_selected_price"] = None
     else:
@@ -2136,7 +2148,7 @@ def _decisions(ss):
         existing_price = d.get("pvod_selected_price")
         default_price = existing_price if existing_price is not None and lo <= existing_price <= hi \
             else round((lo + hi) / 2, 2)
-        pvod_price = float(current_row[5].number_input(
+        pvod_price = float(current_row[4].number_input(
             "PVOD Rental Price", float(lo), float(hi), float(default_price), step=0.50, format="%.2f",
             label_visibility="collapsed",
             help=f"Your band is \\${lo:.2f}–\\${hi:.2f}, sized off this film's real opening. Higher prices earn more "
@@ -2149,10 +2161,10 @@ def _decisions(ss):
     # competitive bid. An accepted bid shows up here as its own option.
     pay1_key = f"pay1_pick_{ss.movie_cycle}"
     if chosen == "day_and_date":
-        _cell(current_row[6], "Peacock (D&amp;D)")
+        _cell(current_row[5], "Peacock (D&amp;D)")
         ss.movie_draft["pay1_licensing"] = "keep"
     elif resolved_entry is None:
-        _cell(current_row[6], "<i>after Theatrical Sim</i>")
+        _cell(current_row[5], "<i>after Theatrical Sim</i>")
     else:
         winner = d.get("pay1_auction_winner")
         pay1_opts = ["keep"] + list(LICENSING_PLATFORMS) + (["bid"] if winner else [])
@@ -2166,7 +2178,7 @@ def _decisions(ss):
                     else d.get("pay1_platform", DEFAULT_LICENSING_PLATFORM))
         if ss.get(pay1_key) not in pay1_opts:
             ss[pay1_key] = cur_pay1   # seed once; the key alone then carries the student's pick
-        pay1_pick = current_row[6].selectbox(
+        pay1_pick = current_row[5].selectbox(
             "Pay-1 Window", pay1_opts, key=pay1_key,
             label_visibility="collapsed", on_change=_pay1_changed,
             format_func=lambda k: ("Keep on Peacock" if k == "keep" else
@@ -2186,16 +2198,16 @@ def _decisions(ss):
     # Pay-2 -- opens years after release, so it's decided next cycle (as
     # this film's row up top), except on the final film.
     if chosen == "day_and_date":
-        _cell(current_row[7], "Peacock (D&amp;D)")
+        _cell(current_row[6], "Peacock (D&amp;D)")
         ss.movie_draft["pay2_licensing"] = "keep"
     elif not final_film:
-        _cell(current_row[7], "<i>decide next cycle</i>")
+        _cell(current_row[6], "<i>decide next cycle</i>")
         ss.movie_draft["pay2_licensing"] = "keep"
     else:
         pay2_opts = ["keep"] + list(LICENSING_PLATFORMS)
         cur_pay2 = ("keep" if d.get("pay2_licensing", "keep") == "keep"
                     else d.get("pay2_platform", DEFAULT_LICENSING_PLATFORM))
-        pay2_pick = current_row[7].selectbox(
+        pay2_pick = current_row[6].selectbox(
             "Pay-2 Window", pay2_opts, index=pay2_opts.index(cur_pay2) if cur_pay2 in pay2_opts else 0,
             label_visibility="collapsed",
             format_func=lambda k: ("Keep on Peacock" if k == "keep" else
@@ -2208,7 +2220,7 @@ def _decisions(ss):
 
     # Status -- the Theatrical Sim button lives in the row itself.
     if resolved_entry is None:
-        if current_row[8].button("🎬 Theatrical Sim", key=f"run_theatrical_{ss.movie_cycle}",
+        if current_row[7].button("🎬 Theatrical Sim", key=f"run_theatrical_{ss.movie_cycle}",
                                  use_container_width=True,
                                  help="Locks in this film's real opening, reviews and any surprises, so you can "
                                       "set PVOD and Pay-1 with the result in hand."):
@@ -2216,7 +2228,7 @@ def _decisions(ss):
             st.rerun()
     else:
         dom_bo = live_project.domestic_box_office(resolved_entry["multiplier"])
-        _cell(current_row[8], f"✅ \\${dom_bo:.0f}M domestic<br>critics {resolved_entry['critical_score']:.0f}/100")
+        _cell(current_row[7], f"✅ ${dom_bo:.0f}M domestic<br>critics {resolved_entry['critical_score']:.0f}/100")
 
     # ── Notes and follow-ups under the table ─────────────────────────────────
     season_open_mult = (SEASON_OPENING_MULT.get(debut_season, 1.0)
@@ -2246,7 +2258,7 @@ def _decisions(ss):
         st.markdown(
             f'<div style="font-size:13px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Theatrical Sim locked in:</b> '
             f'{"⭐" * stars}{"☆" * (5 - stars)} audience demand · '
-            f'\\${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · critics {r["critical_score"]:.0f}/100 · '
+            f'${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · critics {r["critical_score"]:.0f}/100 · '
             f'{theatrical_run_days}-day run'
             + "".join(f"<br>⚡ {escape(e)}" for e in event_notes) + '</div>', unsafe_allow_html=True)
 
@@ -2408,11 +2420,11 @@ def _decisions(ss):
                     icon = "🔥" if state == "hot" else ("⚠" if state == "hungry" else "")
                     term = b.get("term_mo")
                     kept = sub_val * PAY1_REVERSION_SHARE.get(term, 0.0) if term else 0.0
-                    term_html = f' · {term}-month term, ~\\${kept:.1f}M back to Peacock after' if term else ""
+                    term_html = f' · {term}-month term, ~${kept:.1f}M back to Peacock after' if term else ""
                     flavor_html = f'<div style="font-size:11px;">{icon} {flavor}</div>' if flavor else ""
                     bc1, bc2 = st.columns([3, 1])
                     bc1.markdown(f'<div style="font-size:13px;padding:4px 0;"><b>{b["bidder"]}</b>: '
-                                 f'\\${b["bid_m"]:.1f}M{term_html}{flavor_html}</div>', unsafe_allow_html=True)
+                                 f'${b["bid_m"]:.1f}M{term_html}{flavor_html}</div>', unsafe_allow_html=True)
                     if accepted == b["bidder"]:
                         bc2.markdown('<div style="font-size:13px;padding:4px 0;">✅ Accepted</div>',
                                      unsafe_allow_html=True)
@@ -2451,15 +2463,14 @@ def _decisions(ss):
     # Holding Deals gate Simulate alongside the pitch and theatrical run.
     missing = [(i, label, todo) for i, label, _, done, todo in _numbered_steps(ss)
                if not done and label not in ("Greenlight", "Release")]
-    can_simulate = (resolved_entry is not None and not pending_pvod_response and has_logline
-                    and not missing)
-    for i, label, todo in missing:
-        st.caption(f"⚠ Step {i} · {label}: {todo} before you can Simulate.")
     if not has_logline:
-        st.caption("⚠ Step 4 · Greenlight: write your Pitch / Logline (at least a sentence) before you can Simulate.")
+        missing.append((4, "Greenlight", "write your Pitch / Logline (at least a sentence)"))
     if resolved_entry is None:
-        st.caption("⚠ Step 6 · Release: run the Theatrical Simulation above before you can Simulate.")
-    elif pending_pvod_response:
+        missing.append((6, "Release", "click 🎬 Theatrical Sim in the Release Plan table"))
+    can_simulate = not missing and not pending_pvod_response
+    for i, label, todo in sorted(missing, key=lambda m: (m[0], m[1] != "Pay-2 (earlier films)")):
+        st.caption(f"⚠ Step {i} · {label}: {todo} before you can Simulate.")
+    if resolved_entry is not None and pending_pvod_response:
         st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
         project = _current_project(ss)
@@ -2586,12 +2597,12 @@ def _decision_result_card(result: dict):
 
     why = []
     star_boost = 1 + (kw["star_power"] / 100) * STAR_POWER_BOOST_MAX
-    why.append(f"⭐ Star Power {kw['star_power']} added about ${opening - opening / star_boost:,.0f}M "
+    why.append(f"⭐ Star Power {kw['star_power']} added about ${opening - opening / star_boost:,.1f}M "
                f"to the opening weekend.")
     src_boost = (library_ip_opening_boost(ip, kw["genre"]) if ip in UNIVERSAL_LIBRARY_IP
                  else SOURCE_OPENING_BOOST.get(kw.get("source_material"), 1.0))
     if src_boost > 1:
-        why.append(f"📚 {source}'s built-in audience added about ${opening - opening / src_boost:,.0f}M "
+        why.append(f"📚 {source}'s built-in audience added about ${opening - opening / src_boost:,.1f}M "
                    f"to the opening.")
     label = result.get("scenario_label", "base")
     why.append({"bear": "📉 Audience demand came in weak (Bear): the film had short legs after opening.",

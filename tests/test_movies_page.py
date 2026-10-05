@@ -251,7 +251,8 @@ def test_paying_for_research_reveals_the_signal_and_costs_pa_spend():
     pa_before = at.number_input[pa_idx].value   # festival bids, then budget, P&A, screens in that order
     at.button(key="movie_research_1").click().run()
     assert not at.exception, f"Research click raised: {list(at.exception)}"
-    assert at.session_state["movie_research_paid"] == {1: True}
+    # 2026-10-05: research is bought for one Genre + Concept Type.
+    assert at.session_state["movie_research_paid"] == {1: {"genre": "Action/Tentpole", "concept_type": "New IP"}}
     assert at.session_state["movie_draft"]["pa_spend_m"] == pytest.approx(pa_before + RESEARCH_FEE_M)
     assert at.number_input[pa_idx].value == pytest.approx(pa_before + RESEARCH_FEE_M)
     text = "\n".join(md.value for md in at.markdown)
@@ -1007,3 +1008,15 @@ def test_release_plan_lets_you_choose_pay2_for_earlier_films_and_reprices_their_
     assert film1["project_kwargs"]["pay2_platform"] == platform
     assert film1["pay2_decided_cycle"] == 3
     assert film1["npv"] == pytest.approx(npv_before + expected_delta)
+
+
+def test_research_only_covers_the_genre_and_concept_it_was_bought_for():
+    # QA 2026-10-05: one $4M purchase used to reveal the seeded draw for every
+    # Genre / Concept Type as the dropdowns changed.
+    from app_pages.movies import _research_covers
+    bought = {"genre": "Horror", "concept_type": "New IP"}
+    assert _research_covers(bought, "Horror", "New IP")
+    assert not _research_covers(bought, "Comedy", "New IP")
+    assert not _research_covers(bought, "Horror", "Sequel")
+    assert not _research_covers(None, "Horror", "New IP")
+    assert _research_covers(True, "Comedy", "Sequel")   # legacy sessions stored a bare True

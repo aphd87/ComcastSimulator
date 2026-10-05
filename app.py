@@ -746,16 +746,15 @@ elif ss.active_section == "movies":
         """, unsafe_allow_html=True)
 
     _movie_steps = [
-        "🤝 <b>Studio Partnerships, Scouted Concepts, Festival Acquisitions</b> — review all three every cycle: a standing banner deal, 6 ready-made concepts, and finished films to buy",
-        "🎬 <b>Greenlight a New Movie</b> — one slot per 2-year cycle: logline, genre, budget near the genre's typical level, P&amp;A, screens, financing",
-        "🎭 <b>Holding Deals</b> — lock a specific actor's window for next cycle's movie",
-        "📅 <b>Release Strategy</b> — season; from Film 3, Wide, Platform, or Day-and-Date",
-        "🎟️ <b>Theatrical Simulation</b>, then Pay-1 licensing and PVOD pricing",
-        "🎯 <b>Simulate → Results</b> — repeat for 4 films, then submit your score",
+        "🤝 <b>Partnerships, Scouted Concepts, Festivals</b> (steps 1-3): sign a banner once, option a concept, bid on a finished film",
+        "🎬 <b>Greenlight a New Movie</b> (step 4): concept or revived Universal IP, cast, pitch, budget, P&amp;A, screens",
+        "🎭 <b>Holding Deals</b> (step 5): lock an actor to cast in your next film",
+        "📅 <b>Release Plan</b> (step 6): one row per film; set this film's row, click 🎬 Theatrical Sim, then PVOD and Pay-1; choose Pay-2 for earlier films",
+        "🎯 <b>Simulate → Results</b> (step 7): repeat for 4 films, then submit your score",
     ]
     _movie_steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
-        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:22px;white-space:nowrap;">{i+1}.</span>'
         f'<span style="color:#ffffff;">{s}</span></div>'
         for i, s in enumerate(_movie_steps))
     st.markdown(f"""
@@ -952,7 +951,7 @@ else:
     brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
     steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
-        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:22px;white-space:nowrap;">{i+1}.</span>'
         f'<span style="color:#ffffff;">{s}</span></div>'
         for i, s in enumerate(brief["steps"])
     )
