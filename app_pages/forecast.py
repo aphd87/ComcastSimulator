@@ -25,8 +25,8 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">10-Year Strategy:</b> Prove OCF on Oxygen (Years 1–3) →
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">
+    💡 <b style="color:#ffffff;">10-Year Strategy:</b> Prove OCF on Oxygen (Years 1–3) →
     earn the right to add Bravo (Years 4–7) → launch Peacock SVOD+ (Years 8–10).
     Each phase is a performance threshold. Cord-cutting accelerates after Year 4.
     Peacock becomes the hedge against linear erosion.
@@ -146,7 +146,7 @@ def render():
     with c1:
         st.markdown('<div class="section-title">OCF by Phase</div>', unsafe_allow_html=True)
         st.markdown(f"""
-        <div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">
+        <div style="font-size:14px;color:#ffffff;margin-bottom:8px;">
         <b>OCF by Phase</b> sums each year's Operating Cash Flow (Ad + Distribution + SVOD revenue,
         minus content cost, marketing, and G&amp;A) into three fixed windows: <b>Phase 1 — Oxygen</b>
         (Years 1–3, single network), <b>Phase 2 — Oxygen + Bravo</b> (Years 4–7, two P&amp;Ls), and
@@ -166,7 +166,7 @@ def render():
             x=phase_agg["Phase"], y=phase_agg["Cumulative OCF ($M)"],
             marker_color=phase_agg["Color"], opacity=0.8,
             text=phase_agg["Cumulative OCF ($M)"].apply(lambda v: f"${v:.0f}M"),
-            textposition="outside", textfont=dict(size=11, color="#e8eaf0"),
+            textposition="outside", textfont=dict(size=11, color="#ffffff"),
         ))
         fig_ph.update_layout(**base_layout("Cumulative OCF by Phase ($M)", height=280))
         fig_ph.update_xaxes(tickfont=dict(size=9))
@@ -246,8 +246,8 @@ def render():
         <div style="display:flex;gap:12px;padding:8px 12px;margin-bottom:4px;
              background:#1a1d26;border-radius:6px;{border}opacity:{opacity};">
           <span style="font-size:16px;min-width:24px;">{icon}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;
+          <span style="font-family:'DM Mono',monospace;font-size:14px;color:#ffffff;
                 min-width:60px;padding-top:2px;">Y{ev_year} · {cal}</span>
-          <span style="font-size:15px;color:{'#e8eaf0' if is_past else '#e0e2ea'};">{text}</span>
+          <span style="font-size:15px;color:{'#ffffff' if is_past else '#ffffff'};">{text}</span>
         </div>
         """, unsafe_allow_html=True)

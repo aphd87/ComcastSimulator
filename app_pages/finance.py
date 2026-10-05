@@ -124,9 +124,9 @@ def render():
             st.markdown(f"""
             <div style="display:flex;justify-content:space-between;align-items:center;
                  padding:5px 0;border-bottom:1px solid rgba(37,40,54,.5);">
-              <span style="font-size:{size};{bold}color:#e8eaf0;">{label}</span>
+              <span style="font-size:{size};{bold}color:#ffffff;">{label}</span>
               <div style="display:flex;gap:20px;align-items:center;">
-                <span style="font-size:14px;color:#e0e2ea;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
+                <span style="font-size:14px;color:#ffffff;font-family:'DM Mono',monospace;">{pct:.1f}%</span>
                 <span style="font-family:'DM Mono',monospace;{bold}font-size:{size};color:{color};">{sign}${abs(val):.1f}M</span>
               </div>
             </div>
@@ -182,7 +182,7 @@ def render():
     # ── Monthly P&L ───────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Revenue & Cost Trend</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
     Ad revenue follows a seasonal curve — summer dip, fall and spring peaks. Content cost follows each
     show's real premiere month, same curve as the "Scheduling & cash-flow tools" box on the Simulation page. The OCF chart below turns red in
     months where cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
@@ -245,7 +245,7 @@ def render():
     # ── Distribution Revenue Model ────────────────────────────────────────────
     st.markdown('<div class="section-title">Distribution Revenue Calculator</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:15px;color:#e0e2ea;margin-bottom:12px;">
+    <div style="font-size:15px;color:#ffffff;margin-bottom:12px;">
     Distribution (affiliate) revenue = subscribers × monthly fee × 12 months.
     Bravo commands a premium affiliate fee; this compounds with a 5% annual escalation clause
     (capped at Year 5) even as cable subscribers erode at 3%/year.
@@ -262,7 +262,7 @@ def render():
     user_subs, user_rate, user_esc = BASE_SUBS_M, SUB_RATE_PER_MONTH, 5.0
     with st.expander("🎛️ Adjust Distribution Model", expanded=False):
         st.markdown("""
-        <div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">
+        <div style="font-size:14px;color:#ffffff;margin-bottom:10px;">
         This is a <b>what-if sandbox</b>, not your actual game state — these three inputs
         override the model's baseline assumptions so you can see how distribution revenue
         would respond under a different deal. Changing them here only affects the table and
@@ -320,7 +320,7 @@ def render():
     st.divider()
     st.markdown('<div class="section-title">Revenue per Rating Point — Show Benchmarks</div>', unsafe_allow_html=True)
     st.markdown(f"""
-    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
     <b>What's a rating point?</b> 1 point = 1% of the 18-49 target demo watching (Nielsen's standard
     ad-buying metric) — a show rated 2.0 reaches twice the audience share of one rated 1.0.<br>
     <b>Rev/Point</b> = this show's Ad Revenue ÷ its Rating — starts from the ${REV_PER_RATING_POINT}M base

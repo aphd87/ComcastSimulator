@@ -39,9 +39,9 @@ TAILWIND_INJECT = """
             surface:   '#12141a',
             surface2:  '#1a1d26',
             line:      '#252836',
-            ink:       '#e8eaf0',
-            ink2:      '#e0e2ea',
-            muted:     '#e0e2ea',
+            ink:       '#ffffff',
+            ink2:      '#ffffff',
+            muted:     '#ffffff',
             gold:      '#e8c547',
             success:   '#66bb6a',
             danger:    '#ef5350',
@@ -68,20 +68,20 @@ GLOBAL_CSS = """
 
 html, body, [data-testid="stApp"] {
     background-color: #0b0c10 !important;
-    color: #e8eaf0;
+    color: #ffffff;
     font-family: 'DM Sans', sans-serif;
 }
-h1,h2,h3 { font-family:'DM Serif Display',serif !important; color:#e8eaf0 !important; }
-h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important; }
+h1,h2,h3 { font-family:'DM Serif Display',serif !important; color:#ffffff !important; }
+h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important; }
 
 [data-testid="stMetric"] {
     background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px 16px !important;
 }
-[data-testid="stMetricLabel"] { color:#e0e2ea !important;font-size:14px !important;text-transform:uppercase;letter-spacing:.08em; }
-[data-testid="stMetricValue"] { color:#e8eaf0 !important;font-family:'DM Serif Display',serif !important; }
+[data-testid="stMetricLabel"] { color:#ffffff !important;font-size:14px !important;text-transform:uppercase;letter-spacing:.08em; }
+[data-testid="stMetricValue"] { color:#ffffff !important;font-family:'DM Serif Display',serif !important; }
 
 [data-testid="stTabs"] button {
-    color:#e0e2ea !important;font-family:'DM Mono',monospace !important;font-size:15px !important;
+    color:#ffffff !important;font-family:'DM Mono',monospace !important;font-size:15px !important;
     border-bottom:2px solid transparent !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
@@ -89,7 +89,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 }
 
 .stDataFrame { border:1px solid #252836 !important;border-radius:6px; }
-.stDataFrame thead th { background:#1a1d26 !important;color:#e0e2ea !important;
+.stDataFrame thead th { background:#1a1d26 !important;color:#ffffff !important;
     font-family:'DM Mono',monospace;font-size:14px; }
 
 [data-testid="stSlider"] > div > div { background:#252836 !important; }
@@ -98,14 +98,14 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 [data-testid="stSelectbox"] div,
 [data-testid="stTextInput"] input {
     background:#1a1d26 !important;border-color:#252836 !important;
-    color:#e8eaf0 !important;font-family:'DM Mono',monospace !important;
+    color:#ffffff !important;font-family:'DM Mono',monospace !important;
 }
 [data-testid="stExpander"] {
     background:#12141a !important;border:1px solid #252836 !important;border-radius:6px !important;
 }
 .stAlert { border-radius:6px !important;font-family:'DM Mono',monospace !important;font-size:15px; }
 .stButton button {
-    background:#1a1d26 !important;color:#e8eaf0 !important;border:1px solid #252836 !important;
+    background:#1a1d26 !important;color:#ffffff !important;border:1px solid #252836 !important;
     font-family:'DM Mono',monospace !important;font-size:15px !important;border-radius:5px !important;
     transition: all .15s;
 }
@@ -131,7 +131,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     font-size:36px;letter-spacing:.12em;
     font-weight:700;
 }
-.net-tagline { font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;margin-top:2px; }
+.net-tagline { font-family:'DM Mono',monospace;font-size:14px;color:#ffffff;margin-top:2px; }
 
 /* Badge pills */
 .badge { display:inline-block;padding:2px 8px;border-radius:4px;
@@ -140,12 +140,12 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .badge-yellow { background:rgba(255,167,38,.15);color:#ffb74d;border:1px solid rgba(255,167,38,.3); }
 .badge-red    { background:rgba(239,83,80,.15);color:#ef9a9a;border:1px solid rgba(239,83,80,.3); }
 .badge-blue   { background:rgba(79,195,247,.15);color:#81d4fa;border:1px solid rgba(79,195,247,.3); }
-.badge-gray   { background:rgba(139,144,160,.15);color:#e0e2ea;border:1px solid rgba(139,144,160,.3); }
+.badge-gray   { background:rgba(139,144,160,.15);color:#ffffff;border:1px solid rgba(139,144,160,.3); }
 .badge-gold   { background:rgba(232,197,71,.15);color:#e8c547;border:1px solid rgba(232,197,71,.3); }
 
 .section-title {
     font-family:'DM Mono',monospace;font-size:19px;font-weight:700;text-transform:uppercase;
-    letter-spacing:.1em;color:#e8eaf0;margin-bottom:8px;
+    letter-spacing:.1em;color:#ffffff;margin-bottom:8px;
     padding-bottom:6px;border-bottom:2px solid #252836;
 }
 .phase-banner { padding:8px 16px;border-radius:6px;font-family:'DM Mono',monospace;font-size:15px;margin-bottom:12px; }
@@ -179,7 +179,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 .theory-icon { font-size:24px;margin-bottom:6px; }
 .theory-title { font-family:'DM Mono',monospace;font-size:14px;font-weight:600;
     color:#e8c547;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px; }
-.theory-body { font-size:15px;color:#e0e2ea;line-height:1.6; }
+.theory-body { font-size:15px;color:#ffffff;line-height:1.6; }
 
 /* Real-time feedback pulse */
 @keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:.6} }
@@ -217,14 +217,14 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
 /* Readability (2026-10-01): no grey text anywhere. Streamlit renders
    st.caption and widget labels in a faded theme color; force near-white. */
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
-.stCaption, .stCaption p { color:#e0e2ea !important; }
-[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { color:#e8eaf0 !important; }
-[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color:#e8eaf0 !important; }
+.stCaption, .stCaption p { color:#ffffff !important; }
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { color:#ffffff !important; }
+[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color:#ffffff !important; }
 
 /* "?" help tooltips: always on top, high contrast, wide enough to read. */
 [data-baseweb="tooltip"], [data-baseweb="popover"] { z-index: 1000000 !important; }
 [data-testid="stTooltipContent"], [data-baseweb="tooltip"] [role="tooltip"] {
-    background:#1a1d26 !important; color:#e8eaf0 !important;
+    background:#1a1d26 !important; color:#ffffff !important;
     border:1px solid #4fc3f7 !important; border-radius:6px !important;
     box-shadow:0 8px 28px rgba(0,0,0,.65) !important;
     max-width:min(420px, 90vw) !important; width:max-content !important;
@@ -233,8 +233,8 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#e8eaf0 !important
     padding:10px 12px !important;
 }
 [data-testid="stTooltipContent"] *, [data-baseweb="tooltip"] [role="tooltip"] * {
-    color:#e8eaf0 !important; background:transparent !important;
+    color:#ffffff !important; background:transparent !important;
 }
-[data-testid="stTooltipIcon"] svg { color:#e0e2ea !important; stroke:#e0e2ea !important; }
+[data-testid="stTooltipIcon"] svg { color:#ffffff !important; stroke:#ffffff !important; }
 </style>
 """

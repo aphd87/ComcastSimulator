@@ -1719,3 +1719,28 @@ def test_a_slate_that_changes_nothing_always_fails_even_with_great_luck():
         assert not lucky["passed"]
         assert lucky["avg_ra_npv_m"] > 0          # luck still lifts the graded NPV / score...
         assert lucky["avg_decision_npv_m"] < 0    # ...but the decisions alone don't clear $0
+
+
+# ── Universal Library IP (2026-10-05) ────────────────────────────────────────
+def test_library_ip_boosts_opening_more_in_its_home_genre_and_replaces_source_fee():
+    from utils.movie_models import UNIVERSAL_LIBRARY_IP, library_ip_opening_boost
+    base = dict(title="T", budget_m=60, pa_spend_m=40, star_power=50, screens=3000, cycle=1,
+                source_material="Video Game Adaptation")
+    plain = MovieProject(genre="Horror", **base)
+    home = MovieProject(genre="Horror", library_ip="jaws", **base)
+    # Revived IP replaces the source-material boost rather than stacking with it.
+    assert home.opening_weekend() / plain.opening_weekend() == pytest.approx(
+        library_ip_opening_boost("jaws", "Horror") / 1.12)
+    assert library_ip_opening_boost("jaws", "Horror") > library_ip_opening_boost("jaws", "Comedy") > 1.0
+    assert library_ip_opening_boost(None, "Horror") == 1.0
+    # Legacy fee replaces the rights fee in Capital at Risk.
+    assert home.capital_at_risk() - plain.capital_at_risk() == pytest.approx(
+        UNIVERSAL_LIBRARY_IP["jaws"]["legacy_fee_m"] - 8.0)
+
+
+def test_every_library_ip_names_real_genres_and_every_actor_has_a_star_power():
+    from utils.movie_models import UNIVERSAL_LIBRARY_IP, TALENT_BASE_STAR_POWER, TALENT_PARTNERS, GENRES
+    for ip in UNIVERSAL_LIBRARY_IP.values():
+        assert ip["genres"] and set(ip["genres"]) <= set(GENRES)
+        assert ip["opening_boost"] > 1.0 and ip["legacy_fee_m"] > 0
+    assert set(TALENT_BASE_STAR_POWER) == set(TALENT_PARTNERS)

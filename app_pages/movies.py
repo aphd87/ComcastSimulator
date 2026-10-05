@@ -7,6 +7,8 @@ revenue visibility yet) -> Release Strategy (the linear-vs-SVOD tension
 from Day 1's Green Light tab, extended to theatrical/day-and-date/platform)
 -> Results (actual outcome resolves against a hidden bull/base/bear draw).
 """
+from html import escape
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,6 +24,7 @@ from utils.movie_models import (
     IMAX_ELIGIBLE_GENRES, IMAX_OPENING_BOOST_PCT, IMAX_COST_M,
     generate_background_slate,
     generate_scouted_concepts, draw_scouted_poach, resolve_scouted_outcome, SCOUTED_POACH_CHANCE,
+    SCOUTED_CONCEPTS_PER_CYCLE,
     LICENSING_PLATFORMS, DEFAULT_LICENSING_PLATFORM,
     PAY2_LICENSING_OPTIONS, PAY2_WINDOW_MONTH, PAY2_VALUE_PCT_OF_PAY1,
     THEATRICAL_RUN_LENGTHS, RUN_LENGTH_BOX_OFFICE_MULT,
@@ -45,6 +48,8 @@ from utils.movie_models import (
     DEBUT_SEASONS, SEASON_OPENING_MULT, SEASON_GENRE_SYNERGY, SEASON_AWARDS_RECALL,
     FESTIVALS, generate_festival_slate, festival_acquisition_anchor_m,
     draw_festival_acquisition_bids, resolve_festival_acquisition, resolve_festival_acquisition_outcome,
+    describe_pipeline_movie, STAR_POWER_BOOST_MAX, THEME_PARK_CRITICAL_GATE,
+    UNIVERSAL_LIBRARY_IP, library_ip_opening_boost, TALENT_BASE_STAR_POWER,
 )
 from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
@@ -180,7 +185,7 @@ def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
         x=vals, y=[0, 0, 0], mode="markers+text",
         marker=dict(size=[16, 22, 16], color=colors, line=dict(width=2, color="#12141a")),
         text=["Bear", "Base", "Bull"], textposition="top center",
-        textfont=dict(color="#e0e2ea", size=12),
+        textfont=dict(color="#ffffff", size=12),
         hovertemplate="%{text}: $%{x:.1f}M<extra></extra>",
         showlegend=False,
     ))
@@ -297,9 +302,13 @@ def _active_talent_bonus(ss, genre: str, source_material: str = None) -> dict:
         if signed_cycle <= ss.movie_cycle < signed_cycle + MULTI_PICTURE_DEAL_CYCLES:
             active_talent_keys.add(k)
 
+    # 2026-10-05: a held/signed actor's bonus applies only when that actor is
+    # actually CAST as this film's lead (see _contracted_talent and the Lead
+    # Actor pick in Greenlight), in one of their best genres.
+    lead_actor = ss.get("movie_draft", {}).get("lead_actor")
     for talent_key in active_talent_keys:
         talent = TALENT_PARTNERS[talent_key]
-        if talent["specialty"] == genre:
+        if talent_key == lead_actor and genre in talent.get("best_genres", [talent["specialty"]]):
             t_star = talent.get("star_power_bonus", 0)
             t_crit = talent.get("critical_score_bonus", 0.0)
             synergy_material = ORIGIN_MEDIUM_SOURCE_SYNERGY.get(talent.get("origin_medium"))
@@ -319,6 +328,106 @@ def _active_talent_bonus(ss, genre: str, source_material: str = None) -> dict:
     if crit_bonus:
         bonus["critical_score_bonus"] = crit_bonus
     return bonus
+
+
+def _step_status(ss) -> list:
+    """Every required step of a cycle, in page order, as (label, anchor,
+    done, todo) -- 2026-10-05, per explicit user request that Partnerships,
+    Scouted Concepts, Festivals and Holding Deals are required, not
+    optional ("no passing"). Drives both the step bar at the top of
+    Decisions and the Simulate gate at the bottom. Each step is only
+    required while it's actually possible (e.g. every banner already
+    poached, or no next film to hold an actor for)."""
+    cyc = ss.movie_cycle
+    partnerships = bool(ss.movie_overall_deal) or all(k in ss.movie_rival_exclusive for k in STUDIO_PARTNERS)
+    scouted = any(str(cid).startswith(f"{cyc}_") for cid in ss.movie_scouted_optioned)
+    fest_ids = {f["id"] for f in generate_festival_slate(ss.team_name, cyc)}
+    festivals = any(i in ss.movie_festival_log or i in ss.movie_festival_rival_log for i in fest_ids)
+    logline = ss.get(f"movie_logline_{cyc}", ss.movie_draft.get("logline", ""))
+    greenlight = len((logline or "").strip()) >= 20
+    final_film = cyc >= CYCLES_TOTAL
+    holding = (final_film
+               or any(h.get("cycle_placed") == cyc for h in ss.movie_talent_holds.values())
+               or any(signed <= cyc + 1 < signed + MULTI_PICTURE_DEAL_CYCLES
+                      for signed in ss.movie_multi_picture_deals.values()))
+    release = ss.movie_theatrical_resolved.get(cyc) is not None
+    return [
+        ("Partnerships", "talent", partnerships, "sign a Studio Partnership"),
+        ("Scouted Concepts", "scouted", scouted, "option at least one Scouted Concept"),
+        ("Festivals", "festivals", festivals, "bid on at least one festival film"),
+        ("Greenlight", "greenlight", greenlight, "write your pitch / logline"),
+        ("Holding Deals", "holding", holding, "place a Holding Deal or sign a Multi-Picture Deal"),
+        ("Release", "release", release, "run the Theatrical Simulation"),
+    ]
+
+
+def _step_bar(ss):
+    """Compact, clickable step bar -- the one place a student sees where
+    they are in this film's cycle and what's left before Simulate."""
+    steps = _step_status(ss)
+    chips = []
+    for i, (label, anchor, done, _) in enumerate(steps, start=1):
+        bg, border, mark = (("rgba(102,187,106,.15)", SUCCESS, "✓") if done
+                            else ("#1a1d26", "#252836", str(i)))
+        chips.append(f'<a href="#{anchor}" style="text-decoration:none;color:#ffffff;background:{bg};'
+                     f'border:1px solid {border};border-radius:14px;padding:3px 10px;font-size:13px;'
+                     f'white-space:nowrap;"><b>{mark}</b> {label}</a>')
+    ready = all(s[2] for s in steps)
+    chips.append(f'<a href="#simulate" style="text-decoration:none;color:{"#0b0c10" if ready else "#ffffff"};'
+                 f'background:{SUCCESS if ready else "#1a1d26"};border:1px solid {SUCCESS if ready else "#252836"};'
+                 f'border-radius:14px;padding:3px 10px;font-size:13px;white-space:nowrap;">'
+                 f'<b>7</b> Simulate{" ▶" if ready else " 🔒"}</a>')
+    st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">{"".join(chips)}</div>',
+                unsafe_allow_html=True)
+
+
+def _section_your_slate(ss, title: str = "🎬 Your Slate"):
+    """One clear row per film this team has made (2026-10-05, per explicit
+    user request: "there should be a clear table"). Own films only --
+    other teams' results live on the leaderboard."""
+    log = sorted(ss.movie_log, key=lambda r: r["cycle"])
+    if not log:
+        return
+    rows = []
+    for r in log:
+        kw = r["project_kwargs"]
+        p = MovieProject(**kw)
+        domestic = p.domestic_box_office(r["multiplier"])
+        worldwide = domestic + p.international_box_office(domestic)
+        lead = kw.get("lead_actor")
+        ip = kw.get("library_ip")
+        rows.append({
+            "Film":            f"{r['cycle']} of {CYCLES_TOTAL}",
+            "Years":           _cycle_years_label(r["cycle"]),
+            "Title":           kw["title"],
+            "Genre / Concept": f"{kw['genre']} ({kw.get('concept_type', 'New IP')})",
+            "Source / IP":     UNIVERSAL_LIBRARY_IP[ip]["name"] if ip in UNIVERSAL_LIBRARY_IP
+                               else kw.get("source_material", "Original Screenplay"),
+            "Lead":            TALENT_PARTNERS[lead]["name"] if lead in TALENT_PARTNERS
+                               else f"Unnamed (Star Power {kw['star_power']})",
+            "Release":         RELEASE_LABELS.get(kw["release_strategy"], kw["release_strategy"]),
+            "Capital at Risk": f"${r['capital_at_risk']:.0f}M",
+            "Opening Wknd":    f"${p.opening_weekend():.0f}M",
+            "Worldwide B.O.":  f"${worldwide:.0f}M",
+            "Critics":         f"{r['critical_score']:.0f}/100",
+            "NPV":             _fmt_money(r["npv"]),
+            "Result":          "✅ Made money" if r["npv"] >= 0 else "❌ Lost money",
+        })
+    total = sum(r["npv"] for r in log)
+    st.markdown(f'<div class="section-title">{title} '
+                f'<span class="text-xs text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV '
+                f'{_fmt_money(total)})</span></div>', unsafe_allow_html=True)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def _contracted_talent(ss) -> list:
+    """TALENT_PARTNERS keys this studio can cast THIS cycle: a Holding Deal
+    that held together for this cycle, or an active Multi-Picture Deal."""
+    keys = [k for k, h in ss.get("movie_talent_holds", {}).items()
+            if h.get("status") == "succeeded" and h.get("available_cycle") == ss.movie_cycle]
+    keys += [k for k, signed in ss.get("movie_multi_picture_deals", {}).items()
+             if signed <= ss.movie_cycle < signed + MULTI_PICTURE_DEAL_CYCLES and k not in keys]
+    return keys
 
 
 def _current_project(ss) -> MovieProject:
@@ -352,6 +461,8 @@ def _current_project(ss) -> MovieProject:
         theatrical_run_days=d.get("theatrical_run_days"),
         pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
         pvod_chosen_price=d.get("pvod_chosen_price"),
+        library_ip=d.get("library_ip"),
+        lead_actor=d.get("lead_actor"),
     )
 
 
@@ -479,6 +590,8 @@ def _section_distribution_pipeline(ss):
             "Slate":             "Yours",
             "Year":              _cycle_years_label(entry["cycle"]),
             "Title":             project.title,
+            "Description":       describe_pipeline_movie(project.title, project.genre, project.concept_type,
+                                                         entry.get("logline")),
             "Genre / Concept":   f"{project.genre} ({project.concept_type})",
             "Current Window":    _current_distribution_window(project.window_days(), months_elapsed,
                                                                 project.is_licensing_out()),
@@ -496,6 +609,7 @@ def _section_distribution_pipeline(ss):
                 "Slate":             "Studio",
                 "Year":              _cycle_years_label(bg["cycle"]),
                 "Title":             bg["title"],
+                "Description":       describe_pipeline_movie(bg["title"], bg["genre"], bg["concept_type"]),
                 "Genre / Concept":   f"{bg['genre']} ({bg['concept_type']})",
                 "Current Window":    _current_distribution_window(bg["window_days"], months_elapsed),
                 "NPV":               _fmt_money(bg["npv"]),
@@ -510,6 +624,8 @@ def _section_distribution_pipeline(ss):
             "Slate":             "Rival",
             "Year":              _cycle_years_label(outcome["cycle"]),
             "Title":             f"{outcome['title']} ({outcome['rival']})",
+            "Description":       describe_pipeline_movie(outcome["title"], outcome["genre"],
+                                                         outcome["concept_type"], outcome.get("logline")),
             "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
             "Current Window":    "🏆 Rival Release",
             "NPV":               _fmt_money(outcome["npv"]),
@@ -530,6 +646,8 @@ def _section_distribution_pipeline(ss):
             "Slate":             "Festival",
             "Year":              _cycle_years_label(outcome["cycle"]),
             "Title":             f"{outcome['title']} ({outcome['festival_name']})",
+            "Description":       describe_pipeline_movie(outcome["title"], outcome["genre"],
+                                                         outcome["concept_type"], outcome.get("logline")),
             "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
             "Current Window":    _current_distribution_window(outcome["window_days"], months_elapsed),
             "NPV":               _fmt_money(outcome["npv"]),
@@ -543,6 +661,8 @@ def _section_distribution_pipeline(ss):
             "Slate":             "Festival Rival",
             "Year":              _cycle_years_label(outcome["cycle"]),
             "Title":             f"{outcome['title']} ({outcome['winner']}, {outcome['festival_name']})",
+            "Description":       describe_pipeline_movie(outcome["title"], outcome["genre"],
+                                                         outcome["concept_type"], outcome.get("logline")),
             "Genre / Concept":   f"{outcome['genre']} ({outcome['concept_type']})",
             "Current Window":    "🏆 Rival Release",
             "NPV":               _fmt_money(outcome["npv"]),
@@ -553,9 +673,127 @@ def _section_distribution_pipeline(ss):
         }))
 
     rows.sort(key=lambda cr: (cr[0], cr[1]["Slate"]))
+    # Taller rows so the few-sentence Description wraps instead of truncating;
+    # hover any cell to see its full text.
     st.dataframe(pd.DataFrame([r for _, r in rows]), use_container_width=True, hide_index=True,
-                 height=min(400, 40 + 35 * len(rows)))
+                 height=min(560, 40 + 80 * len(rows)), row_height=80,
+                 column_config={"Description": st.column_config.TextColumn(
+                     "Description", width=420,
+                     help="What the movie is about and what its concept type means commercially.")})
     st.divider()
+
+
+def _render_research_card(ss, project: MovieProject, logline: str):
+    """Paid Research preview, 2026-10-05 rewrite per explicit user request
+    ("clearer metrics... should consider the title, genre, concept type and
+    source material along with the logline"). Same seeded draws Simulate
+    uses, translated into dollars via the real engine for the full current
+    draft, so source material, budget, P&A, stars and screens all show up."""
+    genre, concept_type = project.genre, project.concept_type
+    preview_mult = draw_actual_multiplier(ss.team_name, ss.movie_cycle, genre, concept_type)
+    preview_cs = draw_critical_reception(ss.team_name, ss.movie_cycle, genre,
+                                         ai_production_tools=project.ai_production_tools)
+    stars = multiplier_to_stars(preview_mult, genre, concept_type)
+    star_str = "⭐" * stars + "☆" * (5 - stars)
+    bo_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
+    cs_c = SUCCESS if preview_cs >= 55 else (WARN if preview_cs >= 35 else DANGER)
+    cs_tier = ("Acclaimed" if preview_cs >= 75 else "Well Reviewed" if preview_cs >= 55
+               else "Mixed" if preview_cs >= 35 else "Panned")
+    bo_word = {5: "Breakout", 4: "Strong", 3: "Solid", 2: "Soft", 1: "Weak"}.get(stars, "")
+
+    opening = project.opening_weekend()
+    domestic = project.domestic_box_office(preview_mult)
+    worldwide = domestic + project.international_box_office(domestic)
+    base_domestic = project.domestic_box_office("base")
+    base_ww = base_domestic + project.international_box_office(base_domestic)
+    vs_base = (worldwide / base_ww - 1) * 100 if base_ww else 0.0
+    npv_here = project.npv(preview_mult, preview_cs)
+    npv_c = SUCCESS if npv_here >= 0 else DANGER
+    src_boost = (SOURCE_OPENING_BOOST.get(project.source_material, 1.0) - 1) * 100
+    src_name = project.source_material
+    if project.library_ip in UNIVERSAL_LIBRARY_IP:
+        src_boost = (library_ip_opening_boost(project.library_ip, genre) - 1) * 100
+        src_name = f"Revived Universal IP: {UNIVERSAL_LIBRARY_IP[project.library_ip]['name']}"
+
+    implications = [
+        f"{'✅ Clears' if preview_cs >= THEME_PARK_CRITICAL_GATE else '❌ Misses'} the "
+        f"{THEME_PARK_CRITICAL_GATE}/100 bar for theme-park/merch revenue"]
+    if genre in AWARDS_ELIGIBLE_GENRES:
+        implications.append(
+            f"{'✅ An' if preview_cs >= AWARDS_CONTENDER_THRESHOLD else '❌ Not an'} awards contender "
+            f"(needs {AWARDS_CONTENDER_THRESHOLD}+)")
+    src_line = (f"{src_name}: +{src_boost:.0f}% opening from a built-in fan base"
+                if src_boost > 0 else f"{src_name}: no built-in fan base")
+    pitch = escape(logline.strip()) if logline.strip() else "<i>No pitch written yet.</i>"
+
+    st.markdown(f"""
+    <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;">
+      <div style="font-size:13px;margin-bottom:8px;line-height:1.5;">
+        <b>Researching:</b> "{escape(project.title)}" · {genre} · {concept_type} · {escape(src_name)}<br>
+        <b>Pitch:</b> {pitch}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:8px;">
+        <div><div class="text-[10px] font-mono">AUDIENCE DEMAND</div>
+          <div class="text-sm" style="color:{bo_c};">{star_str} {bo_word}</div>
+          <div style="font-size:12px;">{vs_base:+.0f}% vs. a typical run</div></div>
+        <div><div class="text-[10px] font-mono">OPENING WEEKEND</div>
+          <div class="text-sm">${opening:,.1f}M</div>
+          <div style="font-size:12px;">at your current screens, stars &amp; P&amp;A</div></div>
+        <div><div class="text-[10px] font-mono">WORLDWIDE BOX OFFICE</div>
+          <div class="text-sm">${worldwide:,.0f}M</div>
+          <div style="font-size:12px;">${domestic:,.0f}M domestic + ${worldwide - domestic:,.0f}M intl</div></div>
+        <div><div class="text-[10px] font-mono">CRITICS</div>
+          <div class="text-sm" style="color:{cs_c};">{preview_cs:.0f}/100 · {cs_tier}</div></div>
+        <div><div class="text-[10px] font-mono">NPV AT THESE SIGNALS</div>
+          <div class="text-sm" style="color:{npv_c};">{_fmt_money(npv_here)}</div>
+          <div style="font-size:12px;">wide release, before risk events</div></div>
+      </div>
+      <div style="font-size:12px;line-height:1.5;">
+        📚 {src_line}<br>🎭 {' · '.join(implications)}
+      </div>
+      <div style="font-size:12px;line-height:1.5;margin-top:6px;">
+        Live: demand and critics follow your Genre and Concept Type; the dollar figures also follow Source
+        Material, Production Budget, P&amp;A, Star Power and Screens, so change them and watch these move.
+        Your title and pitch are how the movie is presented to the class; they don't change the numbers.
+        Release Strategy, Production Trouble, the AI Tooling Setback, Ancillary Markets Surprise, and
+        eWOM &amp; Piracy still apply on top of this at Simulate.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def _star_vs_critical_explainer():
+    """What each partner bonus type actually buys, 2026-10-05 per explicit
+    user request ("explain what star power vs critical reception offers
+    students"). Numbers come straight from the engine constants so the
+    explanation can't drift from the model."""
+    st.markdown(f"""
+    <div class="rounded-lg border border-line bg-surface2 p-3 mb-3" style="color:#ffffff;">
+      <div class="text-sm font-semibold mb-2">⭐ Star Power vs 🎭 Critical Reception — what a partner bonus buys you</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:13px;line-height:1.5;">
+        <div>
+          <b>⭐ Star Power = a bigger opening.</b> Recognizable talent draws audiences on name alone,
+          so Star Power (0-100) scales your opening weekend by up to +{STAR_POWER_BOOST_MAX * 100:.0f}% at 100.
+          It's front-loaded theatrical money — predictable, and worth the most in NPV because it arrives first.
+          You can also buy it directly with the Star Power slider (${STAR_POWER_COST_PER_POINT_M:.2f}M per point),
+          so a +Star Power partner is effectively discounted casting. Best fit: wide-release, commercial
+          genres where opening weekend is the business.
+        </div>
+        <div>
+          <b>🎭 Critical Reception = longer legs.</b> Reviews (0-100) are a random draw after release, shaped by
+          genre — you can't buy them, only shift the odds upward. The score drives the long tail: library and
+          catalog value scale from 0.7x to 1.8x, movies under {THEME_PARK_CRITICAL_GATE} can't earn theme-park/merch
+          revenue, and Drama/Awards titles at {AWARDS_CONTENDER_THRESHOLD}+ get an awards-season re-release
+          bump ({AWARDS_WIN_THRESHOLD}+ wins the Oscar). Best fit: prestige and franchise-building plays.
+        </div>
+      </div>
+      <div class="mt-2" style="font-size:13px;line-height:1.5;">
+        <b>The trade-off:</b> Star Power is <i>marketability</i> — a known, near-term payoff.
+        Critical Reception is <i>quality</i> — a riskier, back-loaded payoff that keeps paying for years.
+        Match the bonus to how your movies actually make money.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def _section_studio_partnerships(ss, newly_poached: dict):
@@ -579,7 +817,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     transition."""
     st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">1 · Studio Partnerships '
-                '<span class="text-xs text-muted">(optional, Overall/First-Look Deal)</span></div>',
+                '<span class="text-xs text-muted">(required · Overall/First-Look Deal, signed once, lasts the whole slate)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Sign a standing deal with a production banner for '
@@ -587,6 +825,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         'whose genre matches their specialty. A banner nobody signs can quietly get poached by a '
         'rival studio.</p>',
         unsafe_allow_html=True)
+    _star_vs_critical_explainer()
 
     for key, rival in newly_poached.items():
         st.markdown(f"""
@@ -678,13 +917,15 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     Partnerships and Greenlight -- a scouted concept, once optioned, feeds
     directly into the Greenlight fields right below it."""
     st.markdown('<a id="scouted"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Scouted Concepts '
-                '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">2 · Scouted Concepts '
+                '<span class="text-xs text-muted">(required · option at least one each cycle)</span></div>',
+                unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface a few concepts every cycle. '
-        'Option one to pre-fill your Greenlight decision below, or build your own from scratch. A '
-        f'concept you don\'t option has a real, steep (~{SCOUTED_POACH_CHANCE:.0%}) one-time chance of '
-        'being picked up by a rival studio by next cycle.</p>', unsafe_allow_html=True)
+        f'<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface {SCOUTED_CONCEPTS_PER_CYCLE} concepts '
+        'every cycle. <b>Option at least one</b>: it fills in your Greenlight form below, and you can still '
+        'change anything there. You make only one movie per cycle, so optioning a second concept just '
+        f'overwrites the form. Each concept you skip has a ~{SCOUTED_POACH_CHANCE:.0%} chance a rival '
+        'studio makes it instead.</p>', unsafe_allow_html=True)
 
     for cid, outcome in newly_poached.items():
         npv_ok = outcome["npv"] >= 0
@@ -698,7 +939,8 @@ def _section_scouted_concepts(ss, newly_poached: dict):
         """, unsafe_allow_html=True)
 
     concepts = generate_scouted_concepts(ss.team_name, ss.movie_cycle)
-    cols = st.columns(len(concepts))
+    per_row = 3
+    cols = [c for _ in range(0, len(concepts), per_row) for c in st.columns(per_row)]
     for col, concept in zip(cols, concepts):
         with col:
             optioned = concept["id"] in ss.movie_scouted_optioned
@@ -774,14 +1016,14 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
     out of ss.movie_log / compute_movie_score -- see the FESTIVALS module
     comment in utils/movie_models.py for why."""
     st.markdown('<a id="festivals"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Film Festival Acquisitions '
-                '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">3 · Film Festival Acquisitions '
+                '<span class="text-xs text-muted">(required · bid on at least one each cycle)</span></div>',
+                unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each bring one real acquisition '
-        'target every cycle — already made, already screened, critical reception already known. Real '
-        'studios are bidding too (sealed-bid — you can\'t see their offers before yours), and the '
-        'highest bid wins and pays exactly what it bid. A film you don\'t bid on (or get outbid on) goes '
-        'to a rival by next cycle.</p>', unsafe_allow_html=True)
+        '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each offer one finished film with '
+        'its reviews already known. <b>Bid on at least one</b>. Bids are sealed: rivals bid too, the '
+        'highest bid wins and pays what it bid. A film you win joins your pipeline as an extra release; '
+        'it doesn\'t use your greenlight slot.</p>', unsafe_allow_html=True)
 
     for fid, outcome in newly_resolved.items():
         team_won = fid in ss.movie_festival_log
@@ -869,15 +1111,15 @@ def _section_holding_deals(ss, resolved_hold_key):
     shared _resolve_talent_cycle_transitions(ss) call _section_studio_
     partnerships uses -- see that function's docstring."""
     st.markdown('<a id="holding"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Holding Deals '
-                '<span class="text-xs text-muted">(optional, individual talent)</span></div>',
+    st.markdown('<div class="section-title">5 · Holding Deals '
+                '<span class="text-xs text-muted">(required · hold or sign at least one actor for your '
+                'next film; skipped on your final film)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Now that this cycle\'s concept is set, consider locking a '
-        'specific actor\'s window for <b>next</b> cycle\'s production -- a cheaper, one-off booking '
-        'versus a standing Studio Partnership. A rival studio may have already locked the same window '
-        '(resolved instantly), and even a successful hold can still fall through by the time it '
-        'converts.</p>', unsafe_allow_html=True)
+        '<p class="text-xs text-ink2 mb-2"><b>Lock at least one actor for your next film.</b> An actor '
+        'you hold or sign can be cast as the <b>Lead Actor</b> in Greenlight next cycle. A Hold is cheap '
+        'but risky: a rival may already have their window, and even a successful hold can fall through. '
+        'A Multi-Picture Deal costs more but is guaranteed.</p>', unsafe_allow_html=True)
 
     if resolved_hold_key:
         h = ss.movie_talent_holds[resolved_hold_key]
@@ -991,13 +1233,13 @@ def _progress_bar(ss):
         current = i == phase_idx and ss.movie_phase != "complete"
         bg, txt, clr = ("#66bb6a", "✓", "#0b0c10") if done else \
                        ("#1a6bb5", str(i + 1), "#ffffff") if current else \
-                       ("#252836", str(i + 1), "#e0e2ea")
+                       ("#252836", str(i + 1), "#ffffff")
         dot_items.append(
             f'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
             f'<div style="width:32px;height:32px;border-radius:50%;background:{bg};'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:15px;font-weight:700;color:{clr};">{txt}</div>'
-            f'<div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">{label}</div></div>'
+            f'<div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">{label}</div></div>'
         )
     connector = '<div style="width:40px;height:2px;background:#252836;margin-bottom:16px;"></div>'
     if ss.movie_phase != "complete":
@@ -1011,7 +1253,7 @@ def _progress_bar(ss):
         cycle_label = "Slate Complete"
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:14px 20px;margin-bottom:18px;">
-      <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;margin-bottom:10px;">{cycle_label}</div>
+      <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;margin-bottom:10px;">{cycle_label}</div>
       <div style="display:flex;align-items:center;justify-content:center;">{connector.join(dot_items)}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1179,19 +1421,10 @@ def _decisions(ss):
     if prev:
         _last_cycle_recap(prev)
 
-    if len(ss.movie_log) >= 2:
-        _progress_chart(ss)
+    # Your Slate table replaces the old NPV-by-year bar chart here
+    # (2026-10-05): one row per film says far more than one bar per film.
+    _section_your_slate(ss, title="🎬 Your Slate So Far")
 
-    st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
-        '<a href="#talent" style="color:#1a6bb5;">Studio Partnerships</a> · '
-        '<a href="#scouted" style="color:#1a6bb5;">Scouted Concepts</a> · '
-        '<a href="#festivals" style="color:#1a6bb5;">Festival Acquisitions</a> · '
-        '<a href="#holding" style="color:#1a6bb5;">Holding Deals</a> · '
-        '<a href="#greenlight" style="color:#1a6bb5;">Greenlight</a> · '
-        '<a href="#release" style="color:#1a6bb5;">Release Strategy</a> · '
-        '<a href="#simulate" style="color:#1a6bb5;">Simulate</a>'
-        '</div>', unsafe_allow_html=True)
 
     # Both resolutions run BEFORE the scorecard renders -- ss.movie_scouted_
     # poached/ss.movie_rival_exclusive must already reflect this render's
@@ -1202,6 +1435,11 @@ def _decisions(ss):
     resolved_hold_key, newly_poached = _resolve_talent_cycle_transitions(ss)
     newly_poached_concepts = _resolve_scouted_concept_transitions(ss)
     newly_resolved_festivals = _resolve_festival_transitions(ss)
+
+    # Step bar (2026-10-05) replaces the plain jump-link row: same anchors,
+    # plus a ✓ per finished required step and a locked/unlocked Simulate.
+    # Rendered after the transitions above so its statuses are current.
+    _step_bar(ss)
 
     _section_distribution_pipeline(ss)
 
@@ -1223,12 +1461,19 @@ def _decisions(ss):
     _section_festival_acquisitions(ss, newly_resolved_festivals)
 
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">2 · Greenlight the Concept</div>', unsafe_allow_html=True)
+    _slots_left = CYCLES_TOTAL - ss.movie_cycle + 1
+    st.markdown(f'<div class="section-title">4 · Greenlight a New Movie '
+                f'<span class="text-xs text-muted">(Greenlight Slot {ss.movie_cycle} of {CYCLES_TOTAL})</span></div>',
+                unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Every dollar of Production Budget and P&A you commit below is '
-        'paid in full, upfront — before you know whether the movie makes a cent back. That\'s different '
-        'from TV/Streaming, where a show\'s production cost is spread out and expensed gradually '
-        'over several years (amortized) instead of hitting all at once.</p>', unsafe_allow_html=True)
+        f'<p class="text-xs text-ink2 mb-2">🎟️ <b>One new movie per {YEARS_PER_CYCLE}-year cycle, {CYCLES_TOTAL} in all.</b> '
+        f'This is slot {ss.movie_cycle} ({_slots_left} left including this one). Choose the concept, cast it, '
+        f'write the pitch, and commit the money. Your pitch saves automatically and posts to the class Pitch '
+        f'Board when you Simulate.</p>'
+        '<p class="text-xs text-ink2 mb-2">💸 Production Budget and <b>P&A (Prints & Advertising: trailers, '
+        'ad buys, publicity, delivering the film to theaters)</b> are paid in full, upfront, before you know '
+        'whether the movie earns a cent. Unlike TV, where a show\'s cost is spread (amortized) over several '
+        'years.</p>', unsafe_allow_html=True)
 
     left, right = st.columns([3, 2])
     d = ss.movie_draft
@@ -1254,17 +1499,42 @@ def _decisions(ss):
                  "wider variance — huge outperformers on tiny budgets are the whole case for it.",
         )
 
-        gc3, _ = st.columns(2)
+        gc3, gc4 = st.columns(2)
+        # Universal Library IP (2026-10-05): revive a title the studio already owns.
+        ip_keys = [None] + list(UNIVERSAL_LIBRARY_IP)
+        library_ip = gc4.selectbox(
+            "🏛️ Revive a Universal Library IP?", ip_keys,
+            index=ip_keys.index(d.get("library_ip")) if d.get("library_ip") in ip_keys else 0,
+            format_func=lambda k: "No — a new property" if k is None else UNIVERSAL_LIBRARY_IP[k]["name"],
+            help="Universal already owns these, so there's no rights fee, but reviving one carries a legacy "
+                 "fee (original creators' and estates' participations, legacy cast). Its built-in audience "
+                 "replaces Source Material's boost. Revived outside its home genre, only half that audience "
+                 "shows up.",
+        )
         source_material = gc3.selectbox(
             "Source Material", SOURCE_MATERIALS,
             index=SOURCE_MATERIALS.index(d.get("source_material", SOURCE_MATERIALS[0]))
                   if d.get("source_material") in SOURCE_MATERIALS else 0,
             help="Where the underlying story comes from — separate from Concept Type (a Sequel "
                  "can itself be an original-screenplay franchise OR a book-adaptation sequel).",
+            disabled=library_ip is not None,
         )
         acq_cost = SOURCE_ACQUISITION_COST_M.get(source_material, 0.0)
         boost = SOURCE_OPENING_BOOST.get(source_material, 1.0)
-        if acq_cost > 0:
+        if library_ip:
+            ip = UNIVERSAL_LIBRARY_IP[library_ip]
+            acq_cost = ip["legacy_fee_m"]
+            ip_lift = (library_ip_opening_boost(library_ip, genre) - 1) * 100
+            fit = (f"a home genre ({', '.join(ip['genres'])}), so the full audience shows up"
+                   if genre in ip["genres"] else
+                   f"outside its home genre ({', '.join(ip['genres'])}), so only half the audience carries over")
+            st.markdown(
+                f'<div style="font-size:13px;color:#ffffff;line-height:1.5;margin-bottom:6px;">'
+                f'🏛️ <b>{ip["name"]}</b>: {ip["note"]}<br>'
+                f'<b>+{ip_lift:.0f}% opening weekend</b>: {genre} is {fit}. '
+                f'<b>+${acq_cost:.0f}M legacy fee</b> added to Capital at Risk.</div>',
+                unsafe_allow_html=True)
+        elif acq_cost > 0:
             st.caption(f"📚 Rights acquisition: +${acq_cost:.0f}M added to Capital at Risk — but a "
                        f"built-in fan base lifts your opening weekend by {(boost - 1) * 100:.0f}% "
                        f"before you spend a dollar of P&A. Real-world example: game/book/show "
@@ -1277,7 +1547,7 @@ def _decisions(ss):
         # Logline (2026-10-01): always available and required to Simulate --
         # it's posted to the class Pitch Board when the film is simulated.
         logline = st.text_area(
-            "Logline (1-3 sentences): who it's about, what they want, and what's in the way",
+            "Your Pitch / Logline (1-3 sentences): who it's about, what they want, and what's in the way",
             value=d.get("logline", ""), max_chars=500, key=f"movie_logline_{ss.movie_cycle}",
             placeholder="e.g. A stranded astronaut has to out-think a planet that's actively "
                         "trying to kill her, using only what she can scavenge...",
@@ -1285,11 +1555,20 @@ def _decisions(ss):
                  "full synopsis. Required before you can Simulate.",
         )
         ss.movie_draft["logline"] = logline
+        _logline_len = len(logline.strip())
+        if _logline_len >= 20:
+            st.markdown(f'<div style="font-size:13px;color:{SUCCESS};">✅ Pitch saved. It posts to the class '
+                        f'Pitch Board when you Simulate at the bottom of the page.</div>', unsafe_allow_html=True)
+        else:
+            _short = 20 - _logline_len
+            st.markdown(f'<div style="font-size:13px;color:{WARN};">✏️ Pitch needed before you can Simulate '
+                        f'({_short} more character{"s" if _short != 1 else ""}). Type it in, then click '
+                        f'outside the box (or press Ctrl+Enter) to save.</div>', unsafe_allow_html=True)
 
         # ── Peer Pitch Board (2026-10-01; replaced AI pitch feedback) ──────────
-        with st.expander("👀 See what other teams in your class have pitched (TV + Movies)", expanded=False):
+        with st.expander("👀 See the movies other teams in your class have pitched", expanded=False):
             from app_pages.pitch_board import render_pitch_board
-            render_pitch_board(ss, key="movie_pitch_board")
+            render_pitch_board(ss, sim="movies", key="movie_pitch_board")
 
         # ── Research / Social Listening ──────────────────────────────────────
         # Phase 4 item 9, 2026-08-05: Movies-side parallel to TV/Streaming's
@@ -1320,28 +1599,11 @@ def _decisions(ss):
             f'committing your budget. Works the same way whether the concept is brand-new or an '
             f'established franchise entry.</p>',
             unsafe_allow_html=True)
-        if ss.movie_research_paid.get(ss.movie_cycle):
-            preview_mult = draw_actual_multiplier(ss.team_name, ss.movie_cycle, genre, concept_type)
-            preview_cs = draw_critical_reception(ss.team_name, ss.movie_cycle, genre,
-                                                  ai_production_tools=bool(d.get("ai_production_tools", False)))
-            stars = multiplier_to_stars(preview_mult, genre, concept_type)
-            star_str = "⭐" * stars + "☆" * (5 - stars)
-            bo_c = SUCCESS if stars >= 4 else (WARN if stars == 3 else DANGER)
-            cs_c = SUCCESS if preview_cs >= 55 else (WARN if preview_cs >= 35 else DANGER)
-            st.markdown(f"""
-            <div class="rounded-lg border border-line bg-surface2 p-3 mb-2">
-              <div class="flex gap-6 flex-wrap">
-                <div><div class="text-[9px] text-muted font-mono">BOX-OFFICE SIGNAL</div>
-                  <div class="text-sm" style="color:{bo_c};">{star_str}</div></div>
-                <div><div class="text-[9px] text-muted font-mono">SOCIAL / CRITICAL BUZZ</div>
-                  <div class="text-sm" style="color:{cs_c};">{preview_cs:.0f}/100</div></div>
-              </div>
-              <div class="text-[10px] text-muted mt-1">Live for the currently selected Genre/Concept Type —
-              updates if you change either. Production Trouble, the AI Tooling Setback, Ancillary Markets
-              Surprise, and eWOM &amp; Piracy still apply on top of this at Simulate.</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
+        # The paid card renders into this slot AFTER the Capital inputs below
+        # are read, so its dollar metrics use the full current draft (title,
+        # genre, concept type, source material, budget, P&A, stars, screens).
+        research_slot = st.container()
+        if not ss.movie_research_paid.get(ss.movie_cycle):
             if st.button(f"🔎 Pay for Research (${RESEARCH_FEE_M:.0f}M)", key=f"movie_research_{ss.movie_cycle}"):
                 ss.movie_research_paid[ss.movie_cycle] = True
                 ss.movie_draft["pa_spend_m"] = float(d.get("pa_spend_m", 40.0)) + RESEARCH_FEE_M
@@ -1373,10 +1635,41 @@ def _decisions(ss):
                        "quality or word-of-mouth.")
         c3, c4 = st.columns(2)
         with c3:
-            star = st.slider("Star Power", 0, 100, int(d.get("star_power", 50)),
-                              help="Lifts opening awareness, moderately — doesn't compound with P&A. "
-                                   f"Costs ${STAR_POWER_COST_PER_POINT_M:.2f}M per point, added to "
-                                   "Capital at Risk.")
+            # Lead Actor (2026-10-05): any actor under a Holding Deal that held
+            # together, or an active Multi-Picture Deal, can be cast by name.
+            contracted = _contracted_talent(ss)
+            lead_opts = [None] + contracted
+            lead_actor = st.selectbox(
+                "🎭 Lead Actor", lead_opts,
+                index=lead_opts.index(d.get("lead_actor")) if d.get("lead_actor") in lead_opts else 0,
+                format_func=lambda k: ("Unnamed cast (set Star Power below)" if k is None else
+                                       f"{TALENT_PARTNERS[k]['name']} (Star Power {TALENT_BASE_STAR_POWER.get(k, 50)})"),
+                help="Actors you hold (Holding Deals) or sign (Multi-Picture Deal) can be cast here. Casting "
+                     "one sets this film's Star Power to theirs, and their relationship bonus applies if the "
+                     "genre is one of their best.",
+            )
+            if not contracted:
+                st.caption("No actors under contract this cycle. Place a Holding Deal or sign a "
+                           "Multi-Picture Deal (step 5) to cast a named actor in a future film.")
+            if lead_actor:
+                talent = TALENT_PARTNERS[lead_actor]
+                star = TALENT_BASE_STAR_POWER.get(lead_actor, 50)
+                fits = genre in talent.get("best_genres", [talent["specialty"]])
+                bonus_lbl = (f"+{talent['star_power_bonus']} Star Power" if "star_power_bonus" in talent
+                             else f"+{talent['critical_score_bonus']:.0f} Critical Reception")
+                st.markdown(
+                    f'<div style="font-size:13px;color:#ffffff;line-height:1.5;">Star Power <b>{star}</b> '
+                    f'(${star * STAR_POWER_COST_PER_POINT_M:.1f}M fee). '
+                    + (f'✅ {genre} is one of their best genres, so their {bonus_lbl} bonus applies.'
+                       if fits else
+                       f'⚠ {genre} isn\'t one of their best genres '
+                       f'({", ".join(talent.get("best_genres", []))}), so no relationship bonus.')
+                    + '</div>', unsafe_allow_html=True)
+            else:
+                star = st.slider("Star Power", 0, 100, int(d.get("star_power", 50)),
+                                  help="Lifts opening awareness, moderately — doesn't compound with P&A. "
+                                       f"Costs ${STAR_POWER_COST_PER_POINT_M:.2f}M per point, added to "
+                                       "Capital at Risk.")
             star_cost = star * STAR_POWER_COST_PER_POINT_M
             st.caption(f"A-list casting's built-in name recognition — lifts opening-weekend awareness "
                        f"on top of whatever P&A buys, but doesn't stack multiplicatively with it. Costs "
@@ -1521,9 +1814,14 @@ def _decisions(ss):
                  theatrical_run_days=d.get("theatrical_run_days"),
                  pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
                  pvod_chosen_price=d.get("pvod_chosen_price"),
+                 library_ip=library_ip, lead_actor=lead_actor,
                  logline=d.get("logline", ""))   # display text, not a MovieProject field
     ss.movie_draft = draft
     project = _current_project(ss)
+
+    if ss.movie_research_paid.get(ss.movie_cycle):
+        with research_slot:
+            _render_research_card(ss, project, logline)
 
     with right:
         st.markdown('<div class="section-title">Capital at Risk</div>', unsafe_allow_html=True)
@@ -1540,11 +1838,13 @@ def _decisions(ss):
                              f'<span class="font-mono">-${raw_capital - financed_capital:.1f}M</span></div>')
         star_cost_line = ""
         if star_cost > 0:
-            star_cost_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">Star Power Cost</span>'
+            star_cost_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">'
+                               f'{"Lead Actor Fee" if lead_actor else "Star Power Cost"}</span>'
                                f'<span class="font-mono text-warn">+${star_cost:.1f}M</span></div>')
         acq_line = ""
         if acq_cost > 0:
-            acq_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">Rights Acquisition</span>'
+            acq_line = (f'<div class="flex justify-between text-sm py-1"><span class="text-ink2">'
+                        f'{"Legacy IP Fee" if library_ip else "Rights Acquisition"}</span>'
                         f'<span class="font-mono text-warn">+${acq_cost:.1f}M</span></div>')
         imax_line = ""
         if project.is_imax_eligible():
@@ -1581,13 +1881,16 @@ def _decisions(ss):
             use_container_width=True, config={"displayModeBar": False},
         )
         st.markdown(
-            '<div style="font-size:13px;color:#e0e2ea;line-height:1.55;">'
-            '<b>How to read this:</b> each bar is what the movie\'s revenue is worth today <b>minus the '
-            'Capital at Risk above</b>. So every extra $10M of budget, P&A, or stars pushes all three bars '
-            'down about $10M, unless the movie earns it back through a bigger opening or longer run. '
-            'Bear is a weak run, Base is expected, Bull is a breakout. This preview assumes a <b>wide release</b> '
-            '(Release Strategy below shows each option\'s own range) and <b>no reviews yet</b>; critics are '
-            'revealed when the movie comes out. The actual result lands anywhere between Bear and Bull.</div>',
+            '<div style="font-size:13px;color:#ffffff;line-height:1.55;">'
+            '<b>How to read this:</b> the chart shows <b>three possible outcomes</b> for this exact movie, '
+            'one point each: <b>Bear</b> (a weak run), <b>Base</b> (the expected run), and <b>Bull</b> '
+            '(a breakout hit). Each point is that outcome\'s NPV: all the revenue the movie would earn, '
+            'converted to today\'s dollars, <b>minus the Capital at Risk above</b>. Above $0 the movie makes '
+            'money in that outcome; below $0 it loses money. Every extra $10M of budget, P&A, or stars pushes '
+            'all three down about $10M unless a bigger opening or longer run earns it back. This preview '
+            'assumes a <b>wide release</b> (Release Strategy below shows each option\'s own range) and '
+            '<b>no reviews yet</b>; critics are revealed when the movie comes out. The real result lands '
+            'somewhere between Bear and Bull.</div>',
             unsafe_allow_html=True)
 
     st.divider()
@@ -1599,7 +1902,7 @@ def _decisions(ss):
     # ── Decision 2: Release Strategy ─────────────────────────────────────────
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">3 · Release Strategy</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">6 · Release Strategy</div>', unsafe_allow_html=True)
 
     # ── Seasonality / Debut Timing ───────────────────────────────────────────
     # Phase 5, 2026-08-05: the release-*timing* decision Movies never had
@@ -1701,8 +2004,8 @@ def _decisions(ss):
         st.markdown('<div class="section-title mt-3">Pay-2 Window Licensing '
                     '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
         st.markdown(
-            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;line-height:1.6;">'
-            '<b style="color:#e0e2ea;">Terms used here and in Pay-1 above:</b> '
+            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;line-height:1.6;">'
+            '<b style="color:#ffffff;">Terms used here and in Pay-1 above:</b> '
             '<b>Pay-1 window</b> = the first licensing window, right after theatrical, when the movie is at its most valuable. '
             '<b>Pay-2 window</b> = a smaller, later window that only opens once Pay-1 has run its course. '
             '<b>Subscriber value</b> = what the movie is worth to Peacock in acquired/retained subscribers if you keep it '
@@ -2132,13 +2435,21 @@ def _decisions(ss):
     # is ever violated (e.g. a legacy/malformed session) -- normal play
     # never exercises it.
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">7 · Simulate</div>', unsafe_allow_html=True)
     pending_pvod_response = ss.movie_pvod_pending_rejection.get(ss.movie_cycle) is not None
     has_logline = len(ss.movie_draft.get("logline", "").strip()) >= 20
-    can_simulate = resolved_entry is not None and not pending_pvod_response and has_logline
+    # Required steps (2026-10-05): Partnerships / Scouted / Festivals /
+    # Holding Deals gate Simulate alongside the pitch and theatrical run.
+    missing = [(i, label, todo) for i, (label, _, done, todo) in enumerate(_step_status(ss), start=1)
+               if not done and label not in ("Greenlight", "Release")]
+    can_simulate = (resolved_entry is not None and not pending_pvod_response and has_logline
+                    and not missing)
+    for i, label, todo in missing:
+        st.caption(f"⚠ Step {i} · {label}: {todo} before you can Simulate.")
     if not has_logline:
-        st.caption("⚠ Write a Logline in Greenlight → Concept (at least a sentence) before you can Simulate.")
+        st.caption("⚠ Step 4 · Greenlight: write your Pitch / Logline (at least a sentence) before you can Simulate.")
     if resolved_entry is None:
-        st.caption("⚠ Run the Theatrical Simulation above before you can Simulate the full year.")
+        st.caption("⚠ Step 6 · Release: run the Theatrical Simulation above before you can Simulate.")
     elif pending_pvod_response:
         st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
@@ -2229,6 +2540,80 @@ def _decisions(ss):
 
 
 # ── Phase 2: Results ──────────────────────────────────────────────────────────
+def _decision_result_card(result: dict):
+    """What you decided → what happened → why, side by side (2026-10-05,
+    per explicit user request for "clear decisions with clear results").
+    Every 'why' line is computed from the same engine the result came from,
+    and every random event that moved the number is named."""
+    kw = result["project_kwargs"]
+    p = MovieProject(**kw)
+    opening = p.opening_weekend()
+    domestic = p.domestic_box_office(result["multiplier"])
+    worldwide = domestic + p.international_box_office(domestic)
+    lead = kw.get("lead_actor")
+    ip = kw.get("library_ip")
+    source = (UNIVERSAL_LIBRARY_IP[ip]["name"] + " (revived)") if ip in UNIVERSAL_LIBRARY_IP \
+        else kw.get("source_material", "Original Screenplay")
+    lead_txt = (f"{TALENT_PARTNERS[lead]['name']} (Star Power {kw['star_power']})" if lead in TALENT_PARTNERS
+                else f"Unnamed cast (Star Power {kw['star_power']})")
+    decisions = [
+        ("Concept", f"{kw['genre']} · {kw.get('concept_type', 'New IP')} · {source}"),
+        ("Lead", lead_txt),
+        ("Money", f"${kw['budget_m']:.0f}M budget + ${kw['pa_spend_m']:.0f}M P&A "
+                  f"→ ${result['capital_at_risk']:.0f}M at risk"),
+        ("Release", f"{RELEASE_LABELS.get(kw['release_strategy'], kw['release_strategy'])}, "
+                    f"{kw.get('debut_season', 'Off-Peak')}, {kw['screens']:,} screens"),
+    ]
+    cs = result["critical_score"]
+    outcomes = [
+        ("Opening weekend", f"${opening:,.0f}M"),
+        ("Worldwide box office", f"${worldwide:,.0f}M"),
+        ("Critics", f"{cs:.0f}/100"),
+        ("Total revenue", f"${result['total_revenue']:,.0f}M"),
+        ("NPV", _fmt_money(result["npv"])),
+    ]
+
+    why = []
+    star_boost = 1 + (kw["star_power"] / 100) * STAR_POWER_BOOST_MAX
+    why.append(f"⭐ Star Power {kw['star_power']} added about ${opening - opening / star_boost:,.0f}M "
+               f"to the opening weekend.")
+    src_boost = (library_ip_opening_boost(ip, kw["genre"]) if ip in UNIVERSAL_LIBRARY_IP
+                 else SOURCE_OPENING_BOOST.get(kw.get("source_material"), 1.0))
+    if src_boost > 1:
+        why.append(f"📚 {source}'s built-in audience added about ${opening - opening / src_boost:,.0f}M "
+                   f"to the opening.")
+    label = result.get("scenario_label", "base")
+    why.append({"bear": "📉 Audience demand came in weak (Bear): the film had short legs after opening.",
+                "base": "📊 Audience demand came in as expected (Base).",
+                "bull": "📈 Audience demand broke out (Bull): strong legs well past opening."}
+               .get(label, f"Audience demand landed near {label}."))
+    if result.get("talent_partner_bonus"):
+        why.append(f"🤝 {result['talent_partner_bonus']} relationship bonus applied.")
+    why.append(f"🎭 Critics at {cs:.0f}: catalog value {0.7 + cs / 100 * 1.1:.1f}x; "
+               + ("theme-park/merch eligible" if cs >= THEME_PARK_CRITICAL_GATE
+                  else f"under {THEME_PARK_CRITICAL_GATE}, so no theme-park/merch revenue")
+               + ("; 🏆 awards bump" if result.get("awards_contender") else "") + ".")
+    for key, icon in (("production_trouble", "⚠"), ("ai_tooling_setback", "🤖"),
+                      ("ancillary_surprise", "🎢"), ("ewom_piracy_swing", "📱")):
+        if result.get(key):
+            why.append(f"{icon} Random event: {result[key]}.")
+
+    def _rows(items):
+        return "".join(f'<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;">'
+                       f'<span>{k}</span><b style="text-align:right;">{escape(str(v))}</b></div>'
+                       for k, v in items)
+    st.markdown(f"""
+    <div class="rounded-lg border border-line bg-surface2 p-4 mb-4" style="color:#ffffff;font-size:13px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+        <div><div class="font-mono text-[11px] mb-1">WHAT YOU DECIDED</div>{_rows(decisions)}</div>
+        <div><div class="font-mono text-[11px] mb-1">WHAT HAPPENED</div>{_rows(outcomes)}</div>
+      </div>
+      <div class="font-mono text-[11px] mt-3 mb-1">WHY</div>
+      <div style="line-height:1.6;">{'<br>'.join(why)}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def _results(ss):
     result = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle), None)
     if not result:
@@ -2273,6 +2658,8 @@ def _results(ss):
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    _decision_result_card(result)
 
     # ── Bear/Base/Bull range with the real outcome marked on it ───────────────
     # 2026-08-24, per a QA-pass finding: previously this was narrated in
@@ -2422,14 +2809,8 @@ def _results(ss):
     # right before this cycle) and 'Slate — NPV by Cycle' (shown at the
     # Final Slate screen) -- same chart, same data, shown 2-3 times across
     # one cycle's play-through. Kept a one-line text recap in its place.
-    if ss.movie_log:
-        total_npv = sum(r["npv"] for r in ss.movie_log)
-        npv_c = SUCCESS if total_npv >= 0 else DANGER
-        st.markdown(
-            f'<p class="text-xs text-ink2 mt-2">Slate so far: '
-            f'<b style="color:{npv_c};">${total_npv:+.1f}M</b> cumulative NPV across '
-            f'{len(ss.movie_log)} completed cycle{"s" if len(ss.movie_log) != 1 else ""}.</p>',
-            unsafe_allow_html=True)
+    # The one-line recap became the full Your Slate table (2026-10-05).
+    _section_your_slate(ss, title="🎬 Your Slate So Far")
 
     st.divider()
     nav1, nav2 = st.columns(2)
@@ -2507,6 +2888,8 @@ def _complete(ss):
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    _section_your_slate(ss, title="🎬 Your Final Slate")
 
     chart_col, score_col = st.columns([3, 2])
     with chart_col:
@@ -2651,7 +3034,7 @@ def _complete(ss):
             <div class="rounded-lg bg-surface2 p-3" style="height:100%;">
               <div class="text-[9px] text-muted font-mono mb-1">{title}</div>
               <div class="text-lg font-serif" style="color:{color};">{val}</div>
-              <div class="text-xs" style="color:#e0e2ea;">{sub}</div>
+              <div class="text-xs" style="color:#ffffff;">{sub}</div>
             </div>
             """, unsafe_allow_html=True)
 

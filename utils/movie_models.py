@@ -180,7 +180,7 @@ STAR_POWER_COST_PER_POINT_M = 0.20   # $M per Star Power point -- maxing to 100 
 # P&A awareness now saturates -- see PA_AWARENESS_FLOOR / PA_LIFT_MAX (2026-10-01).
 BASE_WINDOW_DAYS      = 90     # 2012-era theatrical exclusivity norm
 WINDOW_SHRINK_PER_CYCLE_DAYS = 15   # real-world post-2012 compression, applied per cycle (1->2->3)
-CYCLES_TOTAL          = 5
+CYCLES_TOTAL          = 4   # 2026-10-05: 5 -> 4 per explicit user request (fits one class session)
 YEARS_PER_CYCLE        = 2
 WINDOWING_UNLOCK_CYCLE = 3   # Zach Schlessel's brief: windowing is a "Year 3 Introduction" —
                               # cycles before this are wide-theatrical only, no strategy choice yet
@@ -383,6 +383,82 @@ SOURCE_OPENING_BOOST = {
     "TV Show Adaptation":    1.08,
     "Video Game Adaptation": 1.12,
 }
+
+# ── Universal Library IP (2026-10-05, per explicit user request) ────────────
+# "Universal has a lot of established IP... students can consider
+# resurrecting an old Universal IP" as part of greenlighting. The studio
+# already owns these, so there's no rights fee -- instead a legacy fee
+# (original creators' and estates' participations, legacy-cast cameos,
+# fan-service development) is added to Capital at Risk. A revived property
+# replaces Source Material's own opening boost (the library title IS the
+# source), so the two never stack. Revived outside its home genre(s), only
+# half the awareness carries over -- fans show up for the thing they
+# remember. Boost and fee values are illustrative teaching calibrations,
+# not studio data.
+LIBRARY_IP_OFF_GENRE_SHARE = 0.5
+UNIVERSAL_LIBRARY_IP = {
+    "dracula": {"name": "Dracula (Universal Monsters)", "genres": ["Horror"],
+                "opening_boost": 1.12, "legacy_fee_m": 2.0,
+                "note": "Universal's 1931 Bela Lugosi classic; the character resurfaced in Renfield (2023). "
+                        "Huge recognition, but a public-domain character other studios can use too."},
+    "creature": {"name": "Creature from the Black Lagoon (Universal Monsters)", "genres": ["Horror", "Sci-Fi/Fantasy"],
+                 "opening_boost": 1.10, "legacy_fee_m": 2.0,
+                 "note": "Dormant since 1956. Iconic design with nostalgia appeal, but most of today's "
+                         "audience has never seen the original."},
+    "mummy": {"name": "The Mummy", "genres": ["Action/Tentpole", "Horror"],
+              "opening_boost": 1.15, "legacy_fee_m": 6.0,
+              "note": "The 1999 adventure was a global hit; the 2017 reboot underperformed and ended the planned "
+                      "Dark Universe. Strong awareness, mixed recent track record."},
+    "jaws": {"name": "Jaws", "genres": ["Horror", "Action/Tentpole"],
+             "opening_boost": 1.22, "legacy_fee_m": 10.0,
+             "note": "The original 1975 summer blockbuster. No new film since Jaws: The Revenge (1987). "
+                     "Enormous recognition, enormous expectations."},
+    "bttf": {"name": "Back to the Future", "genres": ["Sci-Fi/Fantasy", "Comedy"],
+             "opening_boost": 1.28, "legacy_fee_m": 15.0,
+             "note": "Trilogy ended in 1990, and its creators have publicly resisted a remake. The biggest "
+                     "built-in audience on this list, and the steepest legacy fee."},
+    "land_before_time": {"name": "The Land Before Time", "genres": ["Animated"],
+                         "opening_boost": 1.10, "legacy_fee_m": 2.0,
+                         "note": "A 1988 theatrical hit that became a long direct-to-video franchise. "
+                                 "Parents remember it; kids would be meeting it fresh."},
+    "casper": {"name": "Casper", "genres": ["Animated", "Comedy"],
+               "opening_boost": 1.08, "legacy_fee_m": 2.0,
+               "note": "Universal's 1995 family hit. Warm nostalgia, modest awareness with today's kids."},
+    "shrek": {"name": "Shrek (DreamWorks Animation)", "genres": ["Animated", "Comedy"],
+              "opening_boost": 1.25, "legacy_fee_m": 12.0,
+              "note": "Came to NBCUniversal with DreamWorks Animation (2016); no main-series film in theaters "
+                      "since 2010. A four-quadrant powerhouse whose returning voice cast is expensive."},
+    "bourne": {"name": "Bourne", "genres": ["Action/Tentpole"],
+               "opening_boost": 1.15, "legacy_fee_m": 8.0,
+               "note": "Five films from 2002 to 2016. A proven spy franchise that has been quiet since "
+                       "Jason Bourne (2016)."},
+    "american_pie": {"name": "American Pie", "genres": ["Comedy"],
+                     "opening_boost": 1.08, "legacy_fee_m": 3.0,
+                     "note": "1999 teen-comedy hit; last theatrical entry American Reunion (2012). "
+                             "Nostalgia for millennials, little pull with Gen Z."},
+    "pitch_perfect": {"name": "Pitch Perfect", "genres": ["Comedy", "Drama"],
+                      "opening_boost": 1.10, "legacy_fee_m": 4.0,
+                      "note": "A 2012-2017 musical-comedy trilogy with a loyal, mostly female fan base."},
+    "purge": {"name": "The Purge (with Blumhouse)", "genres": ["Horror"],
+              "opening_boost": 1.12, "legacy_fee_m": 2.0,
+              "note": "Low-budget, high-return horror franchise (2013-2021). Cheap to revive, "
+                      "and the concept is easy to refresh."},
+    "scarface": {"name": "Scarface", "genres": ["Drama", "Awards/Prestige"],
+                 "opening_boost": 1.06, "legacy_fee_m": 3.0,
+                 "note": "Universal's 1983 crime classic. Strong cultural cachet, but a hard-R drama, not an "
+                         "event movie."},
+}
+
+
+def library_ip_opening_boost(ip_key: Optional[str], genre: str) -> float:
+    """Opening-weekend awareness multiplier for a revived Universal library
+    title -- full boost in a home genre, LIBRARY_IP_OFF_GENRE_SHARE of it
+    otherwise, 1.0 when no library IP is chosen."""
+    ip = UNIVERSAL_LIBRARY_IP.get(ip_key or "")
+    if not ip:
+        return 1.0
+    lift = ip["opening_boost"] - 1
+    return 1 + (lift if genre in ip["genres"] else lift * LIBRARY_IP_OFF_GENRE_SHARE)
 
 
 def scenario_multipliers_for(genre: str, concept_type: str = "New IP") -> dict:
@@ -769,6 +845,18 @@ TALENT_PARTNERS = {
         "lifetime_box_office_m": 310.0, "social_followers_m": 42.0,
         "hold_cost_m": 3.0, "multi_picture_cost_m": 12.0, "star_power_bonus": 11,
     },
+}
+
+# Star Power each actor brings when actually CAST as the lead (2026-10-05,
+# per explicit user request: students who hold or sign an actor should be
+# able to cast them). Replaces the Greenlight Star Power slider for that
+# film, and is priced the same way (STAR_POWER_COST_PER_POINT_M per point,
+# the actor's fee). The relationship bonus (star_power_bonus /
+# critical_score_bonus) stacks on top only when the actor is cast in one of
+# their best_genres. Scaled to each actor's track record and following.
+TALENT_BASE_STAR_POWER = {
+    "vance": 85, "haddad": 70, "marsh": 60, "delgado": 58,
+    "kade": 55, "okonkwo": 55, "nakamura": 50, "osei": 48,
 }
 
 # ── Multi-Picture Talent Deal — real negotiation depth beyond Holding ──────
@@ -1358,6 +1446,8 @@ class MovieProject:
     pvod_dynamic_pricing: bool = False               # see PVOD_PRICE_PREMIUM/DISCOUNT above
     pvod_chosen_price: Optional[float] = None         # see pvod_price_band above -- takes priority
                                                        # over pvod_dynamic_pricing when set
+    library_ip: Optional[str] = None                  # UNIVERSAL_LIBRARY_IP key -- a revived library title
+    lead_actor: Optional[str] = None                  # display-only: TALENT_PARTNERS key or None (unnamed cast)
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -1392,7 +1482,9 @@ class MovieProject:
             budget_component = self.budget_m
         if self.ai_production_tools:
             budget_component *= (1 - AI_TOOLS_BUDGET_SAVINGS_PCT)
-        acquisition_cost = SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0)
+        acquisition_cost = (UNIVERSAL_LIBRARY_IP[self.library_ip]["legacy_fee_m"]
+                            if self.library_ip in UNIVERSAL_LIBRARY_IP
+                            else SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0))
         star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
         imax_cost = IMAX_COST_M if self.is_imax_eligible() else 0.0
         booked = min(self.screens, PLATFORM_SCREENS) if self.release_strategy == "platform" else self.screens
@@ -1514,7 +1606,9 @@ class MovieProject:
                    else min(self.screens, PLATFORM_SCREENS))
         screens *= EXHIBITOR_SCREENS_MULT_BY_POSTURE.get(self.exhibitor_posture, 1.0)
         star_boost = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
-        source_boost = SOURCE_OPENING_BOOST.get(self.source_material, 1.0)
+        # A revived library title replaces Source Material's boost (see UNIVERSAL_LIBRARY_IP).
+        source_boost = (library_ip_opening_boost(self.library_ip, self.genre) if self.library_ip
+                        else SOURCE_OPENING_BOOST.get(self.source_material, 1.0))
         imax_boost = 1 + IMAX_OPENING_BOOST_PCT if self.is_imax_eligible() else 1.0
         return (BASE_PER_SCREEN_M * screens * star_boost * self.concept_opening_boost()
                 * self.awareness_lift() * self.season_opening_mult() * source_boost * imax_boost
@@ -2175,6 +2269,75 @@ BACKGROUND_TITLE_WORDS_B = ["Horizon", "Protocol", "Harbor", "District", "Signal
                              "Tide", "Frontier", "Anthem", "Pursuit", "Bloom", "Reckoning", "Static"]
 
 
+# Distribution Pipeline "Description" column (2026-10-05, per explicit user
+# request: "a column that describes each movie in a few sentences"). Several
+# premises per genre so a busy background slate doesn't read as copy-paste;
+# the pick is deterministic per title so a movie's description never changes
+# between renders.
+PIPELINE_PREMISES_BY_GENRE = {
+    "Action/Tentpole": [
+        "An elite operative races against a global threat only they can stop.",
+        "A retired getaway driver is pulled back for one last job that turns into a citywide manhunt.",
+        "A disgraced pilot leads a ragtag crew on an impossible rescue behind enemy lines.",
+    ],
+    "Sci-Fi/Fantasy": [
+        "A discovery on the edge of known space forces a reckoning with what's real.",
+        "A young mapmaker finds a door to a kingdom that has been waiting centuries for her return.",
+        "When time starts looping for an entire city, one engineer is the only person who remembers.",
+    ],
+    "Animated": [
+        "A misfit hero learns that belonging is worth the risk of being different.",
+        "A small robot built to sort mail sets off across the country to deliver one lost letter.",
+        "Two rival forest creatures must team up to save their home from a looming flood.",
+    ],
+    "Horror": [
+        "A remote community unravels as something in the dark refuses to stay buried.",
+        "A family's new smart home starts making decisions about who gets to leave.",
+        "A grief-stricken nurse realizes the night-shift patients she cares for have been dead for years.",
+    ],
+    "Comedy": [
+        "Two rivals are forced together by circumstance and discover they need each other.",
+        "A buttoned-up accountant accidentally becomes the frontman of a viral wedding band.",
+        "Three estranged siblings road-trip their mother's ashes across the country -- in the wrong urn.",
+    ],
+    "Drama": [
+        "A family confronts a long-buried truth that reshapes everyone's future.",
+        "A small-town coach gets one last season to turn a losing team -- and his own life -- around.",
+        "A daughter returns home to run the family restaurant and finds it hiding years of debt.",
+    ],
+    "Awards/Prestige": [
+        "A quiet act of conscience ripples outward, testing everyone it touches.",
+        "A forgotten composer's final work is rediscovered decades after the war that silenced her.",
+        "A public defender takes on the case that her whole career has been quietly avoiding.",
+    ],
+}
+
+CONCEPT_TYPE_BLURB = {
+    "New IP":       "An original concept with no built-in fanbase, so awareness has to be earned through marketing and talent.",
+    "Sequel":       "A franchise follow-up that opens on built-in awareness, but risks fatigue if the franchise is stretched.",
+    "Family/Kids":  "Built for four-quadrant family audiences, with long legs and strong merchandising upside.",
+    "Indie-Horror": "A lean-budget genre play where a modest hit can return many times its cost.",
+}
+
+
+def _premise_for(genre: str, i: int) -> str:
+    options = PIPELINE_PREMISES_BY_GENRE.get(genre, ["A bold new concept looking for a studio."])
+    return options[i % len(options)]
+
+
+def describe_pipeline_movie(title: str, genre: str, concept_type: str,
+                            logline: Optional[str] = None) -> str:
+    """A few-sentence description for the Distribution Pipeline scorecard:
+    the movie's premise (the student's own logline when there is one, else a
+    genre premise picked deterministically by title) plus what its concept
+    type means commercially."""
+    premise = (logline or "").strip()
+    if not premise:
+        options = PIPELINE_PREMISES_BY_GENRE.get(genre, ["A bold new concept looking for an audience."])
+        premise = options[stable_seed(title) % len(options)]
+    return f"{premise} {CONCEPT_TYPE_BLURB.get(concept_type, '')}".strip()
+
+
 def generate_background_slate(team_name: str, cycle: int,
                                 studio_budget_m: Optional[float] = None) -> list[dict]:
     """Deterministic per-(team, cycle) list of 5-10 non-interactive 'rest of
@@ -2247,7 +2410,7 @@ def generate_background_slate(team_name: str, cycle: int,
 # immediately (its own deterministic box-office/critical draw, same engine)
 # so the Distribution Pipeline scorecard can show a real, visible
 # consequence -- "you passed on this, a rival made it a hit."
-SCOUTED_CONCEPTS_PER_CYCLE = 3
+SCOUTED_CONCEPTS_PER_CYCLE = 6   # 2026-10-05: was 3, raised per explicit user request
 SCOUTED_POACH_CHANCE       = 0.35   # deliberately steep -- passing has a real, likely cost
 
 SCOUTED_LOGLINE_BY_GENRE = {
@@ -2285,7 +2448,8 @@ def generate_scouted_concepts(team_name: str, cycle: int) -> list[dict]:
             "genre":            genre,
             "concept_type":     concept_type,
             "source_material":  source_material,
-            "logline":          SCOUTED_LOGLINE_BY_GENRE.get(genre, "A bold new concept looking for a studio."),
+            # Rotate through the genre's premises so six concepts rarely repeat a logline.
+            "logline":          _premise_for(genre, i),
             "budget_m":         round(budget, 0),
             "pa_spend_m":       round(budget * 0.5, 0),
             "star_power":       40,
@@ -2327,6 +2491,7 @@ def resolve_scouted_outcome(concept: dict, rival: str) -> dict:
     return {
         "concept_id": concept["id"],
         "rival":      rival,
+        "logline":    concept.get("logline", ""),
         "cycle":      concept["cycle"],
         "title":      project.title,
         "genre":      concept["genre"],
@@ -2515,6 +2680,7 @@ def resolve_festival_acquisition_outcome(film: dict, winner_label: str, acquirer
     critical_score = film["critical_score"]
     return {
         "film_id":       film["id"],
+        "logline":       film.get("logline", ""),
         "festival":      film["festival"],
         "festival_name": film["festival_name"],
         "winner":        winner_label,

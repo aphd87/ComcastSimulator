@@ -44,7 +44,7 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
     """Cards for every pitch posted in the viewer's class. `sim` fixes the
     simulation ("tv" / "movies"); None shows a filter. `limit` caps the count."""
     if not ss.get("registered") or not ss.get("school"):
-        st.markdown('<div style="font-size:14px;color:#e0e2ea;">Register a team to see the pitches '
+        st.markdown('<div style="font-size:14px;color:#ffffff;">Register a team to see the pitches '
                     'posted in your class.</div>', unsafe_allow_html=True)
         return
 
@@ -55,13 +55,17 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
 
     pitches = class_pitches(ss.school, ss.class_section, sim=sim)
     if not pitches:
-        st.markdown('<div style="font-size:14px;color:#e0e2ea;">No pitches posted in your class yet. '
-                    'A pitch appears here when a team greenlights its own TV show or simulates a film.</div>',
-                    unsafe_allow_html=True)
+        empty_msg = {"movies": "No movie pitches posted in your class yet. A pitch appears here when a "
+                               "team simulates its film.",
+                     "tv": "No TV pitches posted in your class yet. A pitch appears here when a team "
+                           "greenlights its own show."}.get(
+            sim, "No pitches posted in your class yet. A pitch appears here when a team greenlights its "
+                 "own TV show or simulates a film.")
+        st.markdown(f'<div style="font-size:14px;color:#ffffff;">{empty_msg}</div>', unsafe_allow_html=True)
         return
 
     shown = pitches[:limit] if limit else pitches
-    st.markdown(f'<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">{len(pitches)} pitch'
+    st.markdown(f'<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">{len(pitches)} pitch'
                 f'{"es" if len(pitches) != 1 else ""} from {ss.class_section}'
                 f'{" — showing the latest " + str(len(shown)) if len(shown) < len(pitches) else ""}.</div>',
                 unsafe_allow_html=True)
@@ -73,12 +77,12 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
         with cols[i % 2]:
             st.markdown(f"""
             <div style="background:#1a1d26;border:1px solid {border};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
-              <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
+              <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
                 {_SIM_LABEL.get(e.get("sim"), "")} · {team}</div>
-              <div style="font-size:15px;font-weight:600;color:#e8eaf0;margin-top:2px;">{escape(e.get("title", ""))}</div>
-              <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;margin:2px 0 6px;">
+              <div style="font-size:15px;font-weight:600;color:#ffffff;margin-top:2px;">{escape(e.get("title", ""))}</div>
+              <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
                 {escape(e.get("genre", ""))}{" · " + _detail_line(e) if _detail_line(e) else ""}</div>
-              <div style="font-size:14px;color:#e8eaf0;line-height:1.5;">{escape(e.get("pitch", ""))}</div>
+              <div style="font-size:14px;color:#ffffff;line-height:1.5;">{escape(e.get("pitch", ""))}</div>
               {_outcome_line(e)}
             </div>
             """, unsafe_allow_html=True)

@@ -39,6 +39,7 @@ from streamlit.testing.v1 import AppTest
 import utils.game_state as gs
 from utils.movie_models import (
     TALENT_PARTNERS, STUDIO_PARTNERS, RIVAL_STUDIOS, TALENT_SOURCE_SYNERGY_MULT, STAR_POWER_COST_PER_POINT_M,
+    TALENT_BASE_STAR_POWER,
     SCREEN_COST_PER_SCREEN_M, FESTIVALS,
 )
 
@@ -101,10 +102,15 @@ def test_decisions_phase_has_expected_widgets():
     # slider. Pay-1 Window Licensing (2026-08-18, Phase 3) moved to render
     # AFTER the Theatrical Mini-Run resolves -- at this fresh, unresolved
     # page load its selectbox isn't rendered yet either.
-    assert len(at.selectbox) == 7
+    # +2 selectboxes (2026-10-05): Universal Library IP and Lead Actor.
+    assert len(at.selectbox) == 9
     assert len(at.slider) == 2         # star power, theatrical run length (days)
     assert len(at.text_input) == 1     # title
     assert "Simulate" in at.button[-1].label
+
+
+def _selectbox(at, label):
+    return next(b for b in at.selectbox if b.label == label)
 
 
 def test_decisions_phase_shows_bear_base_bull_preview():
@@ -119,7 +125,7 @@ def test_decisions_phase_shows_bear_base_bull_preview():
 def test_decisions_phase_shows_both_decisions_on_one_page():
     at = _movies_app()
     text = "\n".join(md.value for md in at.markdown)
-    assert "Greenlight the Concept" in text
+    assert "Greenlight a New Movie" in text
     assert "Release Strategy" in text
 
 
@@ -218,7 +224,7 @@ def test_ewom_piracy_card_renders_in_results_when_it_fires(monkeypatch):
 
 def test_financing_structure_selectbox_offers_all_three_options():
     at = _movies_app()
-    fin_box = at.selectbox[3]   # genre, concept_type, source_material, financing_structure in that order
+    fin_box = _selectbox(at, "Financing Structure")
     # .options is the format_func-rendered display text (raw keys aren't
     # exposed there), so check count + the underlying selected value instead.
     assert len(fin_box.options) == 3
@@ -248,8 +254,8 @@ def test_paying_for_research_reveals_the_signal_and_costs_pa_spend():
     assert at.session_state["movie_draft"]["pa_spend_m"] == pytest.approx(pa_before + RESEARCH_FEE_M)
     assert at.number_input[pa_idx].value == pytest.approx(pa_before + RESEARCH_FEE_M)
     text = "\n".join(md.value for md in at.markdown)
-    assert "BOX-OFFICE SIGNAL" in text
-    assert "SOCIAL / CRITICAL BUZZ" in text
+    assert "AUDIENCE DEMAND" in text
+    assert "CRITICS" in text and "WORLDWIDE BOX OFFICE" in text
 
 
 def test_research_signal_matches_the_replayed_draws():
@@ -415,7 +421,9 @@ def test_origin_medium_source_material_synergy_amplifies_bonus():
         st.session_state.movie_rival_poach_checked_through = 1
         st.session_state.movie_talent_holds = {"marsh": {"status": "succeeded", "cycle_placed": 0,
                                                            "available_cycle": 1}}
-        st.session_state.movie_draft = {"genre": "Animated", "source_material": "Video Game Adaptation"}
+        # 2026-10-05: the bonus applies only when the held actor is CAST as lead.
+        st.session_state.movie_draft = {"genre": "Animated", "source_material": "Video Game Adaptation",
+                                        "lead_actor": "marsh"}
         import app_pages.movies as movies
         movies.render()
 
@@ -426,7 +434,9 @@ def test_origin_medium_source_material_synergy_amplifies_bonus():
     assert not at.exception, f"Simulate click raised: {list(at.exception)}"
     outcome = at.session_state["movie_log"][0]
     expected_bonus = TALENT_PARTNERS["marsh"]["star_power_bonus"] * TALENT_SOURCE_SYNERGY_MULT
-    assert outcome["project_kwargs"]["star_power"] == pytest.approx(50 + expected_bonus)
+    assert outcome["project_kwargs"]["star_power"] == pytest.approx(
+        TALENT_BASE_STAR_POWER["marsh"] + expected_bonus)
+    assert outcome["project_kwargs"]["lead_actor"] == "marsh"
 
 
 def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
@@ -442,9 +452,9 @@ def test_no_bonus_applied_when_no_overall_deal_or_hold_is_active():
 
 def test_exhibitor_posture_and_pay1_licensing_selectboxes_default_correctly():
     at = _movies_app()
-    posture_box = at.selectbox[4]   # genre, concept_type, source_material, financing_structure, exhibitor_posture
-    debut_season_box = at.selectbox[5]   # debut season, rendered first in Release Strategy
-    pay1_box = at.selectbox[6]      # Pay-1 licensing, rendered after debut season
+    posture_box = _selectbox(at, "Exhibitor Negotiation Posture")
+    debut_season_box = _selectbox(at, "Debut Season")
+    pay1_box = at.selectbox[[b.label for b in at.selectbox].index("Debut Season") + 1]   # Pay-1, right after debut season
     assert posture_box.value == "standard"
     assert len(posture_box.options) == 3
     assert debut_season_box.value == "Off-Peak"
@@ -460,7 +470,7 @@ def test_selecting_debut_season_updates_draft_and_simulated_outcome():
     # Simulate outcome -- a single interaction, the FIRST click from a
     # fresh session (this file's documented AppTest safe zone).
     at = _movies_app()
-    debut_season_box = at.selectbox[5]
+    debut_season_box = _selectbox(at, "Debut Season")
     debut_season_box.set_value("Holiday").run()
     assert not at.exception, f"Debut season click raised: {list(at.exception)}"
     assert at.session_state["movie_draft"]["debut_season"] == "Holiday"
@@ -855,7 +865,7 @@ def test_scouted_concepts_section_renders_with_option_buttons():
     text = "\n".join(md.value for md in at.markdown)
     assert "Scouted Concepts" in text
     option_keys = [b.key for b in at.button if b.key and b.key.startswith("option_")]
-    assert len(option_keys) == 3   # SCOUTED_CONCEPTS_PER_CYCLE
+    assert len(option_keys) == 6   # SCOUTED_CONCEPTS_PER_CYCLE
 
 
 def test_optioning_a_scouted_concept_prefills_the_greenlight_draft():
@@ -890,9 +900,10 @@ def test_scouted_concept_poach_notice_and_scorecard_row_when_poached(monkeypatch
     assert "picked up" in text
     assert "Paragon Pictures" in text
     assert at.session_state["movie_scouted_resolved_through"] == 1
-    assert len(at.session_state["movie_scouted_poached"]) == 3   # all of cycle 1's unclaimed concepts
+    assert len(at.session_state["movie_scouted_poached"]) == 6   # all of cycle 1's unclaimed concepts
     df = at.dataframe[0].value
-    assert (df["Slate"] == "Rival").sum() == 3
+    assert (df["Slate"] == "Rival").sum() == 6
+    assert "Description" in df.columns and df["Description"].str.len().min() > 40
 
 
 # ── Progress chart (2026-08-04) ──────────────────────────────────────────────
@@ -954,13 +965,15 @@ def _movies_app_at_cycle_3_with_two_prior_logs() -> AppTest:
     return at
 
 
-def test_progress_chart_renders_at_cycle_3_with_two_prior_cycles():
+def test_your_slate_table_renders_at_cycle_3_with_two_prior_cycles():
+    # 2026-10-05: the Your Slate table replaced the NPV-by-year progress chart.
     at = _movies_app_at_cycle_3_with_two_prior_logs()
-    specs = [el.proto.spec for el in at.get("plotly_chart")]
-    assert any("Your Progress So Far" in s for s in specs)
+    assert any("Your Slate So Far" in md.value for md in at.markdown)
+    slate = next(df.value for df in at.dataframe if "Lead" in df.value.columns)
+    assert len(slate) == 2
+    assert {"Opening Wknd", "Worldwide B.O.", "Critics", "NPV", "Result"} <= set(slate.columns)
 
 
-def test_progress_chart_absent_at_cycle_1_with_no_prior_cycles():
+def test_your_slate_table_absent_at_cycle_1_with_no_prior_cycles():
     at = _movies_app()
-    specs = [el.proto.spec for el in at.get("plotly_chart")]
-    assert not any("Your Progress So Far" in s for s in specs)
+    assert not any("Your Slate So Far" in md.value for md in at.markdown)

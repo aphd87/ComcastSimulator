@@ -54,8 +54,8 @@ def render():
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">Renewal Economics:</b> Each renewed show costs 5% more next year.
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">
+    💡 <b style="color:#ffffff;">Renewal Economics:</b> Each renewed show costs 5% more next year.
     Your budget is performance-linked, not a flat raise — clear {threshold:.0f}% margin this year and
     next year's budget grows faster; miss it and it shrinks. Cancel low-ROI shows to free capacity
     for new IP or marketing. The IP Value score captures long-term franchise potential — sometimes a
@@ -89,7 +89,7 @@ def render():
     if active_for_decay:
         def _render_genre_decay(active_for_decay=active_for_decay, year=year):
             st.markdown(
-                '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+                '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
                 'Every show\'s rating drifts year over year based on its IP score — high-IP genres '
                 'compound upward (franchise value), low-IP genres decay. This is the same math behind '
                 'the "Proj Rating" column in the Renewal table, plotted forward so the trend is visible.</div>',
@@ -142,7 +142,7 @@ def render():
         st.markdown('<div class="section-title">🔬 Research — Preview This Year\'s Variance</div>',
                     unsafe_allow_html=True)
         st.markdown(
-            f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+            f'<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
             f'${RESEARCH_FEE:.0f}M per show, deducted from this year\'s budget immediately. Reveals a real '
             f'1-5 star signal for how that show\'s rating will actually move this year — not a decorative '
             f'guess. Low stars mean brace for a rough year; high stars mean lean into it. Sometimes also '
@@ -176,7 +176,7 @@ def render():
                                     f'HH income ${r["household_income_k"]}K USD</div>'
                                 )
                             st.markdown(
-                                f'<div style="font-size:15px;color:#e0e2ea;">{s.name[:18]}</div>'
+                                f'<div style="font-size:15px;color:#ffffff;">{s.name[:18]}</div>'
                                 f'<div style="font-size:16px;color:{hint_c};">{star_str}</div>'
                                 f'{regional_html}',
                                 unsafe_allow_html=True)
@@ -242,7 +242,7 @@ def render():
     # making individual Renew/Cancel calls is meant to inform those
     # calls, not just recap them afterward.
     st.markdown('<div class="section-title">IP Value vs. Projected OCF — Franchise Potential</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:14px;color:#e0e2ea;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:14px;color:#ffffff;">High IP + negative OCF = renew for franchise value. Low IP + negative OCF = cancel.</span>', unsafe_allow_html=True)
 
     import plotly.express as px
     scatter_data = pd.DataFrame([{
@@ -302,15 +302,15 @@ def render():
     # amortization-timing math everywhere else in the app.
     st.markdown('<div class="section-title">Your Slate — Decide & Schedule Each Show</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
         'For each show: Renew or Cancel, and confirm which month it premieres. '
         'The schedule below updates live as you set premiere months. '
-        '<b style="color:#e8eaf0;">Rating</b> is the show\'s 18-49 demo rating: the share of U.S. adults aged '
+        '<b style="color:#ffffff;">Rating</b> is the show\'s 18-49 demo rating: the share of U.S. adults aged '
         '18-49 watching an average episode (a 1.0 rating ≈ 1% of them). It\'s the audience-size number '
         'advertisers pay for, so it drives ad revenue directly: each rating point is worth about '
         f'${REV_PER_RATING_POINT:.0f}M a year before marketing lift and cord-cutting. For scale, a typical cable show '
         'rates 1.0-1.5, a hit 2.0+, a mega-hit 3.0+. '
-        '<b style="color:#e8eaf0;">IP Score</b> (0-100, shown in the chart above and the table below) is a '
+        '<b style="color:#ffffff;">IP Score</b> (0-100, shown in the chart above and the table below) is a '
         'fixed franchise-strength rating set per show — how much spinoff/brand value it carries, independent '
         'of its current rating or cost. A higher score also means the show ages a little better year to year. '
         'It\'s the tiebreaker for a show that\'s losing money but still worth keeping for franchise value.</div>',
@@ -327,13 +327,13 @@ def render():
                     s     = show_by_id[r["_id"]]
                     ocf_c = SUCCESS if r["Proj OCF"] >= 0 else DANGER
                     st.markdown(f"""
-                    <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{r['Show']}</div>
+                    <div style="font-size:15px;font-weight:600;color:#ffffff;">{r['Show']}</div>
                     <div style="display:flex;gap:6px;margin:4px 0;">
                       <span class="badge badge-gray">{r['Genre']}</span>
                       <span class="badge badge-gray">{r['Network']}</span>
                     </div>
-                    {f'<div style="font-size:13px;color:#e0e2ea;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
-                    <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">
+                    {f'<div style="font-size:13px;color:#ffffff;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
+                    <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                       Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
                     </div>
                     <div style="font-size:15px;font-family:DM Mono,monospace;color:{ocf_c};margin:4px 0 8px;">
@@ -343,7 +343,7 @@ def render():
 
                     demo = genre_demo(r["Genre"])
                     st.markdown(f"""
-                    <div style="font-size:13px;color:#e0e2ea;margin-bottom:8px;">
+                    <div style="font-size:13px;color:#ffffff;margin-bottom:8px;">
                       Demos: {demo['age']} · {demo['gender']} · {demo['reach']}
                     </div>
                     """, unsafe_allow_html=True)
@@ -395,7 +395,7 @@ def render():
 
     def _render_premiere_calendar(active_this_year=active_this_year):
         st.markdown(
-            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+            '<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
             '📋 <b>Read-only preview, not its own decision:</b> this calendar just mirrors the premiere '
             'months you\'ve already set above (in each show\'s Renewal card, or in "New this year" below '
             'the calendar in the main Renewal flow) — it doesn\'t take any input of its own. '
@@ -419,8 +419,8 @@ def render():
             col.markdown(f"""
             <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
                  padding:6px 2px;text-align:center;min-height:56px;">
-              <div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
-              <div style="font-size:16px;font-family:DM Serif Display,serif;color:#e8eaf0;margin-top:4px;">{count}</div>
+              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
+              <div style="font-size:16px;font-family:DM Serif Display,serif;color:#ffffff;margin-top:4px;">{count}</div>
             </div>
             """, unsafe_allow_html=True)
         st.caption("Number = shows premiering that month. Hover a column for names.")
@@ -492,7 +492,7 @@ def render():
         totals=dict(marker_color=ACCENT),
         texttemplate="%{y:+.1f}M",
         textposition="outside",
-        textfont=dict(size=10, color="#e8eaf0"),
+        textfont=dict(size=10, color="#ffffff"),
     ))
     fig_wf.update_layout(**base_layout("Year {} Budget Waterfall ($M)".format(next_year), height=300))
     st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar":False})
@@ -550,15 +550,15 @@ def render():
     penalty = int(round((1 - SLOT_MULT_FLOOR) * 100))
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
-    ⚖️ <b style="color:#e8eaf0;">The trade-off, up front:</b> there are only {n_slots} primetime slots
+         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#ffffff;">
+    ⚖️ <b style="color:#ffffff;">The trade-off, up front:</b> there are only {n_slots} primetime slots
     ({len(PRIMETIME_HOURS)} hours × {len(PRIMETIME_DAYS)} nights) and exactly one show per slot — you
     cannot put every show in its best slot. The best slot is worth up to
     <b style="color:{SUCCESS};">+{bonus}%</b> rating for the show that lands there, and the worst costs a
     show up to <b style="color:{DANGER};">-{penalty}%</b>. A show left unscheduled stays neutral (no bonus,
     no penalty). This bump hits real ad revenue for the year — check Results after you Simulate the Year.
     <br><br>
-    📅 <b style="color:#e8eaf0;">Best slot depends on genre — it's not the same answer for every show.</b>
+    📅 <b style="color:#ffffff;">Best slot depends on genre — it's not the same answer for every show.</b>
     Most genres peak Tue/Wed/8PM, when linear TV viewership has historically been strongest. But
     unscripted <b>Reality</b> and prestige <b>Drama</b> skew the other way — weekend nights (Fri–Sun),
     when they face less competition from weeknight appointment programming (Sunday-night Drama is a real
@@ -566,9 +566,9 @@ def render():
     genuinely strong slot for a Reality show — see the Slot Value Map below for exact numbers by profile,
     and don't assume the same placement logic works for your whole roster.
     <br><br>
-    🖱️ <b style="color:#e8eaf0;">To assign a show:</b> click a cell's dropdown in the grid below and pick a show.
+    🖱️ <b style="color:#ffffff;">To assign a show:</b> click a cell's dropdown in the grid below and pick a show.
     <br><br>
-    🎯 <b style="color:#e8eaf0;">Strategy:</b> the bonus/penalty is a <i>percentage</i> of a show's own
+    🎯 <b style="color:#ffffff;">Strategy:</b> the bonus/penalty is a <i>percentage</i> of a show's own
     rating, so the same slot is worth more real ad revenue on a big show than a small one — protect your
     highest-rated shows with their own best slots rather than spreading the love evenly or copying one
     "best slot" across every genre.
@@ -601,7 +601,7 @@ def render():
     rating_median = sorted(ratings_this_year)[len(ratings_this_year)//2] if ratings_this_year else 0
 
     st.markdown(
-        '<div style="font-size:13px;color:#e0e2ea;margin:4px 0 6px;">'
+        '<div style="font-size:13px;color:#ffffff;margin:4px 0 6px;">'
         '📊 <b>Reference — sorted by rating.</b> Protect your highest-rated shows with their own best '
         'slots (see Day Profile); a show left unscheduled stays neutral. '
         '<b style="color:#e8c547;">⚠</b> = above-median rating, still unscheduled.</div>',
@@ -623,7 +623,7 @@ def render():
     # actually present in this year's roster, labeled with which real
     # genres use it, so the conflict is visible instead of hidden in the math.
     st.markdown(
-        '<div style="font-size:13px;color:#e0e2ea;margin:14px 0 6px;">'
+        '<div style="font-size:13px;color:#ffffff;margin:14px 0 6px;">'
         '🗺️ <b>Slot Value Map</b> — rating bonus/penalty per cell, same layout as the grid below. '
         'Two profiles now, because best slot depends on genre.</div>',
         unsafe_allow_html=True)
@@ -644,7 +644,7 @@ def render():
             continue
         sample_genre = profile_genres[0] if profile_name == "Weekend" else None
         st.markdown(
-            f'<div style="font-size:13px;color:#e0e2ea;margin:8px 0 4px;">'
+            f'<div style="font-size:13px;color:#ffffff;margin:8px 0 4px;">'
             f'<b>{profile_name}</b> profile — {", ".join(profile_genres)}</div>',
             unsafe_allow_html=True)
         value_rows = []
@@ -692,7 +692,7 @@ def render():
             st.rerun()
     with af_hint_col:
         st.markdown(
-            '<div style="font-size:13px;color:#e0e2ea;padding-top:8px;">'
+            '<div style="font-size:13px;color:#ffffff;padding-top:8px;">'
             'Fills every slot from your top-rated shows down, each claiming its own best remaining slot '
             '(genre-aware) — a starting point, not a final answer.</div>', unsafe_allow_html=True)
 

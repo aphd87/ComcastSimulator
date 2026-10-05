@@ -93,7 +93,7 @@ def build_plan():
         "      Today: luck is real. How do you SIZE the bet?\"",
     ])
     teaches(doc, [
-        "Portfolio thinking still matters, but now it works across five films, not inside one.",
+        "Portfolio thinking still matters, but now it works across four films, not inside one.",
         "Risk shows up as the **bear case**, and it's paid up front.",
         "The skill shifts from \"spread it out\" to \"size it right.\"",
     ])
@@ -233,7 +233,7 @@ def build_plan():
         "",
         "  IN TV                              IN FILM",
         "  Luck averaged out across 30 shows  Luck is 25% of each film's grade",
-        "  Mix = the whole game               Mix = across 5 films only",
+        "  Mix = the whole game               Mix = across 4 films only",
         "",
         "  ══════════════════════════════════════════════════════════════",
         "   THE REAL ANSWER: you can't remove luck in film.",
@@ -266,7 +266,7 @@ def build_plan():
     table(doc, ["Time", "Board", "What happens"], [
         ["0–6", "Board 0", "Yesterday vs. today: the one-check problem"],
         ["6–12", "Board 1", "Three greenlight choices"],
-        ["12–72", "—", "Play five films; circulate with the questions above"],
+        ["12–72", "—", "Play four films; circulate with the questions above"],
         ["65–72", "Board 2 (frame)", "Sketch the frame while teams finish"],
         ["72–78", "Board 2", "Fill top / bottom 3 from the Leaderboard; name the pattern"],
         ["78–83", "Board 3", "Luck vs. architecture, revisited"],

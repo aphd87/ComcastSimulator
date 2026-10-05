@@ -18,8 +18,8 @@ ACCENT2  = "#4fc3f7"
 DANGER   = "#ef5350"
 SUCCESS  = "#66bb6a"
 WARN     = "#ffa726"
-TEXT     = "#e8eaf0"
-TEXT2    = "#e0e2ea"
+TEXT     = "#ffffff"
+TEXT2    = "#ffffff"
 BRAVO_C  = "#1a6bb5"
 OXY_C    = "#f2c200"
 SVOD_C   = "#8e44ad"
@@ -91,7 +91,7 @@ def queue_supplement(title: str, render_fn, when_to_use: str = "") -> None:
     render_fn is a no-arg callable (a closure over the values the chart needs)."""
     with st.expander(f"📊 Why? (optional) — {title}", expanded=False):
         if when_to_use:
-            st.markdown(f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:6px;">'
+            st.markdown(f'<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">'
                         f'<b>Use this when:</b> {when_to_use} Not scored.</div>', unsafe_allow_html=True)
         render_fn()
 

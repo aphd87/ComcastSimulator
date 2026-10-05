@@ -74,12 +74,12 @@ def render():
     # capacity constraint either way.
     st.markdown('<div class="section-title">📋 Acquire a Pitched Show</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:14px;color:#e0e2ea;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
         'A second way to add a show, alongside building one from scratch below: pick up an '
-        'already-pitched concept outright. <b style="color:#e8eaf0;">Domestic Original</b> pitches are '
-        'cheaper to acquire but unproven. <b style="color:#e8eaf0;">International Format</b> pitches are '
+        'already-pitched concept outright. <b style="color:#ffffff;">Domestic Original</b> pitches are '
+        'cheaper to acquire but unproven. <b style="color:#ffffff;">International Format</b> pitches are '
         'adapted from a proven overseas hit — a real rights-licensing premium, but a higher, de-risked '
-        'rating and IP Score. A <b style="color:#e8eaf0;">Brand Partnership</b> means a sponsor already '
+        'rating and IP Score. A <b style="color:#ffffff;">Brand Partnership</b> means a sponsor already '
         'attached, subsidizing part of the acquisition cost. Unlike Build From Scratch, an acquired '
         'show\'s numbers are fixed — you\'re paying for a de-risked concept, not a tunable one. '
         + (f'<b style="color:#e8c547;">You have {slots_left} of {MAX_NEW_SHOWS_PER_YEAR} new-show slots '
@@ -93,7 +93,7 @@ def render():
            f'next year <b>unless a rival network is bidding on it (🔥)</b>, in which case the rival may sign it '
            f'first. Switching networks or restarting a level undoes the shows you added in it, so slots '
            f'can\'t be refilled that way.')
-        + '<br><br><b style="color:#e8eaf0;">Reading a pitch card:</b>'
+        + '<br><br><b style="color:#ffffff;">Reading a pitch card:</b>'
         '<ul style="margin:4px 0 0 18px;padding:0;line-height:1.6;">'
         '<li><b>Demo</b>: who watches. Age band · gender skew · where (e.g. 18-49 · Balanced · National US).</li>'
         '<li><b>eps · $/ep</b>: episodes per season and production cost per episode. Multiply them for the season cost.</li>'
@@ -124,7 +124,7 @@ def render():
             for k, v in lost.items())
         st.markdown(
             f'<div style="font-size:14px;color:#ef5350;margin-bottom:10px;">🚫 Signed by rival networks '
-            f'before you acquired them: <span style="color:#e8eaf0;">{gone}</span></div>',
+            f'before you acquired them: <span style="color:#ffffff;">{gone}</span></div>',
             unsafe_allow_html=True)
 
     available_pitches = [k for k in still_open if k not in lost]
@@ -151,23 +151,23 @@ def render():
                 bp = pitch.get("brand_partner")
                 bp_line = (f'<div style="font-size:12px;color:#e8c547;margin-top:4px;">🤝 Brand Partnership: '
                            f'{bp["name"]} (+{bp["rating_bonus"]:.2f} rating)</div>' if bp else
-                           '<div style="font-size:12px;color:#e0e2ea;margin-top:4px;">No brand partnership</div>')
+                           '<div style="font-size:12px;color:#ffffff;margin-top:4px;">No brand partnership</div>')
                 with col:
                     st.markdown(f"""
                     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
                          padding:14px;height:100%;">
-                      <div style="font-size:15px;font-weight:600;color:#e8eaf0;">{pitch['name']}</div>
-                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;margin:2px 0 6px;">
+                      <div style="font-size:15px;font-weight:600;color:#ffffff;">{pitch['name']}</div>
+                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
                         {pitch['genre']} · {origin_badge}</div>
-                      <div style="font-size:12px;color:#e0e2ea;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
-                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
+                      <div style="font-size:12px;color:#ffffff;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
+                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
                         Demo: {demo['age']} · {demo['gender']} · {demo['reach']}</div>
-                      <div style="font-size:12px;color:#e0e2ea;font-family:DM Mono,monospace;">
+                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
                         {pitch['episodes']} eps · ${pitch['ep_cost_k']}K/ep · rating {pitch['rating']:.1f} ·
                         SVOD appeal {pitch['svod_appeal']} · IP Score {pitch['ip_score']}</div>
                       {bp_line}
                       {rival_line}
-                      <div style="font-size:13px;color:#e8eaf0;margin-top:8px;">
+                      <div style="font-size:13px;color:#ffffff;margin-top:8px;">
                         Acquisition fee: <b>${fee:.2f}M</b> + ${season_cost:.2f}M season production cost
                       </div>
                     </div>
@@ -202,8 +202,8 @@ def render():
 
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">The Core Decision:</b> this comparison is a <b>hypothetical</b> —
+         border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">
+    💡 <b style="color:#ffffff;">The Core Decision:</b> this comparison is a <b>hypothetical</b> —
     what would this same show concept be worth as a <b>linear</b> show vs. an <b>SVOD+</b> show?
     In 2012, linear wins on immediate cash — faster ad revenue, no subscriber acquisition cost.
     By Year 7+, SVOD subscription LTV starts to outpace a declining ad market.
@@ -222,7 +222,7 @@ def render():
     # ── Show Concept Builder ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Show Concept Inputs</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:14px;color:#e8eaf0;line-height:1.6;margin-bottom:10px;">'
+        '<div style="font-size:14px;color:#ffffff;line-height:1.6;margin-bottom:10px;">'
         '"18-49" is Nielsen\'s standard ad-buying demo — the age range advertisers pay the most to '
         'reach, so Projected Rating is really "how much of that specific audience tunes in," not '
         'raw viewership. These inputs are yours to set independently, but in the real world (and in '
@@ -278,7 +278,7 @@ def render():
           <div style="font-size:15px;color:{DANGER};font-weight:600;margin-bottom:4px;">
             🚫 Legal Risk — Title Already Exists
           </div>
-          <div style="font-size:15px;color:#e0e2ea;">
+          <div style="font-size:15px;color:#ffffff;">
             "<b>{show_name}</b>" is already an existing title in this universe. Using it without
             permission gets you sued — <b>Risk Score: 0</b>. Rename the concept to something
             original before building a P&L on it.
@@ -309,7 +309,7 @@ def render():
 
     st.markdown('<div class="section-title">🎬 Greenlight This Show</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;">'
+        f'<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
         f'Adds your concept to {net_display}\'s real roster <b>using the numbers in Show Concept Inputs '
         f'above</b> — production cost (${linear["cost"]:.2f}M) comes out of this year\'s budget '
         f'immediately, and it starts earning/costing real money this year. Your pitch becomes the '
@@ -355,8 +355,8 @@ def render():
     # so it belongs after the actual action, not gating it.
     st.markdown('<div class="section-title">Platform P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#e0e2ea;margin-bottom:10px;line-height:1.6;">'
-        '<b style="color:#e0e2ea;">What each line means:</b> '
+        '<div style="font-size:13px;color:#ffffff;margin-bottom:10px;line-height:1.6;">'
+        '<b style="color:#ffffff;">What each line means:</b> '
         '<b>Total Season Cost</b> = episode cost × episode count. '
         '<b>Ad Revenue (Y1)</b> = what Linear earns this year from ratings. '
         '<b>Sub Lift Est.</b> = subscribers SVOD is projected to add. '
@@ -375,7 +375,7 @@ def render():
         rows = "".join([
             f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
             f'border-bottom:1px solid rgba(37,40,54,.5);font-size:15px;">'
-            f'<span style="color:#e0e2ea;">{k}</span>'
+            f'<span style="color:#ffffff;">{k}</span>'
             f'<span style="font-family:DM Mono,monospace;color:{vc};">{v}</span></div>'
             for k,v,vc in data
         ])
@@ -432,7 +432,7 @@ def render():
     # ── Charts ────────────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">3-Year P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
+        '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
         'Same concept, extrapolated 3 years out: Linear\'s bars are Year-1 numbers × 3 (a flat '
         'run-rate). SVOD\'s "3yr Revenue" bar is its real 3-year LTV; its "3yr OCF" bar is Year-1 OCF '
         '× 3 for the same side-by-side comparison. SVOD often looks negative here because it only '
@@ -461,10 +461,10 @@ def render():
     # student prices out. See utils/charts.py::queue_supplement.
     def _render_cumulative_ltv(linear=linear, svod=svod):
         st.markdown(
-            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
+            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
             'Running total of revenue over time, not a single-year number. Linear\'s line spreads its '
             'Year-1 ad revenue rate evenly across all 36 months; SVOD\'s line spreads its full 3-year LTV '
-            'evenly across the same 36 months. The dashed <b style="color:#e0e2ea;">Crossover</b> line '
+            'evenly across the same 36 months. The dashed <b style="color:#ffffff;">Crossover</b> line '
             'marks the month SVOD\'s cumulative total overtakes Linear\'s — visualizing "Linear wins early '
             'cash, SVOD wins the long game" as an actual point in time instead of just a claim.</div>',
             unsafe_allow_html=True)
@@ -494,7 +494,7 @@ def render():
 
     # ── Sensitivity Table ──────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Sensitivity Analysis — Rating vs. Episode Cost</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:14px;color:#e0e2ea;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
+    st.markdown('<span style="font-size:14px;color:#ffffff;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
 
     rating_range = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
     cost_range   = [300, 500, 750, 1000, 1500, 2000]
@@ -534,7 +534,7 @@ def render():
     def _render_marketing_roi(eps=eps, ep_cost=ep_cost, rating=rating, appeal=appeal, year=year,
                                show_name=show_name):
         st.markdown(
-            '<div style="font-size:13px;color:#e0e2ea;margin-bottom:6px;">'
+            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
             'Holds this concept\'s rating and cost fixed and reruns both P&Ls at increasing marketing '
             'budgets, so you can see where extra marketing dollars actually pay off. Linear OCF moves with '
             'the ad-rating lift marketing buys; SVOD OCF moves with the extra subscriber lift (and its 3-year '

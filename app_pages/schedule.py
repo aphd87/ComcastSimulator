@@ -40,8 +40,8 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#e0e2ea;">
-    💡 <b style="color:#e8eaf0;">Key insight:</b> You pay 1/12 of a show's total annual cost on the 1st of each month the show is on air — 
+         border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#ffffff;">
+    💡 <b style="color:#ffffff;">Key insight:</b> You pay 1/12 of a show's total annual cost on the 1st of each month the show is on air — 
     regardless of when in the month it premieres. A March 30 launch means you absorb a full monthly 
     amortization payment with only 2 days of ad revenue. Your cash cows must fund this gap.
     </div>
@@ -93,17 +93,17 @@ def render():
     with c1:
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#ffffff;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day {pd_launch} Launch</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Monthly amort bill</span>
+            <span style="color:#ffffff;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Revenue days in month</span>
+            <span style="color:#ffffff;">Revenue days in month</span>
             <span style="font-family:'DM Mono',monospace;{'color:#66bb6a' if revenue_days > 15 else 'color:#ef5350'};">{revenue_days}</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Ad revenue earned</span>
+            <span style="color:#ffffff;">Ad revenue earned</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${month_rev:.3f}M</span>
           </div>
           <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:16px;font-weight:600;">
@@ -119,17 +119,17 @@ def render():
         mar1_net = mar1_rev - monthly_amort
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#ffffff;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Day 1 Baseline</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Monthly amort bill</span>
+            <span style="color:#ffffff;">Monthly amort bill</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${monthly_amort:.3f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Revenue days in month</span>
+            <span style="color:#ffffff;">Revenue days in month</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">31</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Ad revenue earned</span>
+            <span style="color:#ffffff;">Ad revenue earned</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${mar1_rev:.3f}M</span>
           </div>
           <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;font-size:16px;font-weight:600;">
@@ -146,17 +146,17 @@ def render():
         funded = "✅ Cash cows cover" if cow_coverage >= abs(net_position) else "❌ Cash gap — raise reserve"
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:16px;">
-          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;color:#ffffff;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cash Gap Analysis</div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Revenue shortfall vs. Day 1</span>
+            <span style="color:#ffffff;">Revenue shortfall vs. Day 1</span>
             <span style="font-family:'DM Mono',monospace;color:#ef5350;">${abs(gap):.3f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Cash cow monthly rev</span>
+            <span style="color:#ffffff;">Cash cow monthly rev</span>
             <span style="font-family:'DM Mono',monospace;color:#66bb6a;">${cow_coverage:.3f}M</span>
           </div>
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:15px;">
-            <span style="color:#e0e2ea;">Reserve needed</span>
+            <span style="color:#ffffff;">Reserve needed</span>
             <span style="font-family:'DM Mono',monospace;color:#ffa726;">${max(0,-net_position):.3f}M</span>
           </div>
           <div style="border-top:1px solid #252836;margin-top:10px;padding-top:10px;font-size:15px;">
@@ -170,7 +170,7 @@ def render():
     # ── Section 2: Monthly Amortization Grid ─────────────────────────────────
     st.markdown('<div class="section-title">Monthly Amortization Grid — Top 12 by Cost</div>', unsafe_allow_html=True)
     st.markdown(f"""
-    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
     Red cells = months with active amortization bills. Shows premiering in the same quarter stack costs —
     a deep-red column means your cash cows must bridge a large up-front gap before ad revenue catches up.
     {'<br><br>⚠ Showing the <b>12 costliest of ' + str(len(shows)) + '</b> active shows — a show with no red '
@@ -213,7 +213,7 @@ def render():
     # ── Monthly Cash Bridge ───────────────────────────────────────────────────
     st.markdown('<div class="section-title">Monthly Cash Flow Bridge</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:15px;color:#e0e2ea;margin-bottom:10px;">
+    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
     Green bars = revenue in; red bars = content cost out; gold line = net monthly cash flow.
     Months where the line dips below zero are squeeze points — your reserve must cover that shortfall or you risk a cash crisis.
     </div>

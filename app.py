@@ -234,7 +234,7 @@ def _render_network_picker(ss) -> None:
     st.markdown('<div class="section-title" style="text-align:center;">Choose Your Network</div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<div style="text-align:center;font-size:15px;color:#e0e2ea;margin-bottom:16px;">'
+        '<div style="text-align:center;font-size:15px;color:#ffffff;margin-bottom:16px;">'
         'Each network is its own level with its own era, budget, and margin target. '
         'Play the one your instructor assigned — you can switch later from the network row at the top.'
         '</div>', unsafe_allow_html=True)
@@ -254,11 +254,11 @@ def _render_network_picker(ss) -> None:
             <div style="background:#1a1d26;border:1px solid #252836;border-top:3px solid {info['color2']};
                  border-radius:10px;padding:22px 18px;text-align:center;">
               <div style="font-size:38px;">{info['emoji']}</div>
-              <div style="font-family:DM Serif Display,serif;font-size:21px;color:#e8eaf0;margin:8px 0 2px;">
+              <div style="font-family:DM Serif Display,serif;font-size:21px;color:#ffffff;margin:8px 0 2px;">
                 {info['display_name']}</div>
-              <div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
-              <div style="font-size:14px;color:#e0e2ea;margin:10px 0;font-style:italic;">{info['tagline']}</div>
-              <div style="font-size:14px;color:#e0e2ea;line-height:1.7;">
+              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
+              <div style="font-size:14px;color:#ffffff;margin:10px 0;font-style:italic;">{info['tagline']}</div>
+              <div style="font-size:14px;color:#ffffff;line-height:1.7;">
                 Starting budget ~${info['budget_base']:.0f}M<br>
                 Pass at <b style="color:#e8c547;">{info['pass_threshold']:.0f}%</b> OCF margin
               </div>
@@ -282,8 +282,8 @@ def _render_follow_along_summary(ss, net_info, net):
     Driver's current state as plain tables/metrics."""
     st.markdown(
         '<div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #ffa726;'
-        'border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">'
-        '👀 <b style="color:#e8eaf0;">Follow Along mode:</b> you\'re viewing your Driver\'s live '
+        'border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">'
+        '👀 <b style="color:#ffffff;">Follow Along mode:</b> you\'re viewing your Driver\'s live '
         'decisions, read-only. Nothing you do here is saved — only the Driver\'s choices count.'
         '</div>', unsafe_allow_html=True
     )
@@ -334,7 +334,7 @@ st.markdown(
     '<div style="text-align:center;margin-bottom:2px;">'
     '<span style="font-family:DM Serif Display,serif;font-size:28px;color:#e8c547;">The Slate</span>'
     '</div>'
-    '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;'
+    '<div style="text-align:center;font-family:DM Mono,monospace;font-size:14px;color:#ffffff;'
     'letter-spacing:.1em;margin-bottom:16px;">MEDIA PORTFOLIO SIMULATION</div>',
     unsafe_allow_html=True
 )
@@ -374,9 +374,9 @@ if ss.registered:
         st.markdown(
             f'<div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;'
             f'padding:10px 14px;">'
-            f'<span style="font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
+            f'<span style="font-size:14px;color:#ffffff;text-transform:uppercase;letter-spacing:.08em;">Active Team</span>'
             f'&nbsp;&nbsp;<span style="font-size:16px;font-weight:600;color:#e8c547;font-family:DM Serif Display,serif;">{ss.team_name}</span>'
-            f'&nbsp;&nbsp;<span style="font-size:14px;color:#e0e2ea;">{ss.school} · {ss.class_section}</span>'
+            f'&nbsp;&nbsp;<span style="font-size:14px;color:#ffffff;">{ss.school} · {ss.class_section}</span>'
             f'{role_badge}'
             f'</div>',
             unsafe_allow_html=True
@@ -470,7 +470,7 @@ if not ss.registered and ss.active_section != "leaderboard":
     rcol1, rcol2, rcol3 = st.columns([1, 2, 1])
     with rcol2, st.container(key="registration_form"):
         st.markdown(
-            '<div style="font-size:14px;color:#e0e2ea;margin-bottom:8px;text-align:center;">'
+            '<div style="font-size:14px;color:#ffffff;margin-bottom:8px;text-align:center;">'
             '🔒 FERPA note: Enter a team name only — no student names or IDs.</div>',
             unsafe_allow_html=True
         )
@@ -555,8 +555,8 @@ if not ss.registered and ss.active_section != "leaderboard":
     st.markdown('<div class="section-title">Strategic Foundation — Business Theory</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:15px;color:#e0e2ea;line-height:1.7;">
-    <b style="color:#e8eaf0;font-size:15px;">Two simulations. One inflection point.</b><br><br>
+         border-radius:6px;padding:14px 18px;margin-bottom:20px;font-size:15px;color:#ffffff;line-height:1.7;">
+    <b style="color:#ffffff;font-size:15px;">Two simulations. One inflection point.</b><br><br>
     It's 2012 — the start of a decade-long shift from linear, ad-supported TV toward streaming that
     will reshape how media companies allocate capital, greenlight content, and manage risk.
     <b style="color:#e8c547;">TV / Streaming</b> puts you in the network GM's seat, running a
@@ -576,10 +576,10 @@ elif ss.active_section in (None, "app"):
     # button at any time, not just once right after registering ────────────────
     st.markdown(f"""
     <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-family:DM Serif Display,serif;font-size:24px;color:#e8eaf0;">
+      <div style="font-family:DM Serif Display,serif;font-size:24px;color:#ffffff;">
         Welcome, {ss.team_name}
       </div>
-      <div style="font-size:15px;color:#e0e2ea;margin-top:6px;">
+      <div style="font-size:15px;color:#ffffff;margin-top:6px;">
         Choose your simulation to begin — you can switch anytime from the menu at the top.
       </div>
     </div>
@@ -591,10 +591,10 @@ elif ss.active_section in (None, "app"):
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
              padding:28px 20px;text-align:center;height:100%;">
           <div style="font-size:42px;">📺</div>
-          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#ffffff;margin:10px 0 6px;">
             TV / Streaming
           </div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
+          <div style="font-size:15px;color:#ffffff;line-height:1.6;">
             Run Oxygen → Bravo → Peacock as General Manager. Annual portfolio decisions —
             financing, renewal, greenlighting, scheduling — amortization timing, and the
             linear-vs-SVOD tradeoff.
@@ -609,10 +609,10 @@ elif ss.active_section in (None, "app"):
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
              padding:28px 20px;text-align:center;height:100%;">
           <div style="font-size:42px;">🎬</div>
-          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#ffffff;margin:10px 0 6px;">
             Movies
           </div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
+          <div style="font-size:15px;color:#ffffff;line-height:1.6;">
             Universal Pictures — risk-adjusted NPV under bull/base/bear variance, theatrical
             vs. streaming release-window strategy, and award-season reception. A concentrated,
             front-loaded bet, in contrast to TV's steady, amortized portfolio.
@@ -632,10 +632,10 @@ elif ss.active_section in (None, "app"):
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:10px;
              padding:28px 20px;text-align:center;height:100%;">
           <div style="font-size:42px;">🏆</div>
-          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#e8eaf0;margin:10px 0 6px;">
+          <div style="font-family:DM Serif Display,serif;font-size:20px;color:#ffffff;margin:10px 0 6px;">
             Leaderboard
           </div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.6;">
+          <div style="font-size:15px;color:#ffffff;line-height:1.6;">
             See how your team stacks up — your class, your school, or every school running
             The Slate. Official (first-attempt) scores only.
           </div>
@@ -692,19 +692,19 @@ elif ss.active_section == "movies":
         <div class="net-logo-wrap" style="background:linear-gradient(135deg, rgba(26,107,181,.18), rgba(26,29,38,.95));">
           <div>
             <div class="net-logo-text" style="color:#4fc3f7;">UNIVERSAL</div>
-            <div class="net-tagline">One film. One check. Five chances.</div>
+            <div class="net-tagline">Four greenlights. Eight years. One studio slate.</div>
             <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;">
               <span class="badge badge-gray">Est. 1912</span>
               <span class="badge badge-gray">NBCUniversal / Comcast</span>
               <span class="badge badge-gray">Universal City, CA</span>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">KEY AUDIENCE</div>
-              <div style="font-size:14px;color:#e0e2ea;">Global and all-quadrant: families, franchise action fans, and horror audiences</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:3px;">KEY AUDIENCE</div>
+              <div style="font-size:14px;color:#ffffff;">Global and all-quadrant: families, franchise action fans, and horror audiences</div>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">BUDGET RANGE</div>
-              <div style="font-size:14px;color:#e0e2ea;">~$15M horror to $150M+ tentpoles, plus P&amp;A</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:3px;">BUDGET RANGE</div>
+              <div style="font-size:14px;color:#ffffff;">~$15M horror to $150M+ tentpoles, plus P&amp;A</div>
             </div>
           </div>
         </div>
@@ -712,9 +712,9 @@ elif ss.active_section == "movies":
     with mcol2:
         st.markdown("""
         <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
-          <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Studio Biography</div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.75;">
+          <div style="font-size:15px;color:#ffffff;line-height:1.75;">
             Founded in 1912 by Carl Laemmle, Universal is one of Hollywood's oldest studios. Comcast took
             control of NBCUniversal in 2011, putting the studio alongside NBC, Bravo, Oxygen, and later
             Peacock. Its modern slate runs on a few durable engines: global franchises (Jurassic, Fast &amp;
@@ -726,45 +726,46 @@ elif ss.active_section == "movies":
             up front.
           </div>
           <div style="margin-top:12px;">
-            <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE FILMS</div>
-            <div style="font-size:15px;color:#e0e2ea;">Jaws, E.T., Jurassic Park, Fast &amp; Furious, Despicable Me,
+            <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE FILMS</div>
+            <div style="font-size:15px;color:#ffffff;">Jaws, E.T., Jurassic Park, Fast &amp; Furious, Despicable Me,
               Get Out, Oppenheimer, The Super Mario Bros. Movie, Five Nights at Freddy's</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
 
     _movie_steps = [
-        "🤝 <b>Studio Partnerships, Scouted Concepts, Festivals</b> <i>(optional)</i> — cheaper talent or a ready-made idea",
-        "🎬 <b>Greenlight</b> — logline, genre, budget near the genre's typical level, P&amp;A, screens, financing",
+        "🤝 <b>Studio Partnerships, Scouted Concepts, Festival Acquisitions</b> — review all three every cycle: a standing banner deal, 6 ready-made concepts, and finished films to buy",
+        "🎬 <b>Greenlight a New Movie</b> — one slot per 2-year cycle: logline, genre, budget near the genre's typical level, P&amp;A, screens, financing",
+        "🎭 <b>Holding Deals</b> — lock a specific actor's window for next cycle's movie",
         "📅 <b>Release Strategy</b> — season; from Film 3, Wide, Platform, or Day-and-Date",
         "🎟️ <b>Theatrical Simulation</b>, then Pay-1 licensing and PVOD pricing",
-        "🎯 <b>Simulate → Results</b> — repeat for 5 films, then submit your score",
+        "🎯 <b>Simulate → Results</b> — repeat for 4 films, then submit your score",
     ]
     _movie_steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
-        f'<span style="color:#e0e2ea;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
-        f'<span style="color:#e0e2ea;">{s}</span></div>'
+        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#ffffff;">{s}</span></div>'
         for i, s in enumerate(_movie_steps))
     st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
          border-radius:8px;padding:16px 20px;margin:12px 0 16px;">
       <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:2;min-width:260px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
           <div style="font-size:15px;color:#4fc3f7;font-weight:600;margin-bottom:6px;">
             Five films, ten years. Build a slate worth more than it costs.</div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.7;">
+          <div style="font-size:15px;color:#ffffff;line-height:1.7;">
             You run Universal's film slate: one film every two years, with a $3.5B studio budget that grows
             when your films earn and shrinks when they don't. Every dollar of budget and P&amp;A is spent
-            before a single ticket sells. You're graded on <b style="color:#e8eaf0;">risk-adjusted NPV</b>,
+            before a single ticket sells. You're graded on <b style="color:#ffffff;">risk-adjusted NPV</b>,
             weighing your bad outcome, not just your hopeful one; 25% of each film's grade is what it actually
-            earned. To <b style="color:#e8eaf0;">pass</b>, your decisions alone (risk-adjusted NPV, before luck) must average
+            earned. To <b style="color:#ffffff;">pass</b>, your decisions alone (risk-adjusted NPV, before luck) must average
             above $0: luck moves your score, but it can't pass a slate for you.
           </div>
         </div>
         <div style="flex:1;min-width:220px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
           {_movie_steps_html}
         </div>
@@ -827,26 +828,26 @@ else:
               <span class="badge badge-gray">{net_info['hq']}</span>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
-              <div style="font-size:14px;color:#e0e2ea;">{net_info['demographics']}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:3px;">KEY DEMO</div>
+              <div style="font-size:14px;color:#ffffff;">{net_info['demographics']}</div>
             </div>
             <div style="margin-top:8px;">
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
-              <div style="font-size:14px;color:#e0e2ea;">{net_info['avg_ep_cost']}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:3px;">EP COST RANGE</div>
+              <div style="font-size:14px;color:#ffffff;">{net_info['avg_ep_cost']}</div>
             </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
 
         # Attempt status
-        att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#e0e2ea")
+        att_color = "#66bb6a" if passed else ("#ffa726" if attempts > 0 else "#ffffff")
         st.markdown(f"""
         <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:10px 14px;">
-          <div style="font-size:14px;color:#e0e2ea;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
+          <div style="font-size:14px;color:#ffffff;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Attempt Status</div>
           <div style="font-size:15px;color:{att_color};font-family:DM Mono,monospace;">
             {'✅ PASSED' if passed else f'Attempt {attempts+1} of {MAX_ATTEMPTS}' if can_sub else '🔒 All attempts used'}
           </div>
-          {'<div style="font-size:14px;color:#e0e2ea;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
+          {'<div style="font-size:14px;color:#ffffff;margin-top:4px;">First attempt score is official.</div>' if attempts == 0 else ''}
           {'<div style="font-size:14px;color:#ffa726;margin-top:4px;">⚠️ Retries are practice only — first score counts.</div>' if attempts > 0 and not passed else ''}
         </div>
         """, unsafe_allow_html=True)
@@ -854,12 +855,12 @@ else:
     with hcol2:
         st.markdown(f"""
         <div style="background:#12141a;border:1px solid #252836;border-radius:10px;padding:18px 20px;">
-          <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Network Biography</div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.75;">{net_info['bio']}</div>
+          <div style="font-size:15px;color:#ffffff;line-height:1.75;">{net_info['bio']}</div>
           <div style="margin-top:12px;">
-            <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
-            <div style="font-size:15px;color:#e0e2ea;">{net_info['hit_shows']}</div>
+            <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:6px;">SIGNATURE SHOWS</div>
+            <div style="font-size:15px;color:#ffffff;">{net_info['hit_shows']}</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -879,10 +880,10 @@ else:
             "mission": (
                 f"It's {LEVEL_START_YEAR['oxygen']}. Oxygen is bleeding — 20 true crime & reality shows, "
                 f"$95M budget, and a network on the edge of cancellation. Your mandate: turn it around "
-                f"before {_end_year['oxygen']}. Oxygen's <b style='color:#e8eaf0;'>True Crime shows amortize over 24 months</b> "
+                f"before {_end_year['oxygen']}. Oxygen's <b style='color:#ffffff;'>True Crime shows amortize over 24 months</b> "
                 "(about half their cost hits each year), while other shows expense over 12 months — more breathing "
                 "room than Bravo's reality-heavy slate. "
-                "Hit a <b style='color:#e8eaf0;'>12% OCF margin</b> to pass."
+                "Hit a <b style='color:#ffffff;'>12% OCF margin</b> to pass."
             ),
             "steps": [
                 "💰 <b>Financing</b> — see your revenue streams, set marketing spend",
@@ -899,9 +900,9 @@ else:
             "objective": f"Level 2 — {LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}. You've earned Bravo.",
             "mission": (
                 f"It's {LEVEL_START_YEAR['bravo']}. You now run both Oxygen and Bravo: 40 shows, "
-                "~$315M combined budget. Bravo uses a <b style='color:#e8eaf0;'>12-month amortization</b> — "
+                "~$315M combined budget. Bravo uses a <b style='color:#ffffff;'>12-month amortization</b> — "
                 "costs hit harder each year. Real Housewives and Top Chef are your cash cows. "
-                "Hit a <b style='color:#e8eaf0;'>15% OCF margin</b> to pass."
+                "Hit a <b style='color:#ffffff;'>15% OCF margin</b> to pass."
             ),
             "steps": [
                 "💰 <b>Financing</b> — separate Oxygen shows from Bravo, watch the combined budget",
@@ -917,9 +918,9 @@ else:
             "objective": f"Level 3 — {LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}. Launch Peacock.",
             "mission": (
                 f"It's {LEVEL_START_YEAR['peacock']}. Add SVOD to your portfolio. Peacock content uses "
-                "<b style='color:#e8eaf0;'>36-month amortization</b> and earns subscription LTV instead of ad revenue. "
+                "<b style='color:#ffffff;'>36-month amortization</b> and earns subscription LTV instead of ad revenue. "
                 "Linear revenue will keep eroding — Peacock is your hedge. "
-                "Hit a <b style='color:#e8eaf0;'>10% OCF margin</b> across all three networks to pass."
+                "Hit a <b style='color:#ffffff;'>10% OCF margin</b> across all three networks to pass."
             ),
             "steps": [
                 "💰 <b>Financing</b> — check the linear-vs-streaming economics chart",
@@ -936,8 +937,8 @@ else:
     brief = LEVEL_BRIEFS.get(net, LEVEL_BRIEFS["oxygen"])
     steps_html = "".join(
         f'<div style="display:flex;gap:8px;margin-bottom:5px;font-size:15px;">'
-        f'<span style="color:#e0e2ea;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
-        f'<span style="color:#e0e2ea;">{s}</span></div>'
+        f'<span style="color:#ffffff;font-family:DM Mono,monospace;min-width:16px;">{i+1}.</span>'
+        f'<span style="color:#ffffff;">{s}</span></div>'
         for i, s in enumerate(brief["steps"])
     )
     st.markdown(f"""
@@ -945,13 +946,13 @@ else:
          border-radius:8px;padding:16px 20px;margin-bottom:16px;">
       <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
         <div style="flex:2;min-width:260px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
           <div style="font-size:15px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
-          <div style="font-size:15px;color:#e0e2ea;line-height:1.7;">{brief['mission']}</div>
+          <div style="font-size:15px;color:#ffffff;line-height:1.7;">{brief['mission']}</div>
         </div>
         <div style="flex:1;min-width:220px;">
-          <div style="font-family:DM Mono,monospace;font-size:14px;color:#e0e2ea;
+          <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Suggested Order of Play</div>
           {steps_html}
         </div>
@@ -963,16 +964,16 @@ else:
     # supplements; every scored decision lives in the Simulation tab.
     st.markdown("""
     <div style="background:#12141a;border:1px solid #252836;border-left:3px solid #4fc3f7;
-         border-radius:8px;padding:14px 20px;margin-bottom:16px;font-size:15px;color:#e0e2ea;line-height:1.7;">
-      <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;
+         border-radius:8px;padding:14px 20px;margin-bottom:16px;font-size:15px;color:#ffffff;line-height:1.7;">
+      <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;
            text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Beyond the Simulation tab</div>
-      You make every scored decision in <b style="color:#e8eaf0;">📊 Simulation</b>. The other three tabs
+      You make every scored decision in <b style="color:#ffffff;">📊 Simulation</b>. The other three tabs
       are optional supplements. They don't change your score, but they help you understand it:
-      <b style="color:#e8eaf0;">💹 P&amp;L / OCF</b> breaks the current year into line items and a monthly
+      <b style="color:#ffffff;">💹 P&amp;L / OCF</b> breaks the current year into line items and a monthly
       cash view, so you can see exactly where margin is won or lost.
-      <b style="color:#e8eaf0;">📈 10-Yr Forecast</b> projects your current slate and marketing spend
+      <b style="color:#ffffff;">📈 10-Yr Forecast</b> projects your current slate and marketing spend
       over a longer horizon, using its own simplified model. It's a planning lens, not a prediction of
-      your score. <b style="color:#e8eaf0;">📖 Theory</b> explains the frameworks behind the game
+      your score. <b style="color:#ffffff;">📖 Theory</b> explains the frameworks behind the game
       (portfolio strategy, amortization, diversification) so you can explain <i>why</i> a decision works.
     </div>
     """, unsafe_allow_html=True)

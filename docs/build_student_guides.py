@@ -414,9 +414,9 @@ def build_movies():
 
     doc.add_heading("Quick start (read this first)", level=1)
     table(doc, ["", ""], [
-        ["**Your job**", "Greenlight one movie per cycle, decide how much to spend making and marketing it, and choose how to release it."],
+        ["**Your job**", "Run Universal Pictures' slate: greenlight **one new movie per cycle, 4 in all**. For each one you choose the concept (or revive a Universal classic), cast it, fund it, and release it."],
         ["**The goal**", "Build a slate with a **positive risk-adjusted NPV** (net present value). In short, your movies should be worth more than they cost, after accounting for risk."],
-        ["**How it's played**", "**5 films, one per cycle.** Each cycle covers 2 years: the first year you greenlight and produce (your t = 0 investment), the second you release. That's 10 in-game years."],
+        ["**How it's played**", "**4 films, one per cycle.** Each cycle covers 2 years: the first year you greenlight and produce (your t = 0 investment), the second you release. That's 8 in-game years."],
         ["**Time needed**", "About 25–45 minutes."],
         ["**What counts**", "Only your **first submitted score**. Practice runs don't count."],
     ], [1.5, 5.0])
@@ -433,10 +433,10 @@ def build_movies():
 
     doc.add_heading("The cycle loop", level=2)
     steps(doc, [
-        "**Read the recap** of last cycle (from cycle 2 on).",
-        "**Scroll down and make each decision**, section by section.",
-        "**Run the Theatrical Simulation** (required) and respond to anything it asks.",
-        "**Click ▶ Simulate → See Results**, read them, then click **→ Start [next cycle]**.",
+        "**Read the recap** of last cycle and your **🎬 Your Slate So Far** table (from cycle 2 on).",
+        "**Follow the step bar** at the top of the page: ① Partnerships ② Scouted Concepts ③ Festivals ④ Greenlight ⑤ Holding Deals ⑥ Release ⑦ Simulate. Click any step to jump to it; each gets a ✓ when it's done.",
+        "**Run the Theatrical Simulation** (part of step 6) and respond to anything it asks.",
+        "**Click ▶ Simulate → See Results** once every step has a ✓, read the results, then click **→ Start [next cycle]**.",
     ])
     callout(doc, "key",
             "Your studio starts with a **$3.5B** budget. If your movies average more than $20M NPV in a cycle, next cycle's budget grows 12%. "
@@ -447,25 +447,33 @@ def build_movies():
 
     page_break(doc)
     doc.add_heading("Step 2 — Make your decisions (one page per cycle)", level=1)
-    para(doc, "Sections appear in this order, top to bottom. Jump links at the top take you to any section. "
-              "**Most sections before Greenlight are optional**: they're ways to get a better movie or cheaper talent, and you can skip them.")
+    para(doc, "Sections appear in this order, top to bottom, numbered 1–7 to match the step bar. "
+              "**Every step is required.** The ▶ Simulate button stays locked until each one has a ✓, and the list under the button tells you exactly what's missing.")
 
     doc.add_heading("Distribution Pipeline — Slate Scorecard  (read only)", level=2)
     para(doc, "Shows where each of your earlier movies is now earning money (in theaters, PVOD, streaming, and so on).")
 
-    doc.add_heading("1 · Studio Partnerships  (optional)", level=2)
-    para(doc, "Sign a long-term deal with a production company. It boosts star power on every future movie in that company's specialty genre. "
-              "Click **Sign** to commit. **Watch out:** companies you pass on can be signed by a rival studio and lost for good.")
+    doc.add_heading("1 · Studio Partnerships  (required, sign once)", level=2)
+    para(doc, "Sign a long-term deal with a production company. Once signed it lasts your whole slate and gives every movie in that company's "
+              "specialty genre either **+Star Power** or **+Critical Reception**. Click **Sign** to commit. "
+              "**Watch out:** companies you wait on can be signed by a rival studio and lost for good.")
+    callout(doc, "key",
+            "**⭐ Star Power vs 🎭 Critical Reception.** Star Power means a bigger **opening weekend** (up to +30% at 100): "
+            "predictable money that arrives first. Critical Reception means **longer legs**: higher library value, theme-park "
+            "and merchandise eligibility (40+), and awards for Drama/Prestige (72+). Reviews are a random draw you can only "
+            "shift upward. Pick the partner that matches how your movies make money.")
 
-    doc.add_heading("Scouted Concepts  (optional)", level=2)
-    para(doc, "Your scouts bring you a few ready-made movie ideas. Click **Option This Concept** to pre-fill your Greenlight decision. "
-              "Ideas you skip may be taken by a rival studio before the next cycle.")
+    doc.add_heading("2 · Scouted Concepts  (required, option at least one)", level=2)
+    para(doc, "Your scouts bring you **6** ready-made movie ideas each cycle. Click **Option This Concept** on at least one; it fills in "
+              "your Greenlight form, and you can still change anything there. You still make only one movie per cycle, so optioning a "
+              "second idea just overwrites the form. Ideas you skip may be made by a rival studio before the next cycle.")
 
-    doc.add_heading("Film Festival Acquisitions  (optional)", level=2)
-    para(doc, "Bid on finished films at Sundance, TIFF, or Cannes. Enter a bid and click **Submit Bid**. "
-              "You may be outbid, and you'll learn the result next cycle.")
+    doc.add_heading("3 · Film Festival Acquisitions  (required, bid on at least one)", level=2)
+    para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Enter a bid on at least one and click "
+              "**Submit Bid**. Bids are sealed: rival studios bid too, and the highest bid wins and pays what it bid. You see the result "
+              "right away. A film you win joins your pipeline as an extra release; it does **not** use your greenlight slot.")
 
-    doc.add_heading("2 · Greenlight the Concept  (required)", level=2)
+    doc.add_heading("4 · Greenlight a New Movie  (required, one slot per cycle)", level=2)
     para(doc, "This is the core decision. It has three parts:")
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
@@ -474,13 +482,14 @@ def build_movies():
         "**Genre**: Action/Tentpole, Sci-Fi/Fantasy, Animated, Horror, Comedy, Drama, or Awards/Prestige. Big genres earn more overseas. Prestige genres can win awards.",
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",
-        "**Optional: 🔎 Pay for Research ($4M)**: a preview of how this concept is likely to perform before you commit.",
+        "**🏛️ Revive a Universal Library IP?**: bring back a title Universal already owns, such as Jaws, Back to the Future, The Mummy, Dracula, Shrek, Bourne, or The Purge. Its built-in audience lifts the opening (fully in its home genre, half as much outside it) and replaces Source Material's boost. There's no rights fee, but there is a **legacy fee** for original creators and cast. A short note on each title shows its history.",
+        "**Optional: 🔎 Pay for Research ($4M)**: a preview of this exact movie before you commit: audience demand, projected opening weekend, worldwide box office, critics' score, and NPV. The dollar figures update as you change budget, P&A, cast, and screens. Your title and pitch don't change the numbers.",
     ])
     doc.add_heading("💰 Capital", level=3)
     bullets(doc, [
         "**Production Budget ($M)**: what it costs to make the movie. **Budget buys quality.** A gold hint shows your genre's typical budget (about $150M for a tentpole, $15M for horror). Far below it, the film looks cheap and draws weaker audiences; above it, gains taper off.",
-        "**P&A / Marketing Spend ($M)**: prints and advertising. With no marketing, almost nobody shows up; past a point, extra spending barely moves the opening. Finding that sweet spot is part of the job.",
-        "**Star Power (0–100)**: bigger stars mean a bigger opening, and they cost money.",
+        "**P&A / Marketing Spend ($M)**: **Prints & Advertising**, meaning trailers, ad buys, publicity, and delivering the film to theaters. With no marketing, almost nobody shows up; past a point, extra spending barely moves the opening. Finding that sweet spot is part of the job.",
+        "**🎭 Lead Actor**: cast any actor you hold or signed in Holding Deals (step 5 of an earlier cycle). Casting them sets the film's Star Power to theirs and charges their fee; their relationship bonus applies only if the genre is one of their best. Otherwise choose **Unnamed cast** and set **Star Power (0–100)** yourself: bigger stars mean a bigger opening, and they cost money.",
         "**Planned Opening Screens** and **IMAX release**. A gold hint shows how many screens your genre's audience can fill. Booking more mostly adds empty seats.",
         "**Financing Structure**: **Self-Finance** (all the upside, all the risk). **Pre-Sale**: distributors pay a guaranteed advance about equal to your expected international take; they recoup it first and you get half of anything beyond it. That's insurance: worth it for risky films like horror, a bad trade for a likely hit. **Tax Incentive**: shoot where a government rebate lowers your cost.",
         "**AI Production Tools**: cheaper and faster, but they cap how well critics can rate the movie. An AI-tooled prestige film can be nominated for an Oscar but can't win.",
@@ -488,16 +497,18 @@ def build_movies():
     doc.add_heading("🌎 Distribution Strategy", level=3)
     para(doc, "Choose your **Exhibitor Posture**, which sets how hard you negotiate with theater owners. Aggressive keeps more of each ticket but gets you fewer screens. Exhibitor-Friendly gives up more of each ticket but gets you more screens. Standard sits in between.")
     callout(doc, "tip",
-            "Before you move on, check **Capital at Risk** and the **Projected Range** chart. Each Bear / Base / Bull bar is "
-            "what the movie's revenue is worth today **minus** Capital at Risk, so every extra $10M you commit pushes all three "
-            "bars down about $10M unless the movie earns it back. The chart assumes a wide release and no reviews yet. "
-            "If even the Base case is negative, rethink the plan.")
+            "Before you move on, check **Capital at Risk** and the **Projected Range** chart. It shows **three possible outcomes** "
+            "for this movie: **Bear** (a weak run), **Base** (the expected run), and **Bull** (a breakout). Each point is that outcome's "
+            "NPV: the movie's revenue in today's dollars **minus** Capital at Risk. Above $0 it makes money; below $0 it loses money. "
+            "Every extra $10M you commit pushes all three down about $10M unless the movie earns it back. The chart assumes a wide "
+            "release and no reviews yet. If even the Base case is negative, rethink the plan.")
 
-    doc.add_heading("Holding Deals  (optional)", level=2)
-    para(doc, "Reserve a specific actor for **next** cycle's movie. Click **Place Hold** for a single movie or **Multi-Picture** for several. "
-              "A rival may already have that actor booked, and even a confirmed hold can fall through.")
+    doc.add_heading("5 · Holding Deals  (required, except on your final film)", level=2)
+    para(doc, "Lock at least one actor for your **next** movie. Click **Place Hold** (cheap but risky: a rival may already have that actor "
+              "booked, and even a confirmed hold can fall through) or **Multi-Picture** (costs more, guaranteed for several cycles). "
+              "Next cycle, any actor you hold or signed appears in Greenlight's **🎭 Lead Actor** list so you can cast them.")
 
-    doc.add_heading("3 · Release Strategy  (required)", level=2)
+    doc.add_heading("6 · Release Strategy  (required)", level=2)
     steps(doc, [
         "**Pick a Debut Season.** Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
         "**Pick a release strategy** (from Cycle 3 on; Cycles 1–2 are Wide Theatrical only). **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens in about 600 theaters and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself, so it can win for horror and comedy.",
@@ -507,17 +518,20 @@ def build_movies():
         "**PVOD Market Acceptance Checks**: if viewers reject your price, choose **Hold** (keep the price and accept fewer sales) or **Cut** (lower the price to win back volume).",
     ])
     callout(doc, "warn",
-            "The **▶ Simulate** button stays greyed out until you've written a Logline, run the Theatrical Simulation, and answered any PVOD rejection. "
-            "If you can't click it, scroll up and look for the step you skipped.")
+            "**7 · Simulate.** The **▶ Simulate** button stays locked until every step in the bar has a ✓: a signed partnership, an optioned "
+            "concept, a festival bid, an actor hold (except on your final film), a Logline, and the Theatrical Simulation, plus an answer "
+            "to any PVOD rejection. The list under the button names each missing step.")
 
     page_break(doc)
     doc.add_heading("Step 3 — Read your results", level=1)
     bullets(doc, [
+        "**What you decided → What happened → Why**: your choices (concept, lead, money, release) next to the outcome (opening weekend, worldwide box office, critics, revenue, NPV), then one line per reason: how much Star Power and your source or revived IP added to the opening, whether audience demand came in weak, expected, or breakout, what the critics' score unlocked, and any random event by name.",
         "**NPV for the cycle**: did this movie create value?",
         "**Critical Reception**: what critics thought, which affects long-tail library sales and awards. It is separate from box office, so a hit can be panned and a flop can be praised.",
         "**Revenue Waterfall**: the money from each window (theaters, PVOD, streaming, TV, library).",
         "**Deal Waterfall — Who Gets Paid**: how much went to theaters, talent, and financing partners before you.",
         "**Surprises**: production trouble, word-of-mouth or piracy swings, and unexpected merchandise wins.",
+        "**🎬 Your Slate So Far**: one row per film you've made, so you can compare them side by side. Other teams' results are on the leaderboard.",
     ])
     para(doc, "Then click **→ Start [next cycle]**, or **← Redo** to replay that cycle.")
 
@@ -532,7 +546,7 @@ def build_movies():
         ["**Risk-adjusted NPV**", "45%", "+$200M average per movie", "Your movies create value after accounting for risk (plus a little luck)."],
         ["**Capital efficiency**", "20%", "6× revenue per marketing dollar", "You got a lot back for what you spent."],
         ["**Strategic fit**", "20%", "Genre, season, and release choices that fit together", "Your decisions make sense as a set."],
-        ["**Portfolio diversification**", "15%", "A varied slate across cycles", "Don't make the same movie five times."],
+        ["**Portfolio diversification**", "15%", "A varied slate across cycles", "Don't make the same movie four times."],
     ], [1.6, 0.7, 2.0, 2.2])
 
     doc.add_heading("Common mistakes", level=1)
@@ -542,8 +556,10 @@ def build_movies():
         "**Maxing out P&A or screens.** Past the genre's sweet spot you're paying for empty seats.",
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
-        "**Five sequels in a row.** Franchise fatigue is real, and your diversification score drops.",
+        "**Sequel after sequel.** Franchise fatigue is real, and your diversification score drops.",
         "**Forgetting the Theatrical Simulation.** You can't Simulate until you've run it.",
+        "**Missing a required step.** If ▶ Simulate is locked, check the step bar at the top for a step without a ✓.",
+        "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
         "**Submitting too early.** Your first submission is your official score.",
     ])
 
@@ -557,6 +573,7 @@ def build_movies():
         ["**PVOD**", "Premium video on demand: renting or buying at home while the film is still new."],
         ["**Pay-1 / Pay-2**", "The first and second streaming or pay-TV licensing windows after release."],
         ["**Day-and-Date**", "Releasing in theaters and on streaming on the same day."],
+        ["**Library IP**", "A title Universal already owns (Jaws, Shrek, The Mummy...). Reviving one brings a built-in audience and a legacy fee."],
         ["**Cannibalization**", "When one window steals sales from another. For example, streaming early cuts box office."],
     ], [1.6, 4.9])
 

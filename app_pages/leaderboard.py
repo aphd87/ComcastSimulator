@@ -109,7 +109,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
 
     if not board:
         st.markdown("""
-        <div style="text-align:center;padding:40px;color:#e0e2ea;
+        <div style="text-align:center;padding:40px;color:#ffffff;
              font-family:DM Mono,monospace;font-size:15px;">
           No submissions yet in this scope.
         </div>
@@ -124,7 +124,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
             mc   = RANK_COLORS.get(entry["rank"], TEXT2)
             glow_class = "crown-glow" if entry["rank"] == 1 else ""
             abbrev      = entry.get("class_abbrev", "")
-            school_line = (f'<div style="font-size:14px;color:#e0e2ea;margin-top:2px;">'
+            school_line = (f'<div style="font-size:14px;color:#ffffff;margin-top:2px;">'
                             f'{entry.get("school","")} · {entry.get("class_section","")}'
                             f'{f" ({abbrev})" if abbrev else ""}</div>'
                             if show_school_col else "")
@@ -139,7 +139,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
               <div style="font-family:DM Serif Display,serif;font-size:32px;color:{mc};">
                 {entry['total_score']:.0f}
               </div>
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                 pts · {entry['networks_completed']} network{'s' if entry['networks_completed']!=1 else ''}
               </div>
             </div>
@@ -149,7 +149,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
     st.markdown('<div class="section-title">Full Rankings — Combined Oxygen + Bravo + Peacock</div>', unsafe_allow_html=True)
 
     for entry in board:
-        rank_c = RANK_COLORS.get(entry["rank"], "#e8eaf0")
+        rank_c = RANK_COLORS.get(entry["rank"], "#ffffff")
         icon   = RANK_ICONS.get(entry["rank"], f"#{entry['rank']}")
         is_me  = entry["team_name"] == team
         bg     = "rgba(232,197,71,.08)" if is_me else "#1a1d26"
@@ -165,12 +165,12 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
         # of HTML (reported by the user seeing raw markup on the Leaderboard
         # "Full Rankings" list). An empty-but-valid <div></div> keeps the
         # line non-blank without changing anything visually.
-        school_tag = (f'<div style="font-size:14px;color:#e0e2ea;margin-top:1px;">'
+        school_tag = (f'<div style="font-size:14px;color:#ffffff;margin-top:1px;">'
                        f'{entry.get("school","")} · {entry.get("class_section","")}'
                        f'{f" ({abbrev})" if abbrev else ""}</div>'
                        if show_school_col else "<div></div>")
         breakdown_badges = "".join(
-            f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#e0e2ea;">'
+            f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;">'
             f'{NETWORK_INFO[net]["display_name"]}: {score:.0f}</span>'
             for net, score in entry["breakdown"].items()
         )
@@ -182,7 +182,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
                  color:{rank_c};min-width:32px;font-weight:700;">{icon}</div>
             <div style="flex:1;">
               <div style="font-size:15px;font-weight:600;
-                   color:{'#e8c547' if is_me else '#e8eaf0'};">
+                   color:{'#e8c547' if is_me else '#ffffff'};">
                 {entry['team_name']} {'← YOU' if is_me else ''}
               </div>
               {school_tag}
@@ -192,7 +192,7 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
               <div style="font-family:DM Serif Display,serif;font-size:20px;color:{rank_c};">
                 {entry['total_score']:.0f}
               </div>
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                 {entry['networks_completed']}/{len(NETWORK_ORDER)} networks
               </div>
             </div>
@@ -211,7 +211,7 @@ def _render_board_tab(team: str, net: str, info: dict,
 
     if not board:
         st.markdown(f"""
-        <div style="text-align:center;padding:40px;color:#e0e2ea;
+        <div style="text-align:center;padding:40px;color:#ffffff;
              font-family:DM Mono,monospace;font-size:15px;">
           No submissions yet for {info['display_name']} in this scope.
         </div>
@@ -229,7 +229,7 @@ def _render_board_tab(team: str, net: str, info: dict,
             passes = "✅" if entry["passed"] else "❌"
             glow_class = "crown-glow" if entry["rank"] == 1 else ""
             abbrev      = entry.get("class_abbrev", "")
-            school_line = (f'<div style="font-size:14px;color:#e0e2ea;margin-top:2px;">'
+            school_line = (f'<div style="font-size:14px;color:#ffffff;margin-top:2px;">'
                             f'{entry.get("school","")} · {entry.get("class_section","")}'
                             f'{f" ({abbrev})" if abbrev else ""}</div>'
                             if show_school_col else "")
@@ -244,8 +244,8 @@ def _render_board_tab(team: str, net: str, info: dict,
               <div style="font-family:DM Serif Display,serif;font-size:32px;color:{mc};">
                 {entry['score']:.0f}
               </div>
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">pts</div>
-              <div style="margin-top:8px;font-size:14px;color:#e0e2ea;">{passes} · {ts}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">pts</div>
+              <div style="margin-top:8px;font-size:14px;color:#ffffff;">{passes} · {ts}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -255,7 +255,7 @@ def _render_board_tab(team: str, net: str, info: dict,
     st.markdown('<div class="section-title">Full Rankings — Official Scores</div>', unsafe_allow_html=True)
 
     for entry in board:
-        rank_c = RANK_COLORS.get(entry["rank"], "#e8eaf0")
+        rank_c = RANK_COLORS.get(entry["rank"], "#ffffff")
         icon   = RANK_ICONS.get(entry["rank"], f"#{entry['rank']}")
         is_me  = entry["team_name"] == team
         bg     = "rgba(232,197,71,.08)" if is_me else "#1a1d26"
@@ -279,7 +279,7 @@ def _render_board_tab(team: str, net: str, info: dict,
         # of HTML (reported by the user seeing raw markup on the Leaderboard
         # "Full Rankings" list). An empty-but-valid <div></div> keeps the
         # line non-blank without changing anything visually.
-        school_tag = (f'<div style="font-size:14px;color:#e0e2ea;margin-top:1px;">'
+        school_tag = (f'<div style="font-size:14px;color:#ffffff;margin-top:1px;">'
                        f'{entry.get("school","")} · {entry.get("class_section","")}'
                        f'{f" ({abbrev})" if abbrev else ""}</div>'
                        if show_school_col else "<div></div>")
@@ -297,7 +297,7 @@ def _render_board_tab(team: str, net: str, info: dict,
                  color:{rank_c};min-width:32px;font-weight:700;">{icon}</div>
             <div style="flex:1;">
               <div style="font-size:15px;font-weight:600;
-                   color:{'#e8c547' if is_me else '#e8eaf0'};">
+                   color:{'#e8c547' if is_me else '#ffffff'};">
                 {entry['team_name']} {'← YOU' if is_me else ''}
               </div>
               {school_tag}
@@ -310,13 +310,13 @@ def _render_board_tab(team: str, net: str, info: dict,
               <div style="font-family:DM Serif Display,serif;font-size:20px;color:{bar_c};">
                 {entry['score']:.0f}
               </div>
-              <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                 {passes} · {ts} · {attempts_used}/{MAX_ATTEMPTS} used
               </div>
             </div>
           </div>
           {'<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;">' +
-           ''.join([f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#e0e2ea;">{k}: {v:.0f}</span>'
+           ''.join([f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;">{k}: {v:.0f}</span>'
                     for k,v in details.items() if k not in ("total","passed")]) +
            '</div>' if details else '<div></div>'}
           {notables_html or '<div></div>'}
@@ -336,7 +336,7 @@ def _render_board_tab(team: str, net: str, info: dict,
             if slate:
                 for item in slate:
                     st.markdown(
-                        f'<div style="font-size:14px;color:#e0e2ea;padding:3px 0;'
+                        f'<div style="font-size:14px;color:#ffffff;padding:3px 0;'
                         f'border-bottom:1px solid rgba(37,40,54,.4);">{_format_slate_item(item)}</div>',
                         unsafe_allow_html=True)
             else:
@@ -354,7 +354,7 @@ def _render_board_tab(team: str, net: str, info: dict,
             marker_color=colors, opacity=0.8,
             text=[f"{s:.0f}" for s in scores],
             textposition="outside",
-            textfont=dict(size=11, color="#e8eaf0"),
+            textfont=dict(size=11, color="#ffffff"),
         ))
         # Highlight my team
         if team in teams:
@@ -385,10 +385,10 @@ def _render_board_tab(team: str, net: str, info: dict,
                 st.markdown(f"""
                 <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
                      padding:12px;margin-bottom:10px;height:100%;">
-                  <div style="font-size:13px;color:#e0e2ea;font-family:DM Mono,monospace;
+                  <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;
                        margin-bottom:4px;">{award['title']}</div>
                   <div style="font-size:16px;font-weight:600;color:#e8c547;">{award['team']}</div>
-                  <div style="font-size:14px;color:#e0e2ea;font-family:DM Mono,monospace;">{award['value']}</div>
+                  <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">{award['value']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -405,7 +405,7 @@ def _render_school_comparison(all_nets: list, all_infos: dict):
     rollup = get_school_rollup(net)
     if len(rollup) < 2:
         st.markdown(
-            '<div style="text-align:center;padding:30px;color:#e0e2ea;font-family:DM Mono,monospace;font-size:15px;">'
+            '<div style="text-align:center;padding:30px;color:#ffffff;font-family:DM Mono,monospace;font-size:15px;">'
             'Only one school has submitted so far — comparison needs at least two.</div>',
             unsafe_allow_html=True)
         if rollup:
@@ -425,7 +425,7 @@ def _render_school_comparison(all_nets: list, all_infos: dict):
         x=[r["school"] for r in rollup], y=[r["avg_score"] for r in rollup],
         marker_color=[ACCENT if i == 0 else ACCENT2 for i in range(len(rollup))],
         text=[f"{r['avg_score']:.0f}" for r in rollup], textposition="outside",
-        textfont=dict(size=11, color="#e8eaf0"),
+        textfont=dict(size=11, color="#ffffff"),
     ))
     fig.update_layout(**base_layout(f"Avg Score by School — {all_infos[net]['display_name']}", height=280))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -437,8 +437,8 @@ def render():
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
-         border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:15px;color:#e0e2ea;">
-    🏆 <b style="color:#e8eaf0;">Official Leaderboard:</b> Rankings use your <b>first attempt only</b>.
+         border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">
+    🏆 <b style="color:#ffffff;">Official Leaderboard:</b> Rankings use your <b>first attempt only</b>.
     Retries are practice — they don't change your leaderboard position.
     FERPA: Only team names (student-chosen pseudonyms) are stored — no student IDs or names.
     </div>
@@ -467,7 +467,7 @@ def render():
 
             with cols[i]:
                 border_c = info["color"] if pas else ("#252836")
-                score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#e0e2ea")
+                score_c  = "#66bb6a" if pas else ("#ffa726" if att > 0 else "#ffffff")
                 st.markdown(f"""
                 <div style="background:#1a1d26;border:2px solid {border_c};border-radius:10px;
                      padding:16px;text-align:center;">
@@ -476,7 +476,7 @@ def render():
                        color:{info['color2']};">{info['display_name']}</div>
                   <div style="font-family:DM Serif Display,serif;font-size:28px;
                        color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
-                  <div style="font-size:14px;font-family:DM Mono,monospace;color:#e0e2ea;">
+                  <div style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;">
                     {'OFFICIAL SCORE' if off else 'NOT SUBMITTED'}
                   </div>
                   <div style="margin-top:8px;">
@@ -584,4 +584,4 @@ def render():
             help="FERPA: Contains team names only — no student PII."
         )
     else:
-        st.markdown('<div style="color:#e0e2ea;font-family:DM Mono,monospace;font-size:15px;">No submissions recorded yet.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#ffffff;font-family:DM Mono,monospace;font-size:15px;">No submissions recorded yet.</div>', unsafe_allow_html=True)

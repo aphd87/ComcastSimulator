@@ -153,6 +153,16 @@ def _movies_app_script(team_name):
     if "movie_draft" not in st.session_state:
         st.session_state.movie_draft = {
             "logline": "A stranded astronaut must out-think a planet that's trying to kill her."}
+        # Partnerships / Scouted / Festivals / Holding Deals are required
+        # before Simulate (2026-10-05) -- seed each as already done so these
+        # tests stay focused on the theatrical-run gate.
+        from utils.movie_models import generate_festival_slate, resolve_festival_acquisition_outcome
+        film = generate_festival_slate(team_name, 1)[0]
+        st.session_state.movie_overall_deal = "afterdark"
+        st.session_state.movie_scouted_optioned = {"1_0"}
+        st.session_state.movie_festival_log = {
+            film["id"]: resolve_festival_acquisition_outcome(film, "You", film["asking_anchor_m"])}
+        st.session_state.movie_talent_holds = {"kade": {"status": "pending", "cycle_placed": 1}}
     import app_pages.movies as movies
     movies.render()
 
@@ -667,7 +677,31 @@ def test_simulate_stays_locked_without_a_logline():
     _mini_run_button(at).click().run()
     assert not at.exception, list(at.exception)
     assert _simulate_button(at).disabled is True
-    assert any("Write a Logline" in c.value for c in at.caption)
+    assert any("write your Pitch / Logline" in c.value for c in at.caption)
     at.text_area(key="movie_logline_1").set_value(
         "A disgraced robot hunter must stop the machines he once built from taking the city.").run()
     assert _simulate_button(at).disabled is False
+
+
+# ── Required steps gate Simulate (2026-10-05) ────────────────────────────────
+def _bare_app_script(team_name):
+    import streamlit as st
+    import sys
+    sys.path.insert(0, ".")
+    st.session_state.team_name = team_name
+    if "movie_draft" not in st.session_state:
+        st.session_state.movie_draft = {
+            "logline": "A stranded astronaut must out-think a planet that's trying to kill her."}
+    import app_pages.movies as movies
+    movies.render()
+
+
+def test_simulate_stays_locked_until_partnerships_scouted_festivals_and_holds_are_done():
+    at = AppTest.from_function(_bare_app_script, default_timeout=30, args=("Gate AppTest Team",))
+    at.run()
+    _mini_run_button(at).click().run()
+    assert not at.exception, list(at.exception)
+    assert _simulate_button(at).disabled is True
+    captions = " ".join(c.value for c in at.caption)
+    for step in ("Partnerships", "Scouted Concepts", "Festivals", "Holding Deals"):
+        assert step in captions
