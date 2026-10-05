@@ -440,7 +440,7 @@ def build_movies():
     ])
     callout(doc, "key",
             "Your studio starts with a **$3.5B** budget. If your movies average more than $20M NPV in a cycle, next cycle's budget grows 12%. "
-            "If they lose money, it shrinks 15%. Discipline now buys you room later.")
+            "If they lose money, it shrinks 15%.")
 
     page_break(doc)
     sign_in_section(doc, "→ Start Movies", movies=True)
