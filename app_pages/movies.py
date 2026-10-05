@@ -491,7 +491,7 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
             "Source / IP":     UNIVERSAL_LIBRARY_IP[ip]["name"] if ip in UNIVERSAL_LIBRARY_IP
                                else kw.get("source_material", "Original Screenplay"),
             "Lead":            TALENT_PARTNERS[lead]["name"] if lead in TALENT_PARTNERS
-                               else f"Unnamed (Star Power {kw['star_power']})",
+                               else f"Unnamed (Star Power {kw['star_power']:.0f})",
             "Release":         RELEASE_LABELS.get(kw["release_strategy"], kw["release_strategy"]),
             "Run (days)":      p.window_days(),
             "Capital at Risk": f"${r['capital_at_risk']:.0f}M",
@@ -1288,7 +1288,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                         # Credit the acquisition to this cycle's film: its
                         # risk-adjusted value for the decision part, its
                         # actual NPV for the luck part.
-                        _book_deal(ss, f"Won {outcome['festival_name']}: {outcome['title']}",
+                        _book_deal(ss, f"Festival film: {outcome['title']}",
                                    risk_adjusted_npv(MovieProject(**outcome["project_kwargs"]),
                                                      outcome["critical_score"]),
                                    outcome["npv"])
@@ -2832,8 +2832,8 @@ def _decision_result_card(result: dict, ss=None):
     ip = kw.get("library_ip")
     source = (UNIVERSAL_LIBRARY_IP[ip]["name"] + " (revived)") if ip in UNIVERSAL_LIBRARY_IP \
         else kw.get("source_material", "Original Screenplay")
-    lead_txt = (f"{TALENT_PARTNERS[lead]['name']} (Star Power {kw['star_power']})" if lead in TALENT_PARTNERS
-                else f"Unnamed cast (Star Power {kw['star_power']})")
+    lead_txt = (f"{TALENT_PARTNERS[lead]['name']} (Star Power {kw['star_power']:.0f})" if lead in TALENT_PARTNERS
+                else f"Unnamed cast (Star Power {kw['star_power']:.0f})")
     decisions = [
         ("Concept", f"{kw['genre']} · {kw.get('concept_type', 'New IP')} · {source}"),
         ("Lead", lead_txt),
@@ -2853,7 +2853,7 @@ def _decision_result_card(result: dict, ss=None):
 
     why = []
     star_boost = 1 + (kw["star_power"] / 100) * STAR_POWER_BOOST_MAX
-    why.append(f"⭐ Star Power {kw['star_power']} added about ${opening - opening / star_boost:,.1f}M "
+    why.append(f"⭐ Star Power {kw['star_power']:.0f} added about ${opening - opening / star_boost:,.1f}M "
                f"to the opening weekend.")
     src_boost = (library_ip_opening_boost(ip, kw["genre"]) if ip in UNIVERSAL_LIBRARY_IP
                  else SOURCE_OPENING_BOOST.get(kw.get("source_material"), 1.0))
@@ -2874,7 +2874,7 @@ def _decision_result_card(result: dict, ss=None):
     elif cs < THEME_PARK_CRITICAL_GATE:
         park = f"no theme-park/merch (critics under {THEME_PARK_CRITICAL_GATE})"
     else:
-        park = "no theme-park/merch (box office below the expected run)"
+        park = "no theme-park/merch (box office came in just under the expected-run bar parks need)"
     why.append(f"🎭 Critics at {cs:.0f}: catalog value {0.7 + cs / 100 * 1.1:.1f}x; {park}"
                + ("; 🏆 awards bump" if result.get("awards_contender") else "") + ".")
     deals = (ss.get("movie_deal_ledger", {}).get(result["cycle"], []) if ss is not None else [])

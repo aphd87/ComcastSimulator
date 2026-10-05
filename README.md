@@ -113,7 +113,7 @@ At registration each teammate picks a role. **🎮 Driver** makes every decision
 - **Deals count in the score** (fees subtract, festival films and attractions add), shown as a Deals column in Your Slate.
 - **Clearer results:** "What you decided → What happened → Why"; Your Slate table; Distribution Pipeline gained a Description column and is now a collapsed panel.
 - **Real competitor names**, with simulated-behavior wording; all text in the Movies section is white.
-- **Fixes:** Research could reveal every genre's draw from one purchase; festival bids raised the acquired film's own quality; incoherent concepts (e.g. Horror · Family/Kids); several display bugs.
+- **Fixes:** festival films were priced off production budget alone, so lowball bids won risk-free (prices now track each film's value); Research could reveal every genre's draw from one purchase; festival bids raised the acquired film's own quality; incoherent concepts (e.g. Horror · Family/Kids); several display bugs.
 - Student guide and instructor plan updated to match.
 
 ## Changes on 2026-10-01

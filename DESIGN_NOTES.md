@@ -20,6 +20,8 @@ This doc captures the original design intent (from Zach's mechanics brief) recon
 
 **Real bugs fixed.** One $4M Research purchase revealed the seeded draw for every Genre / Concept Type as the dropdowns changed (now locked to what was bought). A festival bid raised the acquired film's own production value, making overbidding self-justifying (`production_budget_m` separates cost-to-make from price paid). Scouted / festival generators paired incoherent concepts (`coherent_concept_type`). On Streamlit 1.45, live NPVs inside selectbox labels reset the student's pick (labels are now static). Streamlit Cloud served a stale `app_pages/movies.py` after pushes: reboot the app after any push touching `app_pages/`.
 
+**Full QA pass (same day).** Live deploy verified current after reboot; the QA test team left no rows in the live DB. Full 4-film local play-through to Submit + Leaderboard + Pitch Board, TV smoke test. Found and fixed a **festival exploit**: asking prices came from production budget alone, so bidding ~70% of the displayed break-even won ~80% of auctions risk-free (~+$20M/cycle, now counted in the score). Prices now track value (`FESTIVAL_PRICE_TO_VALUE_RANGE` x expected-run break-even, own seed per film): lowballing wins ~6%, the best strategy (~90-100% of break-even) earns ~+$3M/cycle with real downside.
+
 **Also:** real competitor names (Disney, Warner Bros., Paramount, Sony Pictures; Netflix, Amazon Prime Video, Apple TV+, HBO Max) with neutral wording and a "simulated" disclosure; all text white in the Movies section; the Distribution Pipeline has a Description column and is a collapsed panel.
 
 ## 2026-08-25 session — Full live-browser QA playthrough, a real Leaderboard bug fix, and Supplementary Insights chart consolidation

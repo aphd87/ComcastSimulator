@@ -1847,3 +1847,24 @@ def test_attraction_offers_scale_with_franchise_and_reviews():
     assert attraction_offer("New IP", 5000, 50)["cost"] == ATTRACTION_COST_RANGE[1]
     assert new_ip["p10"] < new_ip["expected"] < new_ip["p90"]
     assert draw_attraction_payoff_mult("T", 2) == draw_attraction_payoff_mult("T", 2)
+
+
+def test_festival_lowball_bids_rarely_win_now_that_prices_track_value():
+    # QA 2026-10-05: prices came from production budget alone, so bidding ~70% of the
+    # shown break-even won ~80% of auctions with no downside. Prices now track value.
+    from utils.movie_models import (generate_festival_slate, festival_breakeven_bids,
+                                    draw_festival_acquisition_bids, resolve_festival_acquisition,
+                                    FESTIVAL_PRICE_TO_VALUE_RANGE)
+    wins = n = 0
+    for i in range(120):
+        for c in (1, 2):
+            for f in generate_festival_slate(f"Lowball{i}", c):
+                value = festival_breakeven_bids(f)[1]
+                if value <= 0:
+                    continue
+                lo, hi = FESTIVAL_PRICE_TO_VALUE_RANGE
+                assert lo * value - 0.1 <= f["asking_anchor_m"] <= hi * value + 0.1 or f["asking_anchor_m"] == 1.0
+                rivals = draw_festival_acquisition_bids(f"Lowball{i}", c, f["id"], f["asking_anchor_m"])
+                wins += resolve_festival_acquisition(0.7 * value, rivals)["team_won"]
+                n += 1
+    assert wins / n < 0.25

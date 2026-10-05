@@ -2826,7 +2826,22 @@ def generate_festival_slate(team_name: str, cycle: int) -> list[dict]:
             "logline":         SCOUTED_LOGLINE_BY_GENRE.get(genre, "A festival favorite looking for a distributor."),
             "asking_anchor_m": festival_acquisition_anchor_m(budget, critical_score),
         })
+        # 2026-10-05 QA: price the market off what the film is actually
+        # worth. Asking prices used to come from the production budget
+        # alone, so most films sold far below value and bidding ~70% of the
+        # shown break-even won ~80% of auctions with no downside. Now each
+        # film asks FESTIVAL_PRICE_TO_VALUE_RANGE x its expected-run
+        # break-even (own seed per film): some bargains, some overpriced,
+        # and rivals bid around that, so a real edge has to be earned.
+        price_rng = np.random.default_rng((stable_seed(film_id) + stable_seed(team_name) % 9973 + 5821) % (2 ** 31))
+        expected_value = festival_breakeven_bids(slate[-1])[1]
+        if expected_value > 0:
+            lo, hi = FESTIVAL_PRICE_TO_VALUE_RANGE
+            slate[-1]["asking_anchor_m"] = round(max(1.0, expected_value * float(price_rng.uniform(lo, hi))), 1)
     return slate
+
+
+FESTIVAL_PRICE_TO_VALUE_RANGE = (0.75, 1.10)   # asking price / expected-run break-even
 
 
 def draw_festival_acquisition_bids(team_name: str, cycle: int, film_id: str, anchor_value_m: float,
