@@ -394,7 +394,9 @@ SOURCE_OPENING_BOOST = {
 # source), so the two never stack. Revived outside its home genre(s), only
 # half the awareness carries over -- fans show up for the thing they
 # remember. Boost and fee values are illustrative teaching calibrations,
-# not studio data.
+# not studio data. Each title can be revived once per slate (the UI drops
+# titles already used) -- otherwise the biggest one would be the answer
+# every cycle.
 LIBRARY_IP_OFF_GENRE_SHARE = 0.5
 UNIVERSAL_LIBRARY_IP = {
     "dracula": {"name": "Dracula (Universal Monsters)", "genres": ["Horror"],
@@ -410,11 +412,11 @@ UNIVERSAL_LIBRARY_IP = {
               "note": "The 1999 adventure was a global hit; the 2017 reboot underperformed and ended the planned "
                       "Dark Universe. Strong awareness, mixed recent track record."},
     "jaws": {"name": "Jaws", "genres": ["Horror", "Action/Tentpole"],
-             "opening_boost": 1.22, "legacy_fee_m": 10.0,
+             "opening_boost": 1.22, "legacy_fee_m": 18.0,
              "note": "The original 1975 summer blockbuster. No new film since Jaws: The Revenge (1987). "
                      "Enormous recognition, enormous expectations."},
     "bttf": {"name": "Back to the Future", "genres": ["Sci-Fi/Fantasy", "Comedy"],
-             "opening_boost": 1.28, "legacy_fee_m": 15.0,
+             "opening_boost": 1.28, "legacy_fee_m": 35.0,
              "note": "Trilogy ended in 1990, and its creators have publicly resisted a remake. The biggest "
                      "built-in audience on this list, and the steepest legacy fee."},
     "land_before_time": {"name": "The Land Before Time", "genres": ["Animated"],
@@ -425,7 +427,7 @@ UNIVERSAL_LIBRARY_IP = {
                "opening_boost": 1.08, "legacy_fee_m": 2.0,
                "note": "Universal's 1995 family hit. Warm nostalgia, modest awareness with today's kids."},
     "shrek": {"name": "Shrek (DreamWorks Animation)", "genres": ["Animated", "Comedy"],
-              "opening_boost": 1.25, "legacy_fee_m": 12.0,
+              "opening_boost": 1.25, "legacy_fee_m": 28.0,
               "note": "Came to NBCUniversal with DreamWorks Animation (2016); no main-series film in theaters "
                       "since 2010. A four-quadrant powerhouse whose returning voice cast is expensive."},
     "bourne": {"name": "Bourne", "genres": ["Action/Tentpole"],

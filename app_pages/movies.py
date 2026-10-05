@@ -1501,12 +1501,15 @@ def _decisions(ss):
 
         gc3, gc4 = st.columns(2)
         # Universal Library IP (2026-10-05): revive a title the studio already owns.
-        ip_keys = [None] + list(UNIVERSAL_LIBRARY_IP)
+        # Each library title can be revived once per slate.
+        used_ips = {r["project_kwargs"].get("library_ip") for r in ss.movie_log if r["cycle"] != ss.movie_cycle}
+        ip_keys = [None] + [k for k in UNIVERSAL_LIBRARY_IP if k not in used_ips]
         library_ip = gc4.selectbox(
             "🏛️ Revive a Universal Library IP?", ip_keys,
             index=ip_keys.index(d.get("library_ip")) if d.get("library_ip") in ip_keys else 0,
             format_func=lambda k: "No — a new property" if k is None else UNIVERSAL_LIBRARY_IP[k]["name"],
-            help="Universal already owns these, so there's no rights fee, but reviving one carries a legacy "
+            help="Each title can be revived once per slate. "
+                 "Universal already owns these, so there's no rights fee, but reviving one carries a legacy "
                  "fee (original creators' and estates' participations, legacy cast). Its built-in audience "
                  "replaces Source Material's boost. Revived outside its home genre, only half that audience "
                  "shows up.",
