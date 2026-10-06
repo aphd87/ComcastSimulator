@@ -1034,7 +1034,7 @@ def test_direct_to_peacock_release_offers_a_goal_and_no_rental_or_licensing_cell
     at = _movies_app_at_cycle_3()
     _selectbox(at, "Release Strategy").set_value("direct_to_peacock").run()
     assert not at.exception, list(at.exception)
-    goal = _selectbox(at, "Peacock goal")
+    goal = next(r for r in at.radio if r.label.startswith("🎯 Peacock goal"))
     assert goal.value == "acquisition" and set(goal.options) == {"🎯 Acquisition", "🛡️ Retention"}
     assert not any(n.label == "Theatrical Run Length (days)" for n in at.number_input)
     assert any("Run Release Simulation" in b.label for b in at.button)

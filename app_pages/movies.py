@@ -1527,6 +1527,10 @@ div[data-testid="stElementContainer"]:has(.slate-strip), div.element-container:h
 }
 .slate-strip { background: #0b0c10; border-bottom: 1px solid #252836; padding: 8px 0 8px; }
 a[id] { scroll-margin-top: 11rem; }   /* step-chip jumps land below the pinned strip */
+/* The main action buttons (Greenlight, Run Simulation, Simulate) stand out. */
+.stButton button[kind="primary"], button[data-testid="stBaseButton-primary"] {
+    border: 2px solid #e8c547 !important; font-weight: 600 !important;
+}
 div[data-testid="stColumn"]:has(.eq-card) > div, div[data-testid="column"]:has(.eq-card) > div,
 div[data-testid="stColumn"]:has(.eq-card) div[data-testid="stVerticalBlock"],
 div[data-testid="column"]:has(.eq-card) div[data-testid="stVerticalBlock"] { height: 100%; }
@@ -2419,15 +2423,14 @@ def _decisions(ss):
     if chosen in NO_THEATERS:
         theatrical_run_days = None
         if chosen == "direct_to_peacock":
+            # The goal itself is a full-width toggle under the table (the
+            # narrow Run cell was too small to read a dropdown); this cell
+            # just shows the current pick.
             goal_key = f"peacock_goal_{ss.movie_cycle}"
             if ss.get(goal_key) not in PEACOCK_GOALS:
                 ss[goal_key] = peacock_goal if peacock_goal in PEACOCK_GOALS else "acquisition"
-            peacock_goal = current_row[3].selectbox(
-                "Peacock goal", list(PEACOCK_GOALS), key=goal_key, label_visibility="collapsed",
-                format_func=lambda g: GOAL_LABELS[g],
-                help="Acquisition: pull in NEW subscribers; marketing has to reach people without Peacock, so it "
-                     "needs a big P&A push. Retention: keep EXISTING subscribers; in-app promotion is cheap, so a "
-                     "small P&A spend gets most of the value.")
+            peacock_goal = ss[goal_key]
+            _cell(current_row[3], f"<span style='font-size:12px;'>{GOAL_LABELS[peacock_goal]}</span>")
         else:
             _cell(current_row[3], "—")
         ss.movie_draft["peacock_goal"] = peacock_goal
@@ -2569,6 +2572,12 @@ def _decisions(ss):
         notes.append(f"{season_recall:.0%} awards recall")
     if not windowing_unlocked:
         notes.append(f"🔒 Platform and Day-and-Date unlock {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}")
+    if chosen == "direct_to_peacock":
+        st.radio("🎯 Peacock goal for this film", list(PEACOCK_GOALS), key=f"peacock_goal_{ss.movie_cycle}",
+                 horizontal=True, format_func=lambda g: GOAL_LABELS[g],
+                 help="Acquisition: pull in NEW subscribers; marketing has to reach people without Peacock, so it "
+                      "needs a big P&A push and works best for broad, big-scale films. Retention: keep EXISTING "
+                      "subscribers; in-app promotion is cheap, so a small P&A spend gets most of the value.")
     if theatrical_run_days is not None:
         notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
                      f"box office")
