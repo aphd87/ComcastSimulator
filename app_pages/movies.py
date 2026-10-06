@@ -2512,6 +2512,11 @@ def _decisions(ss):
             ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
             st.rerun()
     if pay2_notes:
+        # Industry context (2026-10-05, per explicit user request).
+        pay2_notes.insert(0, "📖 <b>Why Pay-2 matters:</b> it opens after Pay-1 ends, roughly 4 years after release here. "
+                             "By then the film's production budget and P&A were paid long ago, so a Pay-2 licence fee is "
+                             "almost pure, high-margin profit. Rival streamers like Pay-2 rights because they get a recent "
+                             "hit for a fraction of a Pay-1 price.")
         st.markdown('<div style="font-size:13px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
                     + '</div>', unsafe_allow_html=True)
 
@@ -2675,6 +2680,16 @@ def _decisions(ss):
     if chosen != "day_and_date" and resolved_entry is not None:
         st.markdown('<div class="section-title mt-3" style="font-size:13px;">🏷️ Pay-1: Shop It to Competitive Bidders '
                     '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+        # Industry context (2026-10-05, per explicit user request).
+        st.markdown(
+            '<div style="font-size:13px;line-height:1.55;margin-bottom:6px;">📖 <b>How Pay-1 works in the industry.</b> '
+            'Pay-1 is the first exclusive subscription-streaming window after theaters and PVOD, typically about 18 '
+            'months. Studios without a big streamer of their own act as "arms dealers" and sell it: Sony licenses its '
+            'Pay-1 window to Netflix. Studios with their own streamer keep their films in house to drive subscriptions: '
+            'Disney (Disney+ / Hulu), Warner Bros. (Max), Paramount (Paramount+). Universal sits in between: its films '
+            'start on Peacock, then part of the Pay-1 window is licensed out to another streamer, then they come back. '
+            'That is the trade-off here: keep the film on Peacock to build subscribers, or license some of the window '
+            'for cash, where a shorter term brings it back to Peacock sooner.</div>', unsafe_allow_html=True)
 
         def _run_bid_round(round_num: int) -> dict:
             anchor_value = live_project.subscriber_value(resolved_entry["multiplier"])
