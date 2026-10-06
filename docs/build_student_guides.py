@@ -435,7 +435,7 @@ def build_movies():
     steps(doc, [
         "**Read the recap** of last cycle and your **🎬 Your Slate So Far** table (from cycle 2 on).",
         "**Follow the step bar** at the top of the page: ① Partnerships ② Scouted Concepts ③ Festivals ④ Greenlight ⑤ Holding Deals ⑥ Release ⑦ Simulate. Click any step to jump to it; each gets a ✓ when it's done.",
-        "**Fill in your film's row in the Release Plan table** (step 6), click **🎬 Theatrical Sim**, then set PVOD and Pay-1 and choose Pay-2 for any earlier film that's due.",
+        "**Fill in your film's row in the Release Plan table** (step 6), click the big **🎬 Run Theatrical Simulation** button under the table, then set PVOD and Pay-1 and choose Pay-2 for any earlier film that's due.",
         "**Click ▶ Simulate → See Results** once every step has a ✓, read the results, then click **→ Start [next cycle]**.",
     ])
     callout(doc, "key",
@@ -524,7 +524,7 @@ def build_movies():
         "**Season**: Summer Tentpole and Holiday open bigger. Fall/Awards opens softer but is the path to awards. Off-Peak is neutral.",
         "**Release** (from Film 2 on; Film 1 is Wide Theatrical only). The line under the table shows each option's risk-adjusted NPV for this film. **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens small and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself.",
         "**Run (days)**: how long the film stays in theaters. Longer runs earn more box office, with diminishing returns, but delay every later window.",
-        "**Click 🎬 Theatrical Sim** in the Status column. This is required, and it locks in how the movie does in theaters, its reviews, and any surprises.",
+        "**Click the big 🎬 Run Theatrical Simulation button** right under the table. This is required, and it locks in how the movie does in theaters, its reviews, and any surprises.",
         "**PVOD price** (renting or buying at home while the movie is still new): set it within the band your real opening supports. If viewers later reject your price, choose **Hold** (keep the price, accept fewer sales) or **Cut** (lower it to win back volume) under the table.",
         "**Pay-1** (first streaming window): keep it on Peacock or license it to a platform for a flat fee. Or, under the table, click **🏷️ Shop This Window to Competitive Bid** and accept **any** bid, not just the highest: each has a 12- or 18-month term, and a shorter term returns the film to Peacock sooner. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; new bids usually come in lower.",
         "**Pay-2** (second window, about 4 years after release): decided **the cycle after release**, when a **⚠ Choose…** cell appears in that film's row. It's a **gamble versus a sure thing**. **🎲 Keep** (the gamble): the film stays in Peacock's catalog and earns whatever its catalog life turns out to be; better reviews make it worth more, and the line under the table shows its expected value and likely range. **✓ Amazon / ✓ Netflix** (the sure thing): a guaranteed fee from Amazon Prime Video or Netflix, whose offers change each cycle. Pick one, then click **💼 Lock Pay-2** in the Status column. Locking is final and reveals Keep's outcome. On your **final** film, you choose Pay-2 in its own row and the outcome is revealed at Simulate.",
@@ -573,7 +573,7 @@ def build_movies():
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
         "**Sequel after sequel.** Franchise fatigue is real, and your diversification score drops.",
-        "**Forgetting the Theatrical Sim.** You can't Simulate until you've clicked 🎬 Theatrical Sim in the Release Plan table.",
+        "**Forgetting the Theatrical Simulation.** You can't Simulate until you've clicked 🎬 Run Theatrical Simulation under the Release Plan table.",
         "**Missing a required step.** If ▶ Simulate is locked, check the step bar at the top for a step without a ✓.",
         "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
         "**Submitting too early.** Your first submission is your official score.",

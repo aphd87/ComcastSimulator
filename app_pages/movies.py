@@ -102,6 +102,10 @@ def _init(ss):
     # Deal ledger (2026-10-05, per explicit user request that deals count in
     # the grade): {cycle: [{"label", "decision", "actual"}]} -- every fee paid
     # and every festival film won that cycle, credited to that cycle's film.
+    # Explicit Greenlight confirmation per cycle (2026-10-05, per user:
+    # "do i click on a button at the end to make sure it is processed?").
+    if not isinstance(ss.get("movie_greenlit"), dict):
+        ss.movie_greenlit = {}
     if not isinstance(ss.get("movie_deal_ledger"), dict):
         ss.movie_deal_ledger = {}
     if not isinstance(ss.get("movie_partner_releases"), dict):
@@ -369,7 +373,7 @@ def _step_status(ss) -> list:
     fest_ids = {f["id"] for f in generate_festival_slate(ss.team_name, cyc)}
     festivals = any(i in ss.movie_festival_log or i in ss.movie_festival_rival_log for i in fest_ids)
     logline = ss.get(f"movie_logline_{cyc}", ss.movie_draft.get("logline", ""))
-    greenlight = len((logline or "").strip()) >= 20
+    greenlight = len((logline or "").strip()) >= 20 and bool(ss.get("movie_greenlit", {}).get(cyc))
     final_film = cyc >= CYCLES_TOTAL
     holding = (final_film
                or any(h.get("cycle_placed") == cyc for h in ss.movie_talent_holds.values())
@@ -1404,7 +1408,8 @@ def _section_holding_deals(ss, resolved_hold_key):
                       {synergy_note}
                     </div>
                     """, unsafe_allow_html=True)
-                    bcol1, bcol2 = st.columns(2)
+                    # Stacked, full width (2026-10-05: side by side, "Multi-Picture" was cut to "Multi-Pic…").
+                    bcol1 = bcol2 = st.container()
                     with bcol1:
                         if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
                             ss.movie_talent_total_spend += partner["hold_cost_m"]
@@ -2138,6 +2143,24 @@ def _decisions(ss):
             'somewhere between Bear and Bull.</div>',
             unsafe_allow_html=True)
 
+    # ✅ Greenlight button (2026-10-05): the form above saves as you go, but a
+    # team needs a clear "this film is done" action. Clickable once the pitch
+    # is written; the film can still be edited afterwards (the Theatrical Sim
+    # and Simulate always use what's in the form).
+    st.markdown('<a id="greenlight-confirm"></a>', unsafe_allow_html=True)
+    pitch_ready = len((ss.movie_draft.get("logline") or "").strip()) >= 20
+    if ss.movie_greenlit.get(ss.movie_cycle):
+        st.success(f"✅ Film {ss.movie_cycle} greenlit: \"{title}\" ({genre}), "
+                   f"\\${project.capital_at_risk():.1f}M at risk. Next: step 5 Holding Deals, then step 6 Release Plan. "
+                   f"You can still change anything above before you run the Theatrical Simulation.")
+    else:
+        if st.button(f"✅ Greenlight Film {ss.movie_cycle}", key=f"greenlight_confirm_{ss.movie_cycle}",
+                     type="primary", use_container_width=True, disabled=not pitch_ready):
+            ss.movie_greenlit[ss.movie_cycle] = True
+            st.rerun()
+        st.caption("Write your pitch above to enable this button." if not pitch_ready else
+                   "Click to greenlight this film with the concept, cast and money set above.")
+
     st.divider()
 
     # Holding Deals render AFTER Greenlight -- booking a specific actor's
@@ -2161,7 +2184,8 @@ def _decisions(ss):
         '(release type and run length) → <b>PVOD</b> (premium rental at home; you set the price) → <b>Pay-1</b> '
         '(first streaming window: keep it on Peacock or license it) → <b>Pay-2</b> (second window, '
         f'~{PAY2_WINDOW_MONTH/12:.0f} years out, decided the cycle after release). Fill in this film\'s row, click '
-        '<b>🎬 Theatrical Sim</b>, then set PVOD and Pay-1 with the real opening in hand.</p>',
+        'the big <b>🎬 Run Theatrical Simulation</b> button under the table, then set PVOD and Pay-1 with the real '
+        'opening in hand.</p>',
         unsafe_allow_html=True)
 
     d = ss.movie_draft   # the live draft (Greenlight just rebuilt it), not the start-of-run copy
@@ -2455,14 +2479,11 @@ def _decisions(ss):
         if pay2_pick != "keep":
             ss.movie_draft["pay2_platform"] = pay2_pick
 
-    # Status -- the Theatrical Sim button lives in the row itself.
+    # Status. The Theatrical Sim button itself is a full-width button right
+    # under the table (2026-10-05: inside this narrow cell it rendered as an
+    # unreadable "🎬 The…" on the live site).
     if resolved_entry is None:
-        if current_row[7].button("🎬 Theatrical Sim", key=f"run_theatrical_{ss.movie_cycle}",
-                                 use_container_width=True,
-                                 help="Locks in this film's real opening, reviews and any surprises, so you can "
-                                      "set PVOD and Pay-1 with the result in hand."):
-            ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
-            st.rerun()
+        _cell(current_row[7], "⬇ <b>Run Theatrical Sim</b> below")
     else:
         dom_bo = live_project.domestic_box_office(resolved_entry["multiplier"])
         _cell(current_row[7], f"✅ ${dom_bo:.0f}M domestic<br>critics {resolved_entry['critical_score']:.0f}/100")
@@ -2483,6 +2504,13 @@ def _decisions(ss):
     notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
                  f"box office")
     st.caption(" · ".join(notes).replace("$", "\\$"))   # bare $ pairs render as LaTeX math
+    if resolved_entry is None:
+        if st.button(f"🎬 Run Theatrical Simulation for Film {ss.movie_cycle}", key=f"run_theatrical_{ss.movie_cycle}",
+                     type="primary", use_container_width=True,
+                     help="Locks in this film's real opening, reviews and any surprises, using the Season, Release "
+                          "and Run you set in its row. Then set PVOD and Pay-1 with the result in hand."):
+            ss.movie_theatrical_resolved[ss.movie_cycle] = _resolve_movie_outcome(ss, live_project)
+            st.rerun()
     if pay2_notes:
         st.markdown('<div style="font-size:13px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
                     + '</div>', unsafe_allow_html=True)
@@ -2747,9 +2775,11 @@ def _decisions(ss):
     missing = [(i, label, todo) for i, label, _, done, todo in _numbered_steps(ss)
                if not done and label not in ("Greenlight", "Release")]
     if not has_logline:
-        missing.append((4, "Greenlight", "write your Pitch / Logline (at least a sentence)"))
+        missing.append((4, "Greenlight", "write your Pitch / Logline (at least a sentence), then click ✅ Greenlight"))
+    elif not ss.movie_greenlit.get(ss.movie_cycle):
+        missing.append((4, "Greenlight", f"click ✅ Greenlight Film {ss.movie_cycle} at the end of step 4"))
     if resolved_entry is None:
-        missing.append((6, "Release", "click 🎬 Theatrical Sim in the Release Plan table"))
+        missing.append((6, "Release", "click 🎬 Run Theatrical Simulation (under the Release Plan table)"))
     can_simulate = not missing and not pending_pvod_response
     for i, label, todo in sorted(missing, key=lambda m: (m[0], m[1] != "Pay-2 (earlier films)")):
         st.caption(f"⚠ Step {i} · {label}: {todo} before you can Simulate.")

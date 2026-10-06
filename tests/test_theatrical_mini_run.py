@@ -163,6 +163,7 @@ def _movies_app_script(team_name):
         st.session_state.movie_festival_log = {
             film["id"]: resolve_festival_acquisition_outcome(film, "You", film["asking_anchor_m"])}
         st.session_state.movie_talent_holds = {"kade": {"status": "pending", "cycle_placed": 1}}
+        st.session_state.movie_greenlit = {1: True}
     import app_pages.movies as movies
     movies.render()
 
