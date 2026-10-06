@@ -2085,12 +2085,13 @@ def _decisions(ss):
                                                 # distribution deal scales screen count with
                                                 # studio confidence/spend, not the other way around
         if screens > realistic_max_screens:
-            st.warning(
-                f"⚠ {screens:,.0f} screens is a wide-release scale commitment for "
-                f"${capital:.0f}M in total capital — real distribution deals don't hand a "
-                f"small-budget film that many screens. The math will still run, but this "
-                f"combination isn't realistic; consider more capital or fewer screens."
-            )
+            # A plain white note, not a yellow warning box (2026-10-05, per user).
+            st.markdown(
+                f'<div style="font-size:13px;color:#ffffff;line-height:1.5;margin:4px 0 8px;">📝 Note: '
+                f'{screens:,.0f} screens is a wide-release scale commitment for ${capital:.0f}M in total '
+                f'capital. Real distribution deals don\'t hand a small-budget film that many screens. The math '
+                f'will still run, but this combination isn\'t realistic; consider more capital or fewer screens.'
+                f'</div>', unsafe_allow_html=True)
 
     draft = dict(title=title, genre=genre, budget_m=budget, pa_spend_m=pa, star_power=star, screens=screens,
                  release_strategy=d.get("release_strategy", "wide_theatrical"), concept_type=concept_type,
