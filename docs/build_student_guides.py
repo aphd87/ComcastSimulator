@@ -504,8 +504,9 @@ def build_movies():
     doc.add_heading("🌎 Distribution Strategy", level=3)
     para(doc, "Choose your **Exhibitor Posture**, which sets how hard you negotiate with theater owners. Aggressive keeps more of each ticket but gets you fewer screens. Exhibitor-Friendly gives up more of each ticket but gets you more screens. Standard sits in between.")
     callout(doc, "tip",
-            "Before you move on, check **Capital at Risk** and the **Projected Range** chart. It shows **three possible outcomes** "
-            "for this movie: **Bear** (a weak run), **Base** (the expected run), and **Bull** (a breakout). Each point is that outcome's "
+            "Before you move on, check **Capital at Risk** and the **Projected Range** chart, pinned on the right so you can watch them "
+            "change as you edit. The chart shows **three possible outcomes**, each labelled with its dollar value, "
+            "for this movie: **Bear** (a weak run), **Base** (the expected run), and **Bull** (a breakout). Each is that outcome's "
             "NPV: the movie's revenue in today's dollars **minus** Capital at Risk. Above $0 it makes money; below $0 it loses money. "
             "Every extra $10M you commit pushes all three down about $10M unless the movie earns it back. The chart assumes a wide "
             "release and no reviews yet. If even the Base case is negative, rethink the plan.")

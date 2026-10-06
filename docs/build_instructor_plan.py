@@ -336,7 +336,7 @@ def build_plan():
         ["**Financing**", "Tax incentive almost always helps. Presale is insurance: pays off for high-variance films, a bad trade for likely hits."],
         ["**Pay-1 window**", "Any bid can be accepted; shorter terms return the film to Peacock sooner. One go-back-to-market round per film."],
         ["**Pay-2 window**", "Decided the cycle after release and locked: 🎲 Keep (catalog gamble, better with good reviews) vs a streamer's sure fee."],
-        ["**Festivals**", "Bid against the analysts' break-even; hot films draw more rivals (winner's curse). Dramas are often bargains, tentpoles overpriced."],
+        ["**Festivals**", "Bid against the analysts' break-even; prices sit near value, some cheap, some rich. Lowballing rarely wins; winning at or above break-even is the winner's curse. Hot films draw more rivals."],
         ["**Partnerships**", "Sign once, then renew each cycle (pricier after a hit) or let go. Fees count in the score."],
         ["**Library IP / Lead Actor**", "Reviving a Universal title lifts the opening (once per slate, legacy fee). A held actor's bonus applies only when cast."],
         ["**Attractions**", "After a park-genre hit: Build / Pass a Universal Studios attraction. Roughly break-even on average; better for sequels and family films."],
