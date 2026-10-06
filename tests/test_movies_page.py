@@ -485,7 +485,7 @@ def test_pay1_licensing_selectbox_is_hidden_for_day_and_date():
     _selectbox(at, "Release Strategy").set_value("day_and_date").run()
     assert not at.exception
     assert not any(b.label == "Pay-1 Window" for b in at.selectbox)
-    assert any("Peacock (D&amp;D)" in md.value for md in at.markdown)
+    assert any(">Peacock</div>" in md.value for md in at.markdown)
     assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"
 
 
@@ -615,7 +615,7 @@ def _movies_app_at_cycle_3() -> AppTest:
 def test_windowing_unlocked_at_cycle_3_shows_choose_strategy_buttons():
     at = _movies_app_at_cycle_3()
     release_box = _selectbox(at, "Release Strategy")
-    assert release_box.options and len(release_box.options) == 3   # wide, platform, day-and-date
+    assert release_box.options and len(release_box.options) == 5   # wide, platform, D&D, direct to PVOD, direct to Peacock
     assert not release_box.disabled
 
 
@@ -1028,3 +1028,16 @@ def test_research_only_covers_the_genre_and_concept_it_was_bought_for():
     assert not _research_covers(bought, "Horror", "Sequel")
     assert not _research_covers(None, "Horror", "New IP")
     assert _research_covers(True, "Comedy", "Sequel")   # legacy sessions stored a bare True
+
+
+def test_direct_to_peacock_release_offers_a_goal_and_no_rental_or_licensing_cells():
+    at = _movies_app_at_cycle_3()
+    _selectbox(at, "Release Strategy").set_value("direct_to_peacock").run()
+    assert not at.exception, list(at.exception)
+    goal = _selectbox(at, "Peacock goal")
+    assert goal.value == "acquisition" and set(goal.options) == {"🎯 Acquisition", "🛡️ Retention"}
+    assert not any(n.label == "Theatrical Run Length (days)" for n in at.number_input)
+    assert any("Run Release Simulation" in b.label for b in at.button)
+    assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"
+    goal.set_value("retention").run()
+    assert at.session_state["movie_draft"]["peacock_goal"] == "retention"

@@ -51,6 +51,7 @@ from utils.movie_models import (
     draw_festival_acquisition_bids, resolve_festival_acquisition, resolve_festival_acquisition_outcome,
     describe_pipeline_movie, STAR_POWER_BOOST_MAX, THEME_PARK_CRITICAL_GATE,
     UNIVERSAL_LIBRARY_IP, library_ip_opening_boost, TALENT_BASE_STAR_POWER,
+    PEACOCK_GOALS,
     draw_pay2_revival, draw_pay2_offer_mults, pay2_revival_quantiles,
     festival_breakeven_bids, festival_interest,
     scout_read, SCOUTED_HOT_POACH_CHANCE,
@@ -72,7 +73,12 @@ RELEASE_LABELS = {
     "wide_theatrical": "Wide Theatrical",
     "platform":         "Platform / Limited",
     "day_and_date":     "Day-and-Date (Peacock)",
+    "direct_to_pvod":   "Direct to PVOD",
+    "direct_to_peacock": "Direct to Peacock",
 }
+PEACOCK_EXCLUSIVE = ("day_and_date", "direct_to_peacock")   # no PVOD rental, no Pay-1 / Pay-2 licensing
+NO_THEATERS = ("direct_to_pvod", "direct_to_peacock")
+GOAL_LABELS = {"acquisition": "🎯 Acquisition", "retention": "🛡️ Retention"}
 
 
 # ── Session state init ─────────────────────────────────────────────────────────
@@ -455,7 +461,35 @@ def _numbered_steps(ss) -> list:
     return out
 
 
+def _slate_strip_html(ss) -> str:
+    """Pinned strip: the numbers each decision moves, then the step chips."""
+    def stat(label, value):
+        return (f'<span style="white-space:nowrap;margin-right:16px;"><span style="font-size:11px;'
+                f'font-family:DM Mono,monospace;">{label}</span> <b style="font-size:14px;">{value}</b></span>')
+    deals = _deal_totals(ss, ss.movie_cycle)[1]
+    try:
+        film = _current_project(ss)
+        at_risk = film.capital_at_risk()
+        ra = risk_adjusted_npv(film)
+    except Exception:   # a half-filled draft should never break the page
+        at_risk = ra = 0.0
+    slate = sum(r["npv"] + _deal_totals(ss, r["cycle"])[1] for r in ss.movie_log)
+    stats = "".join([
+        stat(f"FILM {ss.movie_cycle} OF {CYCLES_TOTAL} · STUDIO BUDGET", f"${ss.movie_studio_budget_m / 1000:,.2f}B"),
+        stat("THIS CYCLE'S DEALS", _fmt_money(deals)),
+        stat("THIS FILM AT RISK", f"${at_risk:,.1f}M"),
+        stat("ITS RISK-ADJ. NPV", _fmt_money(ra)),
+        stat("SLATE SO FAR", _fmt_money(slate)),
+    ])
+    return (f'<div class="slate-strip"><div style="display:flex;flex-wrap:wrap;gap:4px 0;margin-bottom:6px;">'
+            f'{stats}</div>{_step_bar_html(ss)}</div>')
+
+
 def _step_bar(ss):
+    st.markdown(_step_bar_html(ss), unsafe_allow_html=True)
+
+
+def _step_bar_html(ss) -> str:
     """Compact, clickable step bar -- the one place a student sees where
     they are in this film's cycle and what's left before Simulate."""
     steps = _step_status(ss)
@@ -471,8 +505,7 @@ def _step_bar(ss):
                  f'background:{SUCCESS if ready else "#1a1d26"};border:1px solid {SUCCESS if ready else "#252836"};'
                  f'border-radius:14px;padding:3px 10px;font-size:13px;white-space:nowrap;">'
                  f'<b>7</b> Simulate{" ▶" if ready else " 🔒"}</a>')
-    st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">{"".join(chips)}</div>',
-                unsafe_allow_html=True)
+    return f'<div style="display:flex;flex-wrap:wrap;gap:6px;">{"".join(chips)}</div>'
 
 
 def _section_your_slate(ss, title: str = "🎬 Your Slate"):
@@ -500,10 +533,10 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
             "Lead":            TALENT_PARTNERS[lead]["name"] if lead in TALENT_PARTNERS
                                else f"Unnamed (Star Power {kw['star_power']:.0f})",
             "Release":         RELEASE_LABELS.get(kw["release_strategy"], kw["release_strategy"]),
-            "Run (days)":      p.window_days(),
+            "Run (days)":      "—" if kw["release_strategy"] in NO_THEATERS else str(p.window_days()),
             "Capital at Risk": f"${r['capital_at_risk']:.0f}M",
-            "Opening Wknd":    f"${p.opening_weekend():.0f}M",
-            "Worldwide B.O.":  f"${worldwide:.0f}M",
+            "Opening Wknd":    "—" if kw["release_strategy"] in NO_THEATERS else f"${p.opening_weekend():.0f}M",
+            "Worldwide B.O.":  "—" if kw["release_strategy"] in NO_THEATERS else f"${worldwide:.0f}M",
             "Critics":         f"{r['critical_score']:.0f}/100",
             "Film NPV":        _fmt_money(r["npv"]),
             "Deals":           _fmt_money(_deal_totals(ss, r["cycle"])[1]),
@@ -524,7 +557,7 @@ def _pending_pay2_films(ss) -> list:
     commits the title to Peacock, same as Pay-1."""
     return [r for r in sorted(ss.movie_log, key=lambda r: r["cycle"])
             if r["cycle"] < ss.movie_cycle and r.get("pay2_decided_cycle") is None
-            and r["project_kwargs"].get("release_strategy") != "day_and_date"]
+            and r["project_kwargs"].get("release_strategy") not in PEACOCK_EXCLUSIVE]
 
 
 def _film_npv(entry: dict, kw: dict) -> float:
@@ -579,6 +612,7 @@ def _current_project(ss) -> MovieProject:
         pvod_chosen_price=d.get("pvod_chosen_price"),
         library_ip=d.get("library_ip"),
         lead_actor=d.get("lead_actor"),
+        peacock_goal=d.get("peacock_goal", "acquisition"),
     )
 
 
@@ -1485,9 +1519,14 @@ _MOVIES_LAYOUT_CSS = """
 <style>
 div[data-testid="stHorizontalBlock"]:has(.capital-pin) { align-items: flex-start; }
 div[data-testid="stColumn"]:has(.capital-pin), div[data-testid="column"]:has(.capital-pin) {
-    position: sticky; top: 3.75rem; align-self: flex-start;
-    max-height: calc(100vh - 4.5rem); overflow-y: auto; z-index: 2;
+    position: sticky; top: 10rem; align-self: flex-start;
+    max-height: calc(100vh - 10.75rem); overflow-y: auto; z-index: 2;
 }
+div[data-testid="stElementContainer"]:has(.slate-strip), div.element-container:has(.slate-strip) {
+    position: sticky; top: 3.75rem; z-index: 50;
+}
+.slate-strip { background: #0b0c10; border-bottom: 1px solid #252836; padding: 8px 0 8px; }
+a[id] { scroll-margin-top: 11rem; }   /* step-chip jumps land below the pinned strip */
 div[data-testid="stColumn"]:has(.eq-card) > div, div[data-testid="column"]:has(.eq-card) > div,
 div[data-testid="stColumn"]:has(.eq-card) div[data-testid="stVerticalBlock"],
 div[data-testid="column"]:has(.eq-card) div[data-testid="stVerticalBlock"] { height: 100%; }
@@ -1671,10 +1710,12 @@ def _decisions(ss):
     newly_poached_concepts = _resolve_scouted_concept_transitions(ss)
     newly_resolved_festivals = _resolve_festival_transitions(ss)
 
-    # Step bar (2026-10-05) replaces the plain jump-link row: same anchors,
-    # plus a ✓ per finished required step and a locked/unlocked Simulate.
-    # Rendered after the transitions above so its statuses are current.
-    _step_bar(ss)
+    # Pinned slate strip (2026-10-05): the step bar plus the money that every
+    # decision moves (studio budget, this cycle's deals, this film at risk,
+    # its risk-adjusted NPV, the slate so far). It's a placeholder here and is
+    # filled at the END of this run, so it always reflects the click that
+    # triggered the run -- no one-step lag. Sticky via _MOVIES_LAYOUT_CSS.
+    strip_slot = st.empty()
 
     # Context, not a decision (2026-10-05 QA): collapsed so step 1 is the
     # first thing a team sees under the step bar. Your own films are in the
@@ -1960,7 +2001,8 @@ def _decisions(ss):
                        f"but going wide is a real, unconditional cost too (~${SCREEN_COST_PER_SCREEN_M*1000:.0f}K/screen "
                        f"in print/booking fees, paid whether the movie hits or flops), not just a soft warning.")
 
-            imax_eligible_here = genre in IMAX_ELIGIBLE_GENRES and d.get("release_strategy", "wide_theatrical") != "day_and_date"
+            imax_eligible_here = (genre in IMAX_ELIGIBLE_GENRES
+                                  and d.get("release_strategy", "wide_theatrical") not in ("day_and_date",) + NO_THEATERS)
             imax_release = st.checkbox(
                 "🎇 IMAX / Premium Large Format", value=bool(d.get("imax_release", False)) and imax_eligible_here,
                 disabled=not imax_eligible_here,
@@ -2062,6 +2104,7 @@ def _decisions(ss):
                  pvod_dynamic_pricing=d.get("pvod_dynamic_pricing", False),
                  pvod_chosen_price=d.get("pvod_chosen_price"),
                  library_ip=library_ip, lead_actor=lead_actor,
+                 peacock_goal=d.get("peacock_goal", "acquisition"),
                  logline=d.get("logline", ""))   # display text, not a MovieProject field
     ss.movie_draft = draft
     project = _current_project(ss)
@@ -2205,7 +2248,7 @@ def _decisions(ss):
                      unsafe_allow_html=True)
 
     def _pay1_text(kw):
-        if kw.get("release_strategy") == "day_and_date" or kw.get("pay1_licensing", "keep") == "keep":
+        if kw.get("release_strategy") in PEACOCK_EXCLUSIVE or kw.get("pay1_licensing", "keep") == "keep":
             return "Peacock"
         if kw.get("pay1_auction_winner"):
             return f"{kw['pay1_auction_winner']} (bid)"
@@ -2289,11 +2332,14 @@ def _decisions(ss):
                 _cell(c, "—")
             continue
         kw = entry["project_kwargs"]
-        is_dd = kw.get("release_strategy") == "day_and_date"
+        is_dd = kw.get("release_strategy") in PEACOCK_EXCLUSIVE
         _cell(row[0], f"{cyc} · {escape(kw['title'])}")
         _cell(row[1], kw.get("debut_season", "Off-Peak"))
-        _cell(row[2], RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy")))
-        _cell(row[3], f"{MovieProject(**kw).window_days()}")
+        rel_txt = RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy"))
+        if kw.get("release_strategy") == "direct_to_peacock":
+            rel_txt += f"<br><span style='font-size:11px;'>{GOAL_LABELS.get(kw.get('peacock_goal'), '')}</span>"
+        _cell(row[2], rel_txt)
+        _cell(row[3], "—" if kw.get("release_strategy") in NO_THEATERS else f"{MovieProject(**kw).window_days()}")
         _cell(row[4], "—" if is_dd or not kw.get("pvod_chosen_price") else f"${kw['pvod_chosen_price']:.2f}")
         _cell(row[5], _pay1_text(kw))
         pay2_due = not is_dd and cyc < ss.movie_cycle and entry.get("pay2_decided_cycle") is None
@@ -2320,7 +2366,7 @@ def _decisions(ss):
                 f"{_fmt_money(ch['keep']['p90'])} · or license: {offers_txt}. Better reviews make Keep worth more.")
         else:
             if is_dd:
-                _cell(row[6], "Peacock (D&amp;D)")
+                _cell(row[6], "Peacock")
             elif cyc > ss.movie_cycle:
                 _cell(row[6], "—")
             else:
@@ -2362,14 +2408,32 @@ def _decisions(ss):
         disabled=not windowing_unlocked, label_visibility="collapsed",
         help="Each option's risk-adjusted NPV for this film is listed under the table. Wide Theatrical suits tentpoles; "
              "Platform opens small and expands (strongest for drama/awards); Day-and-Date premieres in theaters "
-             "and on Peacock together, giving up box office for subscriber value."
+             "and on Peacock together. Direct to PVOD skips theaters for a home rental premiere; Direct to Peacock "
+             "skips theaters and rentals to build subscribers. See the overview under the table."
              + ("" if windowing_unlocked else
                 f" Only Wide Theatrical is available until {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}."),
     )
     ss.movie_draft["release_strategy"] = chosen
 
+    peacock_goal = d.get("peacock_goal", "acquisition")
+    if chosen in NO_THEATERS:
+        theatrical_run_days = None
+        if chosen == "direct_to_peacock":
+            goal_key = f"peacock_goal_{ss.movie_cycle}"
+            if ss.get(goal_key) not in PEACOCK_GOALS:
+                ss[goal_key] = peacock_goal if peacock_goal in PEACOCK_GOALS else "acquisition"
+            peacock_goal = current_row[3].selectbox(
+                "Peacock goal", list(PEACOCK_GOALS), key=goal_key, label_visibility="collapsed",
+                format_func=lambda g: GOAL_LABELS[g],
+                help="Acquisition: pull in NEW subscribers; marketing has to reach people without Peacock, so it "
+                     "needs a big P&A push. Retention: keep EXISTING subscribers; in-app promotion is cheap, so a "
+                     "small P&A spend gets most of the value.")
+        else:
+            _cell(current_row[3], "—")
+        ss.movie_draft["peacock_goal"] = peacock_goal
+    ss.movie_draft["peacock_goal"] = peacock_goal
     default_days = d.get("theatrical_run_days") or THEATRICAL_RUN_LENGTHS["Standard"]
-    theatrical_run_days = int(current_row[3].number_input(
+    theatrical_run_days = None if chosen in NO_THEATERS else int(current_row[3].number_input(
         "Theatrical Run Length (days)", RUN_LENGTH_DAYS_MIN, RUN_LENGTH_DAYS_MAX, int(default_days), step=5,
         label_visibility="collapsed",
         help=f"Short≈{THEATRICAL_RUN_LENGTHS['Short']}d · Standard≈{THEATRICAL_RUN_LENGTHS['Standard']}d · "
@@ -2387,7 +2451,8 @@ def _decisions(ss):
     if inputs_changed:
         resolved_entry = None
     live_project = MovieProject(**{**project.__dict__, "release_strategy": chosen, "debut_season": debut_season,
-                                   "theatrical_run_days": theatrical_run_days, "theatrical_run_length": None})
+                                   "theatrical_run_days": theatrical_run_days, "theatrical_run_length": None,
+                                   "peacock_goal": peacock_goal})
 
     # PVOD price -- band sized off the REAL theatrical result, so it only
     # exists after the Theatrical Sim. The input defaults from the price the
@@ -2395,7 +2460,7 @@ def _decisions(ss):
     # which also carries the Market Checks' post-cut price (2026-08-18 fix).
     pvod_price = None
     lo = hi = None
-    if chosen == "day_and_date":
+    if chosen in PEACOCK_EXCLUSIVE:
         _cell(current_row[4], "—")
         ss.movie_draft["pvod_chosen_price"] = None
         ss.movie_draft["pvod_selected_price"] = None
@@ -2420,8 +2485,8 @@ def _decisions(ss):
     # Pay-1 -- keep on Peacock, license at a flat fee, or (below) take a
     # competitive bid. An accepted bid shows up here as its own option.
     pay1_key = f"pay1_pick_{ss.movie_cycle}"
-    if chosen == "day_and_date":
-        _cell(current_row[5], "Peacock (D&amp;D)")
+    if chosen in PEACOCK_EXCLUSIVE:
+        _cell(current_row[5], "Peacock")
         ss.movie_draft["pay1_licensing"] = "keep"
     elif resolved_entry is None:
         _cell(current_row[5], "<i>after Theatrical Sim</i>")
@@ -2457,8 +2522,8 @@ def _decisions(ss):
 
     # Pay-2 -- opens years after release, so it's decided next cycle (as
     # this film's row up top), except on the final film.
-    if chosen == "day_and_date":
-        _cell(current_row[6], "Peacock (D&amp;D)")
+    if chosen in PEACOCK_EXCLUSIVE:
+        _cell(current_row[6], "Peacock")
         ss.movie_draft["pay2_licensing"] = "keep"
     elif not final_film:
         _cell(current_row[6], "<i>decide next cycle</i>")
@@ -2483,7 +2548,10 @@ def _decisions(ss):
     # under the table (2026-10-05: inside this narrow cell it rendered as an
     # unreadable "🎬 The…" on the live site).
     if resolved_entry is None:
-        _cell(current_row[7], "⬇ <b>Run Theatrical Sim</b> below")
+        _cell(current_row[7], "⬇ <b>Run the simulation</b> below")
+    elif chosen in NO_THEATERS:
+        stars_n = multiplier_to_stars(resolved_entry["multiplier"], genre, concept_type)
+        _cell(current_row[7], f"✅ {'⭐' * stars_n} demand<br>critics {resolved_entry['critical_score']:.0f}/100")
     else:
         dom_bo = live_project.domestic_box_office(resolved_entry["multiplier"])
         _cell(current_row[7], f"✅ ${dom_bo:.0f}M domestic<br>critics {resolved_entry['critical_score']:.0f}/100")
@@ -2501,11 +2569,15 @@ def _decisions(ss):
         notes.append(f"{season_recall:.0%} awards recall")
     if not windowing_unlocked:
         notes.append(f"🔒 Platform and Day-and-Date unlock {_cycle_years_label(WINDOWING_UNLOCK_CYCLE)}")
-    notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
-                 f"box office")
+    if theatrical_run_days is not None:
+        notes.append(f"🎞️ {theatrical_run_days} days in theaters = {run_days_box_office_mult(theatrical_run_days):.2f}x "
+                     f"box office")
+    else:
+        notes.append("🏠 No theatrical run: the home premiere is day one")
     st.caption(" · ".join(notes).replace("$", "\\$"))   # bare $ pairs render as LaTeX math
     if resolved_entry is None:
-        if st.button(f"🎬 Run Theatrical Simulation for Film {ss.movie_cycle}", key=f"run_theatrical_{ss.movie_cycle}",
+        sim_label = ("Release Simulation" if chosen in NO_THEATERS else "Theatrical Simulation")
+        if st.button(f"🎬 Run {sim_label} for Film {ss.movie_cycle}", key=f"run_theatrical_{ss.movie_cycle}",
                      type="primary", use_container_width=True,
                      help="Locks in this film's real opening, reviews and any surprises, using the Season, Release "
                           "and Run you set in its row. Then set PVOD and Pay-1 with the result in hand."):
@@ -2562,9 +2634,26 @@ def _decisions(ss):
             st.caption(f"🎢 Film {entry['cycle']} attraction built: payoff \\${entry['attraction_payoff']:.1f}M on a "
                        f"\\${cost:.1f}M build ({_fmt_money(entry['attraction_payoff'] - cost).replace('$', chr(92) + '$')}). "
                        f"A later {entry['project_kwargs']['genre']} Sequel lifts it {ATTRACTION_SEQUEL_BONUS:.0%}.")
+    if windowing_unlocked:
+        with st.expander("📖 Straight to the home: Direct to PVOD vs Direct to Peacock", expanded=chosen in NO_THEATERS):
+            st.markdown(
+                '<div style="font-size:13px;line-height:1.6;">'
+                '<b>Direct to PVOD</b> skips theaters: the film premieres as a premium home rental (about $20), and '
+                'Universal keeps about 80% of every rental instead of roughly half a ticket. No screen fees, and the '
+                'money arrives in weeks. The catch: without a big-screen launch, fewer people show up. It suits '
+                'mid-size, broad-appeal films (comedy, horror, drama); tentpoles usually need the theatrical event. '
+                'Real example: Trolls World Tour (2020). Pay-1 and Pay-2 still follow.<br>'
+                '<b>Direct to Peacock</b> skips theaters <i>and</i> rentals. There is no ticket or rental money, so the '
+                'film\'s own cash never recoups its cost; its value is what it does for Peacock. Pick a goal: '
+                '<b>🎯 Acquisition</b> pulls in new subscribers, but marketing has to reach people who don\'t have '
+                'Peacock, so it needs a big P&amp;A push and works best for broad, big-scale films (animation, sci-fi, '
+                'family). <b>🛡️ Retention</b> keeps existing subscribers from cancelling; in-app promotion is cheap, so '
+                'a small P&amp;A spend gets most of the value, and it suits fan-driven genres (horror, comedy). '
+                'Question for your team: is this film a product, or a marketing expense for the platform?</div>',
+                unsafe_allow_html=True)
     if inputs_changed:
         st.info("⚠ Your Greenlight choices (Genre / Concept Type / Source Material / AI Production Tools) changed "
-                "since you ran the Theatrical Sim. Click 🎬 Theatrical Sim again to lock in a fresh result.")
+                "since you ran the simulation. Click the 🎬 Run Simulation button again to lock in a fresh result.")
 
     if resolved_entry is not None:
         r = resolved_entry
@@ -2572,10 +2661,12 @@ def _decisions(ss):
                                    r["ancillary_reason"], r["ewom_reason"]) if n]
         stars = multiplier_to_stars(r["multiplier"], genre, concept_type)
         st.markdown(
-            f'<div style="font-size:13px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Theatrical Sim locked in:</b> '
+            f'<div style="font-size:13px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Simulation locked in:</b> '
             f'{"⭐" * stars}{"☆" * (5 - stars)} audience demand · '
-            f'${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · critics {r["critical_score"]:.0f}/100 · '
-            f'{theatrical_run_days}-day run'
+            + (f'${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · ' if chosen not in NO_THEATERS
+               else 'no theaters · ')
+            + f'critics {r["critical_score"]:.0f}/100'
+            + (f' · {theatrical_run_days}-day run' if theatrical_run_days else '')
             + "".join(f"<br>⚡ {escape(e)}" for e in event_notes) + '</div>', unsafe_allow_html=True)
 
     # ── PVOD Market Acceptance Checks ────────────────────────────────────────
@@ -2588,7 +2679,7 @@ def _decisions(ss):
     # all across both checkpoints leaves pvod_market_mult at its true
     # 1.0 zero-effect default.
     ss.movie_draft["pvod_market_mult"] = 1.0
-    if chosen != "day_and_date" and resolved_entry is not None and pvod_price is not None:
+    if chosen not in PEACOCK_EXCLUSIVE and resolved_entry is not None and pvod_price is not None:
         st.markdown('<div class="section-title mt-3">PVOD Market Acceptance Checks</div>', unsafe_allow_html=True)
         st.markdown(
             '<p class="text-xs text-ink2 mb-2">Every 6 months the market gets a real chance to reject '
@@ -2677,7 +2768,7 @@ def _decisions(ss):
     # 2026-08-18, per explicit user request: rival platforms bid for the
     # Pay-1 window, sized off this film's ACTUAL theatrical result. An
     # accepted bid becomes the Pay-1 cell's own option in the table above.
-    if chosen != "day_and_date" and resolved_entry is not None:
+    if chosen not in PEACOCK_EXCLUSIVE and resolved_entry is not None:
         st.markdown('<div class="section-title mt-3" style="font-size:13px;">🏷️ Pay-1: Shop It to Competitive Bidders '
                     '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
         # Industry context (2026-10-05, per explicit user request).
@@ -2802,7 +2893,7 @@ def _decisions(ss):
         st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
         project = _current_project(ss)
-        if ss.movie_cycle >= CYCLES_TOTAL and project.release_strategy != "day_and_date":
+        if ss.movie_cycle >= CYCLES_TOTAL and project.release_strategy not in PEACOCK_EXCLUSIVE:
             # Final film: its Pay-2 call was made in its Release Plan row, so
             # realize it now -- Keep's catalog draw, or the streamer's offer.
             if project.pay2_licensing == "keep":
@@ -2897,6 +2988,8 @@ def _decisions(ss):
         ss.movie_phase = "results"
         st.rerun()
 
+    strip_slot.markdown(_slate_strip_html(ss), unsafe_allow_html=True)
+
 
 # ── Phase 2: Results ──────────────────────────────────────────────────────────
 def _decision_result_card(result: dict, ss=None):
@@ -2920,25 +3013,40 @@ def _decision_result_card(result: dict, ss=None):
         ("Lead", lead_txt),
         ("Money", f"${kw['budget_m']:.0f}M budget + ${kw['pa_spend_m']:.0f}M P&A "
                   f"→ ${result['capital_at_risk']:.0f}M at risk"),
-        ("Release", f"{RELEASE_LABELS.get(kw['release_strategy'], kw['release_strategy'])}, "
-                    f"{kw.get('debut_season', 'Off-Peak')}, {kw['screens']:,} screens"),
+        ("Release", (f"{RELEASE_LABELS.get(kw['release_strategy'], kw['release_strategy'])}, "
+                     f"{kw.get('debut_season', 'Off-Peak')}, {kw['screens']:,} screens")
+         if kw["release_strategy"] not in NO_THEATERS else
+         f"{RELEASE_LABELS[kw['release_strategy']]}"
+         + (f" ({GOAL_LABELS.get(kw.get('peacock_goal'), '')})" if kw["release_strategy"] == "direct_to_peacock" else "")
+         + f", {kw.get('debut_season', 'Off-Peak')}, no theaters"),
     ]
     cs = result["critical_score"]
+    direct = kw["release_strategy"] in NO_THEATERS
     outcomes = [
-        ("Opening weekend", f"${opening:,.0f}M"),
-        ("Worldwide box office", f"${worldwide:,.0f}M"),
+        ("Opening weekend", "— (no theaters)" if direct else f"${opening:,.0f}M"),
+        ("Worldwide box office", "— (no theaters)" if direct else f"${worldwide:,.0f}M"),
         ("Critics", f"{cs:.0f}/100"),
         ("Total revenue", f"${result['total_revenue']:,.0f}M"),
         ("NPV", _fmt_money(result["npv"])),
     ]
 
     why = []
+    if kw["release_strategy"] == "direct_to_pvod":
+        why.append(f"📺 Direct to PVOD: {_fmt_money(result.get('pvod', 0.0))} from home rentals worldwide. Universal "
+                   f"keeps about 80% of each rental, with no theater split and no screen fees, but without a "
+                   f"big-screen launch fewer people showed up.")
+    elif kw["release_strategy"] == "direct_to_peacock":
+        why.append(f"📺 Direct to Peacock ({GOAL_LABELS.get(kw.get('peacock_goal'), '')}): no ticket or rental revenue, "
+                   f"so the film's own cash never covered the ${result['capital_at_risk']:.0f}M at risk. Its value is the "
+                   f"{_fmt_money(result.get('sub_value', 0.0))} of subscriber value it created for Peacock, which is "
+                   f"what counts toward its NPV.")
     star_boost = 1 + (kw["star_power"] / 100) * STAR_POWER_BOOST_MAX
-    why.append(f"⭐ Star Power {kw['star_power']:.0f} added about ${opening - opening / star_boost:,.1f}M "
-               f"to the opening weekend.")
+    if not direct:
+        why.append(f"⭐ Star Power {kw['star_power']:.0f} added about ${opening - opening / star_boost:,.1f}M "
+                   f"to the opening weekend.")
     src_boost = (library_ip_opening_boost(ip, kw["genre"]) if ip in UNIVERSAL_LIBRARY_IP
                  else SOURCE_OPENING_BOOST.get(kw.get("source_material"), 1.0))
-    if src_boost > 1:
+    if src_boost > 1 and not direct:
         why.append(f"📚 {source}'s built-in audience added about ${opening - opening / src_boost:,.1f}M "
                    f"to the opening.")
     label = result.get("scenario_label", "base")

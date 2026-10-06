@@ -265,7 +265,38 @@ GENRE_SVOD_APPEAL = {
     "Horror": 72, "Comedy": 62, "Drama": 58, "Awards/Prestige": 50,
 }
 
-RELEASE_STRATEGIES = ["wide_theatrical", "platform", "day_and_date"]
+RELEASE_STRATEGIES = ["wide_theatrical", "platform", "day_and_date", "direct_to_pvod", "direct_to_peacock"]
+DIRECT_RELEASES = ("direct_to_pvod", "direct_to_peacock")   # no theatrical run at all
+
+# Direct to PVOD (2026-10-05, per explicit user request: "is there an option
+# to place some movies direct to PVOD or VOD?"). No theatrical run at all --
+# Universal's real 2020 Trolls World Tour play. The film premieres as a
+# premium home rental immediately; with no big-screen event, it reaches only
+# DIRECT_PVOD_DEMAND_SHARE of the audience a wide release would have built,
+# but the studio keeps PVOD_STUDIO_SHARE of every rental (vs ~half of a
+# ticket), pays no screen/booking fees, and gets paid months sooner. Pay-1,
+# Pay-2 and library windows follow as usual. Illustrative calibration.
+DIRECT_PVOD_DEMAND_SHARE  = 0.80   # audience reached vs a wide release at the genre's natural screen count
+DIRECT_PVOD_CONVERSION    = 1.45   # rentals per $PVOD_PRICE of that theatrical-equivalent demand (a home premiere converts far more of its audience than a post-theatrical rental)
+DIRECT_PVOD_INTL_SHARE    = 0.45   # international digital premieres, as a share of the domestic PVOD take
+
+# Direct to Peacock (2026-10-05, per explicit user discussion). No theaters,
+# no rentals: the film's only value is to the platform, so its own cash never
+# recoups -- it earns through subscribers, positioned one of two ways
+# (peacock_goal):
+# - "acquisition": pull in NEW subscribers. Marketing has to reach people
+#   who don't have Peacock, so value needs a big P&A push (slow-saturating)
+#   and swings with how big the film plays; stars help.
+# - "retention": keep EXISTING subscribers from cancelling. Marketing only
+#   has to reach the app (in-app promotion), so a small P&A spend gets most
+#   of the value; steadier and smaller, much less hit-dependent.
+# Values are present-value $M; illustrative calibration, not studio data.
+DTP_ACQ_VALUE_PER_TYPICAL_M = 5.8   # acquisition value per $1M of the genre's typical budget (commercial scale)
+DTP_ACQ_PA_REF_X   = 1.50    # x the genre's P&A reference: acquisition needs ~1.5x the usual spend
+DTP_RET_VALUE_M    = 150.0   # retention value of a premiere at full genre appeal
+DTP_RET_PA_REF_X   = 0.25    # retention saturates at ~a quarter of the usual spend
+DTP_RET_HIT_EXP    = 0.40    # retention's sensitivity to how big the film plays (1.0 = fully)
+PEACOCK_GOALS      = ("acquisition", "retention")
 
 # Bull/base/bear multiplier on the box-office "multiplier" (opening weekend
 # -> total domestic run) — this is deliberately where quality/word-of-mouth
@@ -1588,6 +1619,7 @@ class MovieProject:
     pay2_fee_mult: Optional[float] = None              # licensing platform's Pay-2 appetite when the deal was struck
     library_ip: Optional[str] = None                  # UNIVERSAL_LIBRARY_IP key -- a revived library title
     lead_actor: Optional[str] = None                  # display-only: TALENT_PARTNERS key or None (unnamed cast)
+    peacock_goal: str = "acquisition"                 # Direct to Peacock only: "acquisition" | "retention"
 
     def capital_at_risk(self) -> float:
         """Total upfront cash committed before any revenue arrives --
@@ -1627,7 +1659,8 @@ class MovieProject:
                             else SOURCE_ACQUISITION_COST_M.get(self.source_material, 0.0))
         star_power_cost = self.star_power * STAR_POWER_COST_PER_POINT_M
         imax_cost = IMAX_COST_M if self.is_imax_eligible() else 0.0
-        booked = min(self.screens, PLATFORM_SCREENS) if self.release_strategy == "platform" else self.screens
+        booked = (0 if self.release_strategy in DIRECT_RELEASES
+                  else min(self.screens, PLATFORM_SCREENS) if self.release_strategy == "platform" else self.screens)
         screen_cost = booked * SCREEN_COST_PER_SCREEN_M
         return (budget_component + self.pa_spend_m + acquisition_cost + star_power_cost
                 + imax_cost + screen_cost)
@@ -1679,7 +1712,7 @@ class MovieProject:
         none to upgrade). False (the common case) means IMAX never touches
         capital_at_risk() or opening_weekend() at all."""
         return (self.imax_release and self.genre in IMAX_ELIGIBLE_GENRES
-                and self.release_strategy != "day_and_date")
+                and self.release_strategy not in ("day_and_date",) + DIRECT_RELEASES)
 
     def window_days(self) -> int:
         """Theatrical exclusivity window. theatrical_run_length (2026-08-18,
@@ -1692,6 +1725,8 @@ class MovieProject:
         day count from a real mini-run takes priority over the coarser
         tier picker, which in turn takes priority over the automatic
         formula."""
+        if self.release_strategy in DIRECT_RELEASES:
+            return 0   # no theatrical window: the home premiere is day one
         if self.theatrical_run_days is not None:
             return max(RUN_LENGTH_DAYS_MIN, min(RUN_LENGTH_DAYS_MAX, int(self.theatrical_run_days)))
         if self.theatrical_run_length is not None:
@@ -1766,7 +1801,8 @@ class MovieProject:
         2021 WarnerMedia/HBO Max day-and-date experiment, not exact."""
         # Platform's smaller footprint is modeled by its own legs (platform_legs,
         # 2026-10-01) rather than a flat haircut.
-        return {"wide_theatrical": 1.0, "platform": 1.0, "day_and_date": 0.55}[self.release_strategy]
+        return {"wide_theatrical": 1.0, "platform": 1.0, "day_and_date": 0.55,
+                "direct_to_pvod": 0.0, "direct_to_peacock": 0.0}[self.release_strategy]
 
     def domestic_box_office(self, scenario) -> float:
         """`scenario` is either a named key ("bear"/"base"/"bull", for
@@ -1794,6 +1830,18 @@ class MovieProject:
             run_mult = 1.0
         legs = self.platform_legs() if self.release_strategy == "platform" else 1.0
         return self.opening_weekend() * multiplier * self.cannibalization_factor() * run_mult * legs
+
+    def demand_box_office(self, scenario) -> float:
+        """Audience-demand signal for the downstream windows (PVOD, Peacock,
+        theme parks). Equals domestic box office for any theatrical release;
+        for Direct to PVOD (no box office at all) it's DIRECT_PVOD_DEMAND_SHARE
+        of what a wide release at the genre's natural screen count would have
+        grossed -- same draws, same quality, no big-screen event."""
+        if self.release_strategy not in DIRECT_RELEASES:
+            return self.domestic_box_office(scenario)
+        wide = replace(self, release_strategy="wide_theatrical", screens=GENRE_SCREEN_DEMAND.get(self.genre, 3000),
+                       imax_release=False, theatrical_run_days=None, theatrical_run_length=None)
+        return wide.domestic_box_office(scenario) * DIRECT_PVOD_DEMAND_SHARE
 
     def international_box_office(self, domestic_gross: float) -> float:
         """International box office the studio itself keeps. Under a
@@ -1833,8 +1881,15 @@ class MovieProject:
         curve (see PVOD_PRICE_ELASTICITY) instead of a fixed conversion
         rate, so a higher chosen price earns more per transaction but
         converts fewer of them."""
-        if self.release_strategy == "day_and_date":
+        if self.release_strategy in ("day_and_date", "direct_to_peacock"):
             return 0.0, 0.0
+        if self.release_strategy == "direct_to_pvod":
+            # A home premiere: a much bigger share of the (smaller) audience
+            # rents, at the chosen price, worldwide.
+            demand = self.demand_box_office(scenario)
+            price = self.pvod_chosen_price or PVOD_PRICE
+            rentals_m = (demand / PVOD_PRICE) * DIRECT_PVOD_CONVERSION * (PVOD_PRICE / price) ** PVOD_PRICE_ELASTICITY
+            return rentals_m * price * PVOD_STUDIO_SHARE * (1 + DIRECT_PVOD_INTL_SHARE), 0.0
         dom = self.domestic_box_office(scenario)
         if self.pvod_chosen_price is not None:
             price = self.pvod_chosen_price
@@ -1864,7 +1919,9 @@ class MovieProject:
         attributable to this title — same LTV logic Day 1 applies to SVOD
         shows (utils/models.py::SVOD_SUB_LTV_MO), scaled by a genre-specific
         streaming-conversion appeal score instead of a per-show rating."""
-        dom = self.domestic_box_office(scenario)
+        if self.release_strategy == "direct_to_peacock":
+            return self.peacock_direct_value(scenario)
+        dom = self.demand_box_office(scenario)
         appeal = GENRE_SVOD_APPEAL.get(self.genre, 65) / 100
         sub_lift_m = (dom / 50.0) * appeal * 0.4
         if self.release_strategy == "day_and_date":
@@ -1878,12 +1935,36 @@ class MovieProject:
                       * GENRE_AUDIENCE_SCALE.get(self.genre, 1.0))
         return value
 
+    def peacock_direct_value(self, scenario) -> float:
+        """Subscriber value of a Direct to Peacock premiere (see the DTP_*
+        block): acquisition needs heavy P&A and swings with the film's
+        performance; retention saturates on a small in-app P&A spend and
+        barely depends on how big the film plays."""
+        import math
+        bounds = scenario_multipliers_for(self.genre, self.concept_type)
+        mult = bounds[scenario] if isinstance(scenario, str) else scenario
+        ratio = max(mult, 0.0) / bounds["base"]
+        appeal = GENRE_SVOD_APPEAL.get(self.genre, 65) / 100
+        typical = GENRE_TYPICAL_BUDGET_M.get(self.genre, 60.0)
+        quality = self.production_value_mult() * self.concept_opening_boost() * self.season_opening_mult()
+        ref = typical * PA_REF_PCT_OF_TYPICAL_BUDGET
+        pa = max(self.pa_spend_m, 0.0)
+        if self.peacock_goal == "retention":
+            # Keeping fans subscribed: driven by how much current subscribers
+            # like the genre, not by the film's commercial size.
+            reach = 1 - math.exp(-pa / (DTP_RET_PA_REF_X * ref))
+            return DTP_RET_VALUE_M * appeal * quality * reach * ratio ** DTP_RET_HIT_EXP
+        # New sign-ups: a broad, big-scale film pulls far more of them.
+        reach = 1 - math.exp(-pa / (DTP_ACQ_PA_REF_X * ref))
+        stars = 1 + (self.star_power / 100) * STAR_POWER_BOOST_MAX
+        return DTP_ACQ_VALUE_PER_TYPICAL_M * typical * appeal ** 2 * quality * reach * ratio * stars
+
     def is_licensing_out(self) -> bool:
         """Whether the Pay-1 SVOD window is actually being licensed away
         this project -- day_and_date overrides pay1_licensing to False
         regardless of what's set, since that release strategy already
         commits the title to Peacock exclusivity as its core premise."""
-        return self.pay1_licensing == "license_out" and self.release_strategy != "day_and_date"
+        return self.pay1_licensing == "license_out" and self.release_strategy not in ("day_and_date", "direct_to_peacock")
 
     def pay1_license_fee(self) -> float:
         """Flat, pre-negotiated fee for licensing the Pay-1 SVOD window to
@@ -1922,7 +2003,7 @@ class MovieProject:
         day_and_date exclusion as Pay-1 (that release strategy already
         commits the title to Peacock exclusivity, so there's no Pay-2
         window to license away either)."""
-        return self.pay2_licensing == "license_out" and self.release_strategy != "day_and_date"
+        return self.pay2_licensing == "license_out" and self.release_strategy not in ("day_and_date", "direct_to_peacock")
 
     def pay2_value(self, critical_score: Optional[float] = None) -> float:
         """The Pay-2 window's value, ~4 years after release (see the Pay-2
@@ -1932,6 +2013,8 @@ class MovieProject:
         Peacock: the expected catalog share for these reviews, times the
         realized revival draw once the decision is locked (pay2_keep_mult;
         None = expected value)."""
+        if self.release_strategy == "direct_to_peacock":
+            return 0.0   # a Peacock original stays on Peacock; its value is all in subscriber value
         pool = self.subscriber_value("base") * PAY2_VALUE_PCT_OF_PAY1
         if self.is_licensing_out_pay2():
             fee_pct = LICENSING_PLATFORMS.get(self.pay2_platform,
@@ -1954,7 +2037,12 @@ class MovieProject:
         library value, independent of how it did theatrically. Family/Kids
         content carries an extra long-tail multiplier — the real "vault"
         shelf-life effect (see KIDS_LONGTAIL_MULT)."""
-        base = self.theatrical_studio_net(scenario) * 0.06
+        if self.release_strategy == "direct_to_pvod":
+            base = self.pvod_revenue(scenario) * 0.10
+        elif self.release_strategy == "direct_to_peacock":
+            base = self.subscriber_value(scenario) * 0.04   # later catalog value on Peacock
+        else:
+            base = self.theatrical_studio_net(scenario) * 0.06
         if self.concept_type == "Family/Kids":
             base *= KIDS_LONGTAIL_MULT
         if critical_score is None:
@@ -1991,7 +2079,7 @@ class MovieProject:
             return 0.0
 
         concept_mult = THEME_PARK_CONCEPT_MULT.get(self.concept_type, 1.0 if genre_eligible else 0.0)
-        return self.domestic_box_office(scenario) * THEME_PARK_REVENUE_RATE * concept_mult
+        return self.demand_box_office(scenario) * THEME_PARK_REVENUE_RATE * concept_mult
 
     def awards_season_bump(self, scenario: str, critical_score: Optional[float] = None) -> float:
         """A limited theatrical rerelease during awards season (For-Your-

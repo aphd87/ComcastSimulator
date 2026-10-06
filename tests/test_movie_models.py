@@ -1868,3 +1868,44 @@ def test_festival_lowball_bids_rarely_win_now_that_prices_track_value():
                 wins += resolve_festival_acquisition(0.7 * value, rivals)["team_won"]
                 n += 1
     assert wins / n < 0.25
+
+
+
+# ── Releases without theaters (2026-10-05) ───────────────────────────────────
+def _direct(genre, strategy, pa_x=0.5, goal="acquisition"):
+    from utils.movie_models import GENRE_TYPICAL_BUDGET_M, GENRE_SCREEN_DEMAND
+    b = GENRE_TYPICAL_BUDGET_M.get(genre, 60) * 0.6
+    return MovieProject(title="t", genre=genre, budget_m=b, pa_spend_m=b * pa_x * 1.0, star_power=40,
+                        screens=GENRE_SCREEN_DEMAND.get(genre, 3000), cycle=2, release_strategy=strategy,
+                        peacock_goal=goal)
+
+
+def test_direct_releases_have_no_theaters_but_keep_their_own_revenue():
+    p = _direct("Comedy", "direct_to_pvod")
+    assert p.domestic_box_office("base") == 0 and p.theatrical_studio_net("base") == 0
+    assert p.window_days() == 0 and p.pvod_revenue("base") > 0
+    wide = _direct("Comedy", "wide_theatrical")
+    assert p.capital_at_risk() < wide.capital_at_risk()          # no screen / booking fees
+    peacock = _direct("Animated", "direct_to_peacock")
+    assert peacock.pvod_revenue("base") == 0 and peacock.subscriber_value("base") > 0
+    assert not peacock.is_licensing_out() and peacock.pay2_value(60) == 0
+
+
+def test_direct_to_pvod_suits_smaller_genre_films_not_tentpoles():
+    from utils.movie_models import risk_adjusted_npv
+    gap = lambda g: risk_adjusted_npv(_direct(g, "direct_to_pvod")) - risk_adjusted_npv(_direct(g, "wide_theatrical"))
+    assert gap("Comedy") > 0 and gap("Horror") > 0
+    assert gap("Action/Tentpole") < -20
+
+
+def test_peacock_acquisition_needs_marketing_and_retention_does_not():
+    from utils.movie_models import GENRE_TYPICAL_BUDGET_M
+    acq_low = _direct("Animated", "direct_to_peacock", pa_x=0.3).subscriber_value("base")
+    acq_high = _direct("Animated", "direct_to_peacock", pa_x=1.5).subscriber_value("base")
+    ret_low = _direct("Horror", "direct_to_peacock", pa_x=0.3, goal="retention").subscriber_value("base")
+    ret_high = _direct("Horror", "direct_to_peacock", pa_x=1.5, goal="retention").subscriber_value("base")
+    assert acq_high > 2.0 * acq_low                    # acquisition keeps paying for reach
+    assert ret_low > 0.6 * ret_high                    # retention gets most of its value on a small spend
+    # Acquisition favors broad, big-scale films; retention favors fan-driven genres.
+    assert (_direct("Animated", "direct_to_peacock", pa_x=1.5).subscriber_value("base")
+            > _direct("Drama", "direct_to_peacock", pa_x=1.5).subscriber_value("base"))
