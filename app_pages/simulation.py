@@ -65,6 +65,12 @@ def _remove_greenlit_shows(ss, ids_to_remove: set):
         return
     for key in ("oxygen_shows", "bravo_shows", "peacock_shows"):
         ss[key] = [s for s in ss.get(key, []) if s.id not in ids_to_remove]
+    # Keep the class Pitch Board in step with the roster (2026-10-14): an
+    # undone show's post is withdrawn (same key greenlight.py posted under).
+    from utils.game_state import withdraw_pitch
+    for sid in ids_to_remove:
+        withdraw_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""),
+                       "tv", f"{ss.get('active_network', '')}-{sid}")
 
 
 def _annual_cost(shows, year: int, prev_cancelled: set, new_cancel: set) -> float:

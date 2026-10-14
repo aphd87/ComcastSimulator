@@ -27,6 +27,16 @@ def test_reposting_the_same_key_replaces_the_earlier_post():
     assert board[0]["details"]["npv"] == 12.0
 
 
+def test_withdrawn_pitch_leaves_the_board_until_reposted():
+    """Redo Year / Restart Level / Movies Redo withdraw the undone post
+    (2026-10-14); re-simulating the same key brings it back."""
+    _post("A", "Undone show", sim="tv", key="oxygen-61")
+    gs.withdraw_pitch("A", "S", "C", "tv", "oxygen-61")
+    assert gs.class_pitches("S", "C", sim="tv") == []
+    _post("A", "Redone show", sim="tv", key="oxygen-61")
+    assert [p["title"] for p in gs.class_pitches("S", "C", sim="tv")] == ["Redone show"]
+
+
 def test_sim_filter():
     _post("A", "A show", sim="tv", key="oxygen-60")
     _post("A", "A film", sim="movies", key="cycle-1")

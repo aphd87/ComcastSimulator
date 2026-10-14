@@ -555,7 +555,7 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
         })
     total = sum(r["npv"] + _deal_totals(ss, r["cycle"])[1] for r in log)
     st.markdown(f'<div class="section-title">{title} '
-                f'<span class="text-xs text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV incl. deals '
+                f'<span class="text-sm text-muted">({len(log)} of {CYCLES_TOTAL} films · total NPV incl. deals '
                 f'{_fmt_money(total)})</span></div>', unsafe_allow_html=True)
     st.caption("Deals = partnership and renewal fees, actor holds, festival films won and attractions built "
                "that cycle. They count in your score alongside each film's NPV.")
@@ -569,6 +569,21 @@ def _pending_pay2_films(ss) -> list:
     return [r for r in sorted(ss.movie_log, key=lambda r: r["cycle"])
             if r["cycle"] < ss.movie_cycle and r.get("pay2_decided_cycle") is None
             and r["project_kwargs"].get("release_strategy") not in PEACOCK_EXCLUSIVE]
+
+
+def _post_film_pitch(ss, entry: dict):
+    """(Re)post a logged film to the class Pitch Board. Called on Simulate
+    and again whenever the film's NPV changes later (Pay-2 lock), so the
+    board always shows the same NPV as Your Slate and the score (2026-10-14)."""
+    from utils.game_state import post_pitch
+    kw = entry["project_kwargs"]
+    post_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""), "movies",
+               key=f"cycle-{entry['cycle']}", title=kw["title"], genre=kw["genre"],
+               pitch=entry.get("logline", ""),
+               details={"cycle_label": f"Film {entry['cycle']}", "concept_type": kw.get("concept_type", "New IP"),
+                        "budget_m": kw["budget_m"], "pa_spend_m": kw["pa_spend_m"],
+                        "release_label": RELEASE_LABELS.get(kw["release_strategy"], kw["release_strategy"]),
+                        "npv": entry["npv"], "critical_score": entry["critical_score"]})
 
 
 def _film_npv(entry: dict, kw: dict) -> float:
@@ -712,7 +727,7 @@ def _section_distribution_pipeline(ss):
     slate)."""
     st.markdown('<div class="section-title">Distribution Pipeline — Slate Scorecard</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<p class="text-xs text-ink2 mb-1">🏦 Studio Annual Budget: '
+        f'<p class="text-sm text-ink2 mb-1">🏦 Studio Annual Budget: '
         f'<b class="text-ink">${ss.movie_studio_budget_m/1000:,.2f}B</b> '
         f'<span class="text-muted">— moves year to year based on how the slate actually performs. '
         f'A soft signal for your own Greenlight spend below, not a hard cap — your Production Budget '
@@ -907,18 +922,18 @@ def _render_research_card(ss, project: MovieProject, logline: str):
         <b>Pitch:</b> {pitch}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:8px;">
-        <div><div class="text-[10px] font-mono">AUDIENCE DEMAND</div>
+        <div><div class="text-[14px] font-mono">AUDIENCE DEMAND</div>
           <div class="text-sm" style="color:{bo_c};">{star_str} {bo_word}</div>
           <div style="font-size:14px;">{vs_base:+.0f}% vs. a typical run</div></div>
-        <div><div class="text-[10px] font-mono">OPENING WEEKEND</div>
+        <div><div class="text-[14px] font-mono">OPENING WEEKEND</div>
           <div class="text-sm">${opening:,.1f}M</div>
           <div style="font-size:14px;">at your current screens, stars &amp; P&amp;A</div></div>
-        <div><div class="text-[10px] font-mono">WORLDWIDE BOX OFFICE</div>
+        <div><div class="text-[14px] font-mono">WORLDWIDE BOX OFFICE</div>
           <div class="text-sm">${worldwide:,.0f}M</div>
           <div style="font-size:14px;">${domestic:,.0f}M domestic + ${worldwide - domestic:,.0f}M intl</div></div>
-        <div><div class="text-[10px] font-mono">CRITICS</div>
+        <div><div class="text-[14px] font-mono">CRITICS</div>
           <div class="text-sm" style="color:{cs_c};">{preview_cs:.0f}/100 · {cs_tier}</div></div>
-        <div><div class="text-[10px] font-mono">NPV AT THESE SIGNALS</div>
+        <div><div class="text-[14px] font-mono">NPV AT THESE SIGNALS</div>
           <div class="text-sm" style="color:{npv_c};">{_fmt_money(npv_here)}</div>
           <div style="font-size:14px;">wide release, before risk events</div></div>
       </div>
@@ -991,10 +1006,10 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     transition."""
     st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">1 · Studio Partnerships '
-                '<span class="text-xs text-muted">(optional · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
+                '<span class="text-sm text-muted">(optional · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Sign a standing deal with a production banner for '
+        '<p class="text-sm text-ink2 mb-2">Sign a standing deal with a production banner for '
         'first-look access to whatever they\'re developing next: a bonus on every film in their '
         'specialty genre. From the next cycle on they ask for a renewal fee each cycle (more after a '
         'hit). A banner nobody signs can quietly get poached by a rival studio.</p>',
@@ -1005,7 +1020,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         st.markdown(f"""
         <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
           <div class="text-sm font-semibold" style="color:{WARN};">🚨 {rival} signed {STUDIO_PARTNERS[key]['name']} to an exclusive deal</div>
-          <div class="text-xs text-ink2 mt-1">No longer available to you for the rest of this level.</div>
+          <div class="text-sm text-ink2 mt-1">No longer available to you for the rest of this level.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1074,11 +1089,11 @@ def _section_studio_partnerships(ss, newly_poached: dict):
                 st.markdown(f"""
                 <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;{opacity}">
                   <div class="text-sm font-semibold text-ink">{partner['name']}</div>
-                  <div class="text-[10px] text-muted font-mono mb-2">{partner['specialty']} specialty</div>
-                  <div class="text-[10px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
-                  <div class="text-xs text-ink2">{bonus_label}</div>
-                  <div class="text-xs text-warn mt-1">${partner['deal_cost_m']:.0f}M</div>
-                  {f'<div class="text-[10px] mt-1" style="color:{DANGER};">Signed by {poached_by}</div>' if poached_by else ''}
+                  <div class="text-[14px] text-muted font-mono mb-2">{partner['specialty']} specialty</div>
+                  <div class="text-[14px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
+                  <div class="text-sm text-ink2">{bonus_label}</div>
+                  <div class="text-sm text-warn mt-1">${partner['deal_cost_m']:.0f}M</div>
+                  {f'<div class="text-[14px] mt-1" style="color:{DANGER};">Signed by {poached_by}</div>' if poached_by else ''}
                 </div>
                 """, unsafe_allow_html=True)
                 if not poached_by and st.button("Sign", key=f"sign_overall_{key}", use_container_width=True):
@@ -1138,10 +1153,10 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     directly into the Greenlight fields right below it."""
     st.markdown('<a id="scouted"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">2 · Scouted Concepts '
-                '<span class="text-xs text-muted">(optional · option a concept or skip)</span></div>',
+                '<span class="text-sm text-muted">(optional · option a concept or skip)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        f'<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface {SCOUTED_CONCEPTS_PER_CYCLE} concepts '
+        f'<p class="text-sm text-ink2 mb-2">The studio\'s scouts surface {SCOUTED_CONCEPTS_PER_CYCLE} concepts '
         'every cycle. <b>Option at least one</b>: it fills in your Greenlight form below, and you can still '
         'change anything there. Each card has the <b>scout\'s read</b>: a demand estimate (it can be off by a '
         'star; paid Research gives the real signal), how volatile the genre is, and what the concept earns as '
@@ -1154,7 +1169,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
         <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
           <div class="text-sm font-semibold" style="color:{WARN};">🚨 {outcome['rival']} picked up
           "{outcome['title']}" — you passed on this {outcome['genre']} concept.</div>
-          <div class="text-xs text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
+          <div class="text-sm text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
           {_fmt_money(outcome['npv'])} NPV for them{' — a real hit you left on the table.' if npv_ok else '.'}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1174,13 +1189,13 @@ def _section_scouted_concepts(ss, newly_poached: dict):
             st.markdown(f"""
             <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
               {hot_html}
-              <div class="text-[10px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
-              <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
-              <div class="text-[10px] text-muted font-mono">Est. Budget: ${concept['budget_m']:.0f}M</div>
+              <div class="text-[14px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
+              <div class="text-sm text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
+              <div class="text-[14px] text-muted font-mono">Est. Budget: ${concept['budget_m']:.0f}M</div>
               <div style="font-size:14px;margin-top:6px;line-height:1.5;">🔭 <b>Scout's read</b>: {stars_html} demand (±1 star)
                 · {read['risk']} risk<br>As scouted: {_fmt_money(read['npv_weak'])} (weak run) to
                 {_fmt_money(read['npv_expected'])} (expected run)</div>
-              {'<div class="text-[10px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
+              {'<div class="text-[14px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
             </div>
             """, unsafe_allow_html=True)
             if not optioned and st.button("Option This Concept", key=f"option_{concept['id']}", use_container_width=True):
@@ -1248,10 +1263,10 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
     comment in utils/movie_models.py for why."""
     st.markdown('<a id="festivals"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">3 · Film Festival Acquisitions '
-                '<span class="text-xs text-muted">(optional · bid or pass)</span></div>',
+                '<span class="text-sm text-muted">(optional · bid or pass)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each offer one finished film with '
+        '<p class="text-sm text-ink2 mb-2">Sundance, TIFF, and Cannes each offer one finished film with '
         'its reviews already known. <b>Bid on at least one</b>. Bids are sealed: rivals bid too, the '
         'highest bid wins and pays what it bid. Your analysts give each film a <b>break-even bid</b>: '
         'pay more than that and the film loses money unless it breaks out. Hot films draw more rival '
@@ -1267,7 +1282,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
         <div class="rounded-lg p-3 mb-2" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
           <div class="text-sm font-semibold" style="color:{WARN};">🚨 {outcome['winner']} acquired
           "{outcome['title']}" ({outcome['festival_name']}) — you didn't place a winning bid.</div>
-          <div class="text-xs text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
+          <div class="text-sm text-ink2 mt-1">It went on to post {'a' if npv_ok else 'a real'}
           {_fmt_money(outcome['npv'])} NPV for them{' — a real one that got away.' if npv_ok else '.'}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1295,10 +1310,10 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                             if interested else "no rival studio screened it"))
             st.markdown(f"""
             <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
-              <div class="text-[10px] text-muted font-mono mb-1">{film['festival_name']} · {film['genre']} · {film['concept_type']}</div>
-              <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
-              <div class="text-[10px] text-muted font-mono">Critics: {cs:.0f}/100 ({cs_tier}), already screened</div>
-              <div class="text-[10px] text-muted font-mono">Asking price: ${film['asking_anchor_m']:.1f}M</div>
+              <div class="text-[14px] text-muted font-mono mb-1">{film['festival_name']} · {film['genre']} · {film['concept_type']}</div>
+              <div class="text-sm text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
+              <div class="text-[14px] text-muted font-mono">Critics: {cs:.0f}/100 ({cs_tier}), already screened</div>
+              <div class="text-[14px] text-muted font-mono">Asking price: ${film['asking_anchor_m']:.1f}M</div>
               <div style="font-size:14px;margin-top:6px;line-height:1.45;">📈 Break-even bid: <b>${be_bear:.1f}M</b> (weak run)
                 to <b>${be_base:.1f}M</b> (expected run)</div>
               <div style="font-size:14px;line-height:1.45;">{interest_txt}</div>
@@ -1367,11 +1382,11 @@ def _section_holding_deals(ss, resolved_hold_key):
     partnerships uses -- see that function's docstring."""
     st.markdown('<a id="holding"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">5 · Holding Deals '
-                '<span class="text-xs text-muted">(optional · hold or sign an actor for your '
+                '<span class="text-sm text-muted">(optional · hold or sign an actor for your '
                 'next film; skipped on your final film)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2"><b>Lock at least one actor for your next film.</b> An actor '
+        '<p class="text-sm text-ink2 mb-2"><b>Lock at least one actor for your next film.</b> An actor '
         'you hold or sign can be cast as the <b>Lead Actor</b> in Greenlight next cycle. A Hold is cheap '
         'but risky: a rival may already have their window, and even a successful hold can fall through. '
         'A Multi-Picture Deal costs more but is guaranteed.</p>', unsafe_allow_html=True)
@@ -1384,7 +1399,7 @@ def _section_holding_deals(ss, resolved_hold_key):
              border:1px solid rgba({'102,187,106' if ok else '239,83,80'},.3);">
           <div class="text-sm font-semibold" style="color:{SUCCESS if ok else DANGER};">
             {'✅' if ok else '❌'} Holding Deal Update — {TALENT_PARTNERS[resolved_hold_key]['name']}</div>
-          <div class="text-xs text-ink2 mt-1">{'The window held together. Cast them as 🎭 Lead Actor in Greenlight (step 4) this cycle; their bonus applies in one of their best genres.' if ok else h['forfeit_reason']}</div>
+          <div class="text-sm text-ink2 mt-1">{'The window held together. Cast them as 🎭 Lead Actor in Greenlight (step 4) this cycle; their bonus applies in one of their best genres.' if ok else h['forfeit_reason']}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1411,7 +1426,7 @@ def _section_holding_deals(ss, resolved_hold_key):
         return signed is not None and signed <= ss.movie_cycle < signed + MULTI_PICTURE_DEAL_CYCLES
 
     st.markdown(
-        '<p class="text-xs text-ink2 mt-3 mb-2">Or negotiate a Multi-Picture Deal — real negotiation '
+        '<p class="text-sm text-ink2 mt-3 mb-2">Or negotiate a Multi-Picture Deal — real negotiation '
         f'depth beyond a one-off Hold: pay more upfront (~4x the hold fee) to lock an actor\'s '
         f'availability for {MULTI_PICTURE_DEAL_CYCLES} full cycles outright, with no rival-claim roll '
         'and no forfeit risk. Expensive and safe, versus Holding\'s cheap and risky.</p>',
@@ -1434,22 +1449,22 @@ def _section_holding_deals(ss, resolved_hold_key):
                 partner = TALENT_PARTNERS[key]
                 with col:
                     synergy_material = ORIGIN_MEDIUM_SOURCE_SYNERGY.get(partner.get("origin_medium"))
-                    synergy_note = (f'<div class="text-[10px] mt-1" style="color:{ACCENT2};">🎯 {synergy_material} synergy '
+                    synergy_note = (f'<div class="text-[14px] mt-1" style="color:{ACCENT2};">🎯 {synergy_material} synergy '
                                     f'(×{TALENT_SOURCE_SYNERGY_MULT:.1f}) if paired with that Source Material</div>'
                                     if synergy_material else "")
                     bonus_label = (f"+{partner['star_power_bonus']} Star Power" if "star_power_bonus" in partner
                                    else f"+{partner['critical_score_bonus']:.0f} Critical Reception")
                     st.markdown(f"""
                     <div class="eq-card rounded-lg border border-line bg-surface p-3" style="height:100%;">
-                      <div class="text-sm font-semibold text-ink">{partner['name']} <span class="text-[10px] text-muted">
+                      <div class="text-sm font-semibold text-ink">{partner['name']} <span class="text-[14px] text-muted">
                         ({partner.get('gender', '')}, {partner.get('age', '?')}, {partner.get('ethnicity', '—')})</span></div>
-                      <div class="text-[10px] text-muted font-mono mb-1">Best genres: {', '.join(partner.get('best_genres', [partner['specialty']]))}</div>
-                      <div class="text-[10px] text-muted font-mono mb-2">From: {partner.get('origin_medium', '—')}</div>
-                      <div class="text-[10px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
-                      <div class="text-[10px] text-muted font-mono">Lifetime B.O.: ${partner.get('lifetime_box_office_m', 0):,.0f}M</div>
-                      <div class="text-[10px] text-muted font-mono mb-2">Social: {partner.get('social_followers_m', 0):.1f}M followers</div>
-                      <div class="text-xs text-ink2">{bonus_label}</div>
-                      <div class="text-[10px] text-muted font-mono">${partner['hold_cost_m']:.1f}M hold fee · ${partner['multi_picture_cost_m']:.0f}M multi-picture</div>
+                      <div class="text-[14px] text-muted font-mono mb-1">Best genres: {', '.join(partner.get('best_genres', [partner['specialty']]))}</div>
+                      <div class="text-[14px] text-muted font-mono mb-2">From: {partner.get('origin_medium', '—')}</div>
+                      <div class="text-[14px] text-ink2 mb-2" style="line-height:1.4;">{partner.get('bio', '')}</div>
+                      <div class="text-[14px] text-muted font-mono">Lifetime B.O.: ${partner.get('lifetime_box_office_m', 0):,.0f}M</div>
+                      <div class="text-[14px] text-muted font-mono mb-2">Social: {partner.get('social_followers_m', 0):.1f}M followers</div>
+                      <div class="text-sm text-ink2">{bonus_label}</div>
+                      <div class="text-[14px] text-muted font-mono">${partner['hold_cost_m']:.1f}M hold fee · ${partner['multi_picture_cost_m']:.0f}M multi-picture</div>
                       {synergy_note}
                     </div>
                     """, unsafe_allow_html=True)
@@ -1587,17 +1602,17 @@ def _last_cycle_recap(prev: dict):
     cs_c   = SUCCESS if cs >= 55 else (WARN if cs >= 35 else DANGER)
     st.markdown(f"""
     <div class="rounded-lg border border-line bg-surface2 p-4 mb-4">
-      <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-2">
+      <div class="font-mono text-[14px] text-muted uppercase tracking-widest mb-2">
         {_cycle_years_label(prev['cycle'])} — "{title}" — Last Period's Actuals
       </div>
       <div class="flex gap-8 flex-wrap items-end">
-        <div><div class="text-[9px] text-muted font-mono">NPV</div>
+        <div><div class="text-[14px] text-muted font-mono">NPV</div>
           <div class="text-xl font-serif" style="color:{npv_c};">{_fmt_money(prev['npv'])}</div></div>
-        <div><div class="text-[9px] text-muted font-mono">IRR</div>
+        <div><div class="text-[14px] text-muted font-mono">IRR</div>
           <div class="text-xl font-serif text-ink">{_irr_label(prev['irr'])}</div></div>
-        <div><div class="text-[9px] text-muted font-mono">CRITICAL RECEPTION</div>
+        <div><div class="text-[14px] text-muted font-mono">CRITICAL RECEPTION</div>
           <div class="text-xl font-serif" style="color:{cs_c};">{cs:.0f}/100</div></div>
-        <div><div class="text-[9px] text-muted font-mono">RELEASE STRATEGY</div>
+        <div><div class="text-[14px] text-muted font-mono">RELEASE STRATEGY</div>
           <div class="text-sm text-ink mt-1">{RELEASE_LABELS[strat]}</div></div>
       </div>
     </div>
@@ -1756,14 +1771,14 @@ def _decisions(ss):
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
     _slots_left = CYCLES_TOTAL - ss.movie_cycle + 1
     st.markdown(f'<div class="section-title decision">4 · Greenlight a New Movie '
-                f'<span class="text-xs text-muted">(Greenlight Slot {ss.movie_cycle} of {CYCLES_TOTAL})</span></div>',
+                f'<span class="text-sm text-muted">(Greenlight Slot {ss.movie_cycle} of {CYCLES_TOTAL})</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
-        f'<p class="text-xs text-ink2 mb-2">🎟️ <b>One new movie per {YEARS_PER_CYCLE}-year cycle, {CYCLES_TOTAL} in all.</b> '
+        f'<p class="text-sm text-ink2 mb-2">🎟️ <b>One new movie per {YEARS_PER_CYCLE}-year cycle, {CYCLES_TOTAL} in all.</b> '
         f'This is slot {ss.movie_cycle} ({_slots_left} left including this one). Choose the concept, cast it, '
         f'write the pitch, and commit the money. Your pitch saves automatically and posts to the class Pitch '
         f'Board when you Simulate.</p>'
-        '<p class="text-xs text-ink2 mb-2">💸 Production Budget and <b>P&A (Prints & Advertising: trailers, '
+        '<p class="text-sm text-ink2 mb-2">💸 Production Budget and <b>P&A (Prints & Advertising: trailers, '
         'ad buys, publicity, delivering the film to theaters)</b> are paid in full, upfront, before you know '
         'whether the movie earns a cent. Unlike TV, where a show\'s cost is spread (amortized) over several '
         'years.</p>', unsafe_allow_html=True)
@@ -1885,11 +1900,11 @@ def _decisions(ss):
             f"for this {genre} · {concept_type} concept, your only hard signal before you commit"
         )
         st.markdown('<div class="section-title mt-3">🔎 Research '
-                    '<span class="text-xs text-muted">(optional — '
+                    '<span class="text-sm text-muted">(optional — '
                     'this previews real seeded outcome signals, not qualitative advice)</span></div>',
                     unsafe_allow_html=True)
         st.markdown(
-            f'<p class="text-xs text-ink2 mt-1 mb-1">Pay ${RESEARCH_FEE_M:.0f}M (added to P&A spend) to '
+            f'<p class="text-sm text-ink2 mt-1 mb-1">Pay ${RESEARCH_FEE_M:.0f}M (added to P&A spend) to '
             f'preview the actual audience-demand and critics signals {research_ip_note}. Research covers '
             f'the Genre and Concept Type you buy it for; switching either needs new research.</p>',
             unsafe_allow_html=True)
@@ -2029,7 +2044,7 @@ def _decisions(ss):
 
         st.markdown('<div class="section-title mt-3">🌎 Distribution Strategy</div>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="text-xs text-ink2 mb-2">How this movie gets funded globally and how hard you '
+            '<p class="text-sm text-ink2 mb-2">How this movie gets funded globally and how hard you '
             'push exhibitors on terms — separate from Research above, which is about '
             'the concept itself, not how it reaches audiences.</p>', unsafe_allow_html=True)
         fin_labels = {
@@ -2236,7 +2251,7 @@ def _decisions(ss):
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">6 · Release Plan — Your Slate</div>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">One row per film, windows in the order they open: <b>theaters</b> '
+        '<p class="text-sm text-ink2 mb-2">One row per film, windows in the order they open: <b>theaters</b> '
         '(release type and run length) → <b>PVOD</b> (premium rental at home; you set the price) → <b>Pay-1</b> '
         '(first streaming window: keep it on Peacock or license it) → <b>Pay-2</b> (second window, '
         f'~{PAY2_WINDOW_MONTH/12:.0f} years out, decided the cycle after release). Fill in this film\'s row, click '
@@ -2324,6 +2339,7 @@ def _decisions(ss):
         entry["total_revenue"] = p_new.total_revenue(entry["multiplier"], entry["critical_score"], **mults)
         entry["pay2_decided_cycle"] = ss.movie_cycle
         entry["pay2_npv_delta"] = entry.get("pay2_npv_delta", 0.0) + delta
+        _post_film_pitch(ss, entry)
         if pick == "keep":
             read = "strong" if revival >= 1.25 else ("as expected" if revival >= 0.8 else "weak")
             entry["pay2_outcome"] = f"Kept: catalog {read} ({_fmt_money(delta)})"
@@ -2700,7 +2716,7 @@ def _decisions(ss):
     if chosen not in PEACOCK_EXCLUSIVE and resolved_entry is not None and pvod_price is not None:
         st.markdown('<div class="section-title mt-3">PVOD Market Acceptance Checks</div>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="text-xs text-ink2 mb-2">Every 6 months the market gets a real chance to reject '
+            '<p class="text-sm text-ink2 mb-2">Every 6 months the market gets a real chance to reject '
             'your PVOD price — pricing near the top of your band is a real gamble, pricing near the '
             'floor is nearly always accepted. A rejection is a real choice: hold the price (an ongoing '
             'conversion cost) or cut it toward the floor (a one-time disruption cost, but the lower '
@@ -2788,7 +2804,7 @@ def _decisions(ss):
     # accepted bid becomes the Pay-1 cell's own option in the table above.
     if chosen not in PEACOCK_EXCLUSIVE and resolved_entry is not None:
         st.markdown('<div class="section-title mt-3" style="font-size:14px;">🏷️ Pay-1: Shop It to Competitive Bidders '
-                    '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
+                    '<span class="text-sm text-muted">(optional)</span></div>', unsafe_allow_html=True)
         # Industry context (2026-10-05, per explicit user request).
         st.markdown(
             '<div style="font-size:14px;line-height:1.55;margin-bottom:6px;">📖 <b>How Pay-1 works in the industry.</b> '
@@ -2823,7 +2839,7 @@ def _decisions(ss):
 
         auction = ss.movie_licensing_auction.get(ss.movie_cycle)
         if auction is None:
-            st.markdown('<p class="text-xs text-ink2 mb-1">Instead of a flat fee, rival platforms bid on the Pay-1 '
+            st.markdown('<p class="text-sm text-ink2 mb-1">Instead of a flat fee, rival platforms bid on the Pay-1 '
                         'window based on how this film actually opened. Not every platform bids. (Real '
                         'streamers, simulated bids.)</p>',
                         unsafe_allow_html=True)
@@ -2835,14 +2851,14 @@ def _decisions(ss):
             result = auction["result"]
             round_num = auction.get("round", 1)
             if round_num > 1:
-                st.markdown('<p class="text-xs text-ink2 mb-1">🔁 <b>Round 2</b>: you took the window back to '
+                st.markdown('<p class="text-sm text-ink2 mb-1">🔁 <b>Round 2</b>: you took the window back to '
                             'market. The first round\'s offers are gone.</p>', unsafe_allow_html=True)
             if not result["all_bids"]:
                 st.caption("No platforms made an offer this round. Keep it on Peacock or take a flat fee in the "
                            "Pay-1 cell above.")
             else:
                 st.markdown(
-                    '<p class="text-xs text-ink2 mb-2">Accept <b>any</b> offer, not just the highest. When a bid\'s '
+                    '<p class="text-sm text-ink2 mb-2">Accept <b>any</b> offer, not just the highest. When a bid\'s '
                     'term ends, the film returns to Peacock and you keep part of its subscriber value '
                     f'({PAY1_REVERSION_SHARE[12]:.0%} after 12 months, {PAY1_REVERSION_SHARE[18]:.0%} after 18), '
                     'so a lower bid on a shorter term can be worth more.</p>', unsafe_allow_html=True)
@@ -2872,7 +2888,7 @@ def _decisions(ss):
             if round_num < LICENSING_MAX_ROUNDS and not ss.movie_draft.get("pay1_auction_winner"):
                 lo_r, hi_r = LICENSING_RESHOP_MULT_RANGE
                 st.markdown(
-                    '<p class="text-xs text-ink2 mt-2 mb-1">Not happy with these offers? Reject all of them and take '
+                    '<p class="text-sm text-ink2 mt-2 mb-1">Not happy with these offers? Reject all of them and take '
                     'the window back to market <b>once</b>. Buyers know the title was passed over, so new bids '
                     f'typically land {1 - hi_r:.0%}–{1 - lo_r:.0%} lower, and some platforms may not bid at all.</p>',
                     unsafe_allow_html=True)
@@ -2995,14 +3011,7 @@ def _decisions(ss):
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
         # Share the film and how it did on the class Pitch Board (2026-10-01).
         # Re-simulating the same cycle replaces its post.
-        from utils.game_state import post_pitch
-        post_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""), "movies",
-                   key=f"cycle-{ss.movie_cycle}", title=project.title, genre=project.genre,
-                   pitch=ss.movie_draft.get("logline", ""),
-                   details={"cycle_label": f"Film {ss.movie_cycle}", "concept_type": project.concept_type,
-                            "budget_m": project.budget_m, "pa_spend_m": project.pa_spend_m,
-                            "release_label": RELEASE_LABELS.get(project.release_strategy, project.release_strategy),
-                            "npv": outcome["npv"], "critical_score": outcome["critical_score"]})
+        _post_film_pitch(ss, outcome)
         ss.movie_phase = "results"
         st.rerun()
 
@@ -3101,10 +3110,10 @@ def _decision_result_card(result: dict, ss=None):
     st.markdown(f"""
     <div class="rounded-lg border border-line bg-surface2 p-4 mb-4" style="color:#ffffff;font-size:14px;">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
-        <div><div class="font-mono text-[11px] mb-1">WHAT YOU DECIDED</div>{_rows(decisions)}</div>
-        <div><div class="font-mono text-[11px] mb-1">WHAT HAPPENED</div>{_rows(outcomes)}</div>
+        <div><div class="font-mono text-[14px] mb-1">WHAT YOU DECIDED</div>{_rows(decisions)}</div>
+        <div><div class="font-mono text-[14px] mb-1">WHAT HAPPENED</div>{_rows(outcomes)}</div>
       </div>
-      <div class="font-mono text-[11px] mt-3 mb-1">WHY</div>
+      <div class="font-mono text-[14px] mt-3 mb-1">WHY</div>
       <div style="line-height:1.6;">{'<br>'.join(why)}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -3135,22 +3144,22 @@ def _results(ss):
     st.markdown(f"""
     <div class="rounded-lg p-5 mb-4" style="background:rgba({'102,187,106' if npv_ok else '239,83,80'},.07);
          border:1px solid rgba({'102,187,106' if npv_ok else '239,83,80'},.3);">
-      <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-3">
+      <div class="font-mono text-[14px] text-muted uppercase tracking-widest mb-3">
         "{title}" ({concept_type}) — {RELEASE_LABELS[strat]} — Actual Results ({scenario_framing})
       </div>
       <div class="flex gap-8 flex-wrap">
-        <div><div class="text-[9px] text-muted font-mono">TOTAL REVENUE</div>
+        <div><div class="text-[14px] text-muted font-mono">TOTAL REVENUE</div>
           <div class="text-2xl font-serif text-ink">${result['total_revenue']:.1f}M</div>
-          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Every window summed — theatrical through library longtail.</div></div>
-        <div><div class="text-[9px] text-muted font-mono">CAPITAL AT RISK</div>
+          <div class="text-[14px] text-muted mt-1" style="max-width:140px;">Every window summed — theatrical through library longtail.</div></div>
+        <div><div class="text-[14px] text-muted font-mono">CAPITAL AT RISK</div>
           <div class="text-2xl font-serif" style="color:{WARN};">${result['capital_at_risk']:.1f}M</div>
-          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">What you committed before revenue arrived — the number NPV is measured against.</div></div>
-        <div><div class="text-[9px] text-muted font-mono">NPV</div>
+          <div class="text-[14px] text-muted mt-1" style="max-width:140px;">What you committed before revenue arrived — the number NPV is measured against.</div></div>
+        <div><div class="text-[14px] text-muted font-mono">NPV</div>
           <div class="text-2xl font-serif" style="color:{npv_c};">{_fmt_money(result['npv'])}</div>
-          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Total Revenue's present value minus Capital at Risk — positive means real value created.</div></div>
-        <div><div class="text-[9px] text-muted font-mono">IRR</div>
+          <div class="text-[14px] text-muted mt-1" style="max-width:140px;">Total Revenue's present value minus Capital at Risk — positive means real value created.</div></div>
+        <div><div class="text-[14px] text-muted font-mono">IRR</div>
           <div class="text-2xl font-serif text-ink">{_irr_label(result['irr'])}</div>
-          <div class="text-[10px] text-muted mt-1" style="max-width:140px;">Annualized rate of return — &gt;500% means capital came back too fast for the rate to be meaningful.</div></div>
+          <div class="text-[14px] text-muted mt-1" style="max-width:140px;">Annualized rate of return — &gt;500% means capital came back too fast for the rate to be meaningful.</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -3176,7 +3185,7 @@ def _results(ss):
         st.markdown(f"""
         <div class="rounded-lg p-4 mb-3" style="background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.3);">
           <div class="text-sm" style="color:{DANGER};font-weight:600;">🎬 Production Trouble</div>
-          <div class="text-xs text-ink2 mt-1">{trouble_reason} — this dragged down the resolved
+          <div class="text-sm text-ink2 mt-1">{trouble_reason} — this dragged down the resolved
           box-office outcome before you ever saw a number.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -3186,7 +3195,7 @@ def _results(ss):
         st.markdown(f"""
         <div class="rounded-lg p-4 mb-3" style="background:rgba(255,167,38,.08);border:1px solid rgba(255,167,38,.3);">
           <div class="text-sm" style="color:{WARN};font-weight:600;">🤖 AI Tooling Setback</div>
-          <div class="text-xs text-ink2 mt-1">{ai_setback_reason} — the cost/timeline savings from AI
+          <div class="text-sm text-ink2 mt-1">{ai_setback_reason} — the cost/timeline savings from AI
           Production Tools aren't a free efficiency win.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -3197,7 +3206,7 @@ def _results(ss):
         st.markdown(f"""
         <div class="rounded-lg p-4 mb-3" style="background:rgba(26,107,181,.08);border:1px solid rgba(26,107,181,.3);">
           <div class="text-sm" style="color:{surprise_c};font-weight:600;">🎢 Ancillary Markets Surprise</div>
-          <div class="text-xs text-ink2 mt-1">{ancillary_reason} — this moved PVOD rental and
+          <div class="text-sm text-ink2 mt-1">{ancillary_reason} — this moved PVOD rental and
           theme-park/merchandise revenue independently of box office and reviews.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -3209,7 +3218,7 @@ def _results(ss):
         <div class="rounded-lg p-4 mb-3" style="background:rgba({'102,187,106' if ewom_up else '239,83,80'},.08);
              border:1px solid rgba({'102,187,106' if ewom_up else '239,83,80'},.3);">
           <div class="text-sm" style="color:{ewom_c};font-weight:600;">📱 eWOM &amp; Piracy</div>
-          <div class="text-xs text-ink2 mt-1">{ewom_reason} — this moved PVOD and Peacock subscriber value
+          <div class="text-sm text-ink2 mt-1">{ewom_reason} — this moved PVOD and Peacock subscriber value
           together, independently of box office, reviews, and Ancillary Markets.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -3224,7 +3233,7 @@ def _results(ss):
         st.markdown(f"""
         <div class="rounded-lg p-4 mb-3" style="background:rgba(102,187,106,.08);border:1px solid rgba(102,187,106,.3);">
           <div class="text-sm" style="color:{SUCCESS};font-weight:600;">📣 Price-Cut Buzz</div>
-          <div class="text-xs text-ink2 mt-1">Cutting your PVOD price reached a wider audience — the
+          <div class="text-sm text-ink2 mt-1">Cutting your PVOD price reached a wider audience — the
           real, randomized payoff landed: {' and '.join(buzz_bits)}.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -3239,26 +3248,26 @@ def _results(ss):
     awards_note = ""
     if genre in AWARDS_ELIGIBLE_GENRES:
         if result.get("oscar_win"):
-            awards_note = (f'<div class="text-xs mt-2" style="color:{ACCENT};">'
+            awards_note = (f'<div class="text-sm mt-2" style="color:{ACCENT};">'
                             f'🏆 Oscar Win — cleared the {AWARDS_WIN_THRESHOLD:.0f} threshold, on top of '
                             f'the nomination-level rerelease bump: +${result["awards_bump"]:.2f}M.</div>')
         elif result["awards_contender"]:
-            awards_note = (f'<div class="text-xs mt-2" style="color:{SUCCESS};">'
+            awards_note = (f'<div class="text-sm mt-2" style="color:{SUCCESS};">'
                             f'🎬 Oscar Nomination — cleared the {AWARDS_CONTENDER_THRESHOLD:.0f} threshold '
                             f'(win needs {AWARDS_WIN_THRESHOLD:.0f}+), triggering a For-Your-Consideration '
                             f'rerelease bump: +${result["awards_bump"]:.2f}M.</div>')
         else:
-            awards_note = (f'<div class="text-xs text-muted mt-2">Didn\'t clear the '
+            awards_note = (f'<div class="text-sm text-muted mt-2">Didn\'t clear the '
                             f'{AWARDS_CONTENDER_THRESHOLD:.0f} awards-contender threshold — no rerelease bump.</div>')
     else:
-        awards_note = '<div class="text-xs text-muted mt-2">Not an awards-eligible genre — reception still affects library/EST value, but no rerelease window.</div>'
+        awards_note = '<div class="text-sm text-muted mt-2">Not an awards-eligible genre — reception still affects library/EST value, but no rerelease window.</div>'
     st.markdown(f"""
     <div class="rounded-lg border border-line bg-surface2 p-4">
       <div class="flex items-center gap-4">
         <div class="text-3xl font-serif" style="color:{cs_c};">{cs:.0f}</div>
         <div>
           <div class="text-sm font-semibold" style="color:{cs_c};">{cs_tier}</div>
-          <div class="text-[10px] text-muted font-mono">Critical Reception Score / 100 — independent of box office</div>
+          <div class="text-[14px] text-muted font-mono">Critical Reception Score / 100 — independent of box office</div>
         </div>
       </div>
       {awards_note}
@@ -3288,7 +3297,7 @@ def _results(ss):
     if all(k in result for k in ("talent_take", "producer_take", "studio_residual")):
         st.markdown('<div class="section-title mt-4">Deal Waterfall — Who Gets Paid</div>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="text-xs text-ink2 mb-2">Revenue doesn\'t all stay with the studio. Talent gross '
+            '<p class="text-sm text-ink2 mb-2">Revenue doesn\'t all stay with the studio. Talent gross '
             'participation is paid off top-line revenue regardless of profitability, before capital is '
             'even recouped; the producer\'s net participation only comes out of whatever\'s left after '
             'that. Studio Residual can go negative even on a nominal box-office win.</p>',
@@ -3313,6 +3322,9 @@ def _results(ss):
     with nav1:
         if st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True):
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle]
+            from utils.game_state import withdraw_pitch   # board matches the slate until re-simulated
+            withdraw_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""),
+                           "movies", f"cycle-{ss.movie_cycle}")
             ss.movie_theatrical_resolved.pop(ss.movie_cycle, None)   # redo re-opens the theatrical mini-run too
             ss.movie_pvod_checkpoints.pop(ss.movie_cycle, None)
             ss.movie_pvod_pending_rejection.pop(ss.movie_cycle, None)
@@ -3369,21 +3381,21 @@ def _complete(ss):
 
     st.markdown(f"""
     <div class="rounded-lg bg-surface2 p-5 mb-5" style="border-left:4px solid #1a6bb5;">
-      <div class="font-mono text-[10px] text-muted uppercase tracking-widest mb-3">
+      <div class="font-mono text-[14px] text-muted uppercase tracking-widest mb-3">
         Full Slate Results — Universal Pictures · {CYCLES_TOTAL * YEARS_PER_CYCLE} Years
       </div>
       <div class="flex gap-8 flex-wrap">
-        <div><div class="text-[9px] text-muted font-mono">PASS / FAIL (DECISIONS ONLY)</div>
+        <div><div class="text-[14px] text-muted font-mono">PASS / FAIL (DECISIONS ONLY)</div>
           <div class="text-3xl font-serif" style="color:{pass_c};">{'PASS' if score['passed'] else 'FAIL'}</div>
-          <div class="text-[9px] text-muted font-mono">decisions avg {_fmt_money(dec_npv)} — must be above $0</div></div>
-        <div><div class="text-[9px] text-muted font-mono">AVG GRADED NPV (75% DECISIONS + 25% LUCK)</div>
+          <div class="text-[14px] text-muted font-mono">decisions avg {_fmt_money(dec_npv)} — must be above $0</div></div>
+        <div><div class="text-[14px] text-muted font-mono">AVG GRADED NPV (75% DECISIONS + 25% LUCK)</div>
           <div class="text-3xl font-serif" style="color:{npv_c};">{_fmt_money(score['avg_ra_npv_m'])}</div></div>
-        <div><div class="text-[9px] text-muted font-mono">SCORE</div>
+        <div><div class="text-[14px] text-muted font-mono">SCORE</div>
           <div class="text-3xl font-serif" style="color:{total_c};">{score['total']:.0f}</div>
-          <div class="text-[9px] text-muted font-mono">/ 100 pts</div></div>
-        <div><div class="text-[9px] text-muted font-mono">DEALS &amp; FEES (IN THE SCORE)</div>
+          <div class="text-[14px] text-muted font-mono">/ 100 pts</div></div>
+        <div><div class="text-[14px] text-muted font-mono">DEALS &amp; FEES (IN THE SCORE)</div>
           <div class="text-3xl font-serif">{_fmt_money(sum(deal_act))}</div>
-          <div class="text-[9px] text-muted font-mono">partnerships, renewals, holds, festival films</div></div>
+          <div class="text-[14px] text-muted font-mono">partnerships, renewals, holds, festival films</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -3446,22 +3458,22 @@ def _complete(ss):
             c = SUCCESS if val >= 70 else (WARN if val >= 40 else DANGER)
             st.markdown(f"""
             <div class="mb-3">
-              <div class="flex justify-between text-xs mb-1">
+              <div class="flex justify-between text-sm mb-1">
                 <span class="text-ink2">{label} <span class="text-muted">({weight})</span></span>
                 <span class="font-mono" style="color:{c};">{val:.0f}/100</span></div>
               <div class="h-[5px] rounded bg-line overflow-hidden">
                 <div class="h-full rounded" style="width:{val}%;background:{c};"></div></div>
-              <div class="text-[10px] text-muted mt-1">{defn}</div>
+              <div class="text-[14px] text-muted mt-1">{defn}</div>
             </div>
             """, unsafe_allow_html=True)
 
-        passed_badge = (f'<span style="background:{SUCCESS};color:#0b0c10;" class="px-3 py-1 rounded text-xs font-mono">PASSED ✓</span>'
+        passed_badge = (f'<span style="background:{SUCCESS};color:#0b0c10;" class="px-3 py-1 rounded text-sm font-mono">PASSED ✓</span>'
                         if score["passed"] else
-                        f'<span style="background:{DANGER};color:#fff;" class="px-3 py-1 rounded text-xs font-mono">NOT PASSED</span>')
+                        f'<span style="background:{DANGER};color:#fff;" class="px-3 py-1 rounded text-sm font-mono">NOT PASSED</span>')
         st.markdown(f"""
         <div class="rounded-lg bg-surface2 p-3 text-center mt-2">
           <div class="text-4xl font-serif" style="color:{total_c};">{score['total']:.0f}</div>
-          <div class="text-[10px] text-muted font-mono mb-2">/ 100 points</div>
+          <div class="text-[14px] text-muted font-mono mb-2">/ 100 points</div>
           {passed_badge}
         </div>
         """, unsafe_allow_html=True)
@@ -3479,7 +3491,7 @@ def _complete(ss):
     if waterfall_entries:
         st.markdown('<div class="section-title">Slate Deal Waterfall — Who Got Paid, In Total</div>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="text-xs text-ink2 mb-2">Same per-movie waterfall from Results, summed across your '
+            '<p class="text-sm text-ink2 mb-2">Same per-movie waterfall from Results, summed across your '
             'whole slate. Talent gross participation comes off top-line revenue regardless of '
             'profitability; Studio Residual can be negative even on a slate with real box-office wins.</p>',
             unsafe_allow_html=True)
@@ -3531,9 +3543,9 @@ def _complete(ss):
         with col:
             st.markdown(f"""
             <div class="rounded-lg bg-surface2 p-3" style="height:100%;">
-              <div class="text-[9px] text-muted font-mono mb-1">{title}</div>
+              <div class="text-[14px] text-muted font-mono mb-1">{title}</div>
               <div class="text-lg font-serif" style="color:{color};">{val}</div>
-              <div class="text-xs" style="color:#ffffff;">{sub}</div>
+              <div class="text-sm" style="color:#ffffff;">{sub}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -3552,7 +3564,7 @@ def _complete(ss):
         else:
             if attempts > 0:
                 st.markdown(
-                    f'<p class="text-xs text-ink2 mb-2">⚠ Attempt {attempts + 1} of {MAX_ATTEMPTS}. '
+                    f'<p class="text-sm text-ink2 mb-2">⚠ Attempt {attempts + 1} of {MAX_ATTEMPTS}. '
                     f'Your <b>first submission</b> is the official score — retries are practice only.</p>',
                     unsafe_allow_html=True)
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)

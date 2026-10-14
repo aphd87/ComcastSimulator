@@ -728,6 +728,16 @@ def post_pitch(team_name: str, school: str, class_section: str, sim: str, key: s
     return entry
 
 
+def withdraw_pitch(team_name: str, school: str, class_section: str, sim: str, key: str) -> None:
+    """Hide a pitch whose show/film was undone (Redo Year, Restart Level).
+    Append-only: posts a withdrawn marker under the same key rather than
+    deleting the original (2026-10-14)."""
+    _storage.append_pitch(PITCH_BOARD_FILE, {
+        "team_name": team_name, "school": school, "class_section": class_section,
+        "sim": sim, "key": str(key), "withdrawn": True, "timestamp": time.time(),
+    })
+
+
 def class_pitches(school: str, class_section: str, sim: Optional[str] = None) -> list[dict]:
     """Pitches posted in this school + class section, newest first, keeping
     only the latest post per (team, sim, key)."""
@@ -738,7 +748,8 @@ def class_pitches(school: str, class_section: str, sim: Optional[str] = None) ->
         if sim and e.get("sim") != sim:
             continue
         latest[(e.get("team_name"), e.get("sim"), e.get("key"))] = e
-    return sorted(latest.values(), key=lambda e: -e.get("timestamp", 0))
+    return sorted((e for e in latest.values() if not e.get("withdrawn")),
+                  key=lambda e: -e.get("timestamp", 0))
 
 
 # ── Network identity ──────────────────────────────────────────────────────────

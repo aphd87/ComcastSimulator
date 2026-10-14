@@ -453,7 +453,7 @@ def render():
     if ss.get("registered"):
         st.markdown('<div class="section-title">My Team Status</div>', unsafe_allow_html=True)
         st.markdown(
-            f'<p class="text-xs text-ink2 mb-2">{ss.school} · {ss.class_section}</p>'
+            f'<p class="text-sm text-ink2 mb-2">{ss.school} · {ss.class_section}</p>'
             if ss.get("school") else "", unsafe_allow_html=True)
         status = get_team_network_status(team, ss.school, ss.class_section)
 
@@ -532,7 +532,7 @@ def render():
     # ── School Comparison ───────────────────────────────────────────────────────
     st.markdown('<div class="section-title">School Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Aggregate performance across every class at each school — '
+        '<p class="text-sm text-ink2 mb-2">Aggregate performance across every class at each school — '
         'your school\'s overall standing sits alongside every other school\'s.</p>',
         unsafe_allow_html=True)
     _render_school_comparison(all_nets, all_infos)
@@ -542,7 +542,7 @@ def render():
     # ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────
     st.markdown('<div class="section-title">📋 Pitch Board — Your Class</div>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="text-xs text-ink2 mb-2">Every pitch a team in your class has committed: TV shows they '
+        '<p class="text-sm text-ink2 mb-2">Every pitch a team in your class has committed: TV shows they '
         'greenlit from their own pitch, and films they made (with how each film actually did). '
         'Read across them like a studio development meeting.</p>', unsafe_allow_html=True)
     from app_pages.pitch_board import render_pitch_board
