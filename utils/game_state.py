@@ -412,6 +412,25 @@ def can_advance(team_name: str, current_network: str, school: str = "", class_se
     repeated   = len(attempts) >= 2   # must retry before advancing
     return passed_any or repeated
 
+UNIVERSITY_SCOPE = "university:"
+
+
+def university_of(school: str) -> str:
+    """Registration stores school as "College, University" (app.py); the
+    university is the part after the last comma."""
+    return school.rsplit(",", 1)[-1].strip() if school else ""
+
+
+def school_in_scope(entry_school: str, school: Optional[str]) -> bool:
+    """None = every school. "university:<name>" = every college at that
+    university (2026-10-14). Anything else = that exact school."""
+    if school is None:
+        return True
+    if school.startswith(UNIVERSITY_SCOPE):
+        return university_of(entry_school).casefold() == school[len(UNIVERSITY_SCOPE):].strip().casefold()
+    return entry_school == school
+
+
 def get_network_leaderboard(network: str, school: Optional[str] = None,
                              class_section: Optional[str] = None) -> list[dict]:
     """
@@ -430,7 +449,7 @@ def get_network_leaderboard(network: str, school: Optional[str] = None,
     for entry in board:
         if entry["network"] != network or not entry["is_official"]:
             continue
-        if school is not None and entry.get("school", "") != school:
+        if not school_in_scope(entry.get("school", ""), school):
             continue
         if class_section is not None and entry.get("class_section", "") != class_section:
             continue
@@ -750,6 +769,54 @@ def class_pitches(school: str, class_section: str, sim: Optional[str] = None) ->
         latest[(e.get("team_name"), e.get("sim"), e.get("key"))] = e
     return sorted((e for e in latest.values() if not e.get("withdrawn")),
                   key=lambda e: -e.get("timestamp", 0))
+
+
+# ── In-progress leaderboard (2026-10-14) ──────────────────────────────────────
+# Per user: each network's leaderboard also shows sub-boards by how much of
+# the simulation a team has completed, not just finished/official scores.
+# Every simulated (or redone/restarted) year or film writes the team's
+# current progress; the latest row per (team, network) wins. Append-only.
+PROGRESS_FILE = Path("progress.json")
+
+
+def record_progress(team_name: str, school: str, class_section: str, network: str,
+                    units_done: int, units_total: int, metric: float, metric_label: str,
+                    unit: str = "year") -> None:
+    if not team_name:
+        return
+    _storage.append_progress(PROGRESS_FILE, {
+        "team_name": team_name, "school": school, "class_section": class_section,
+        "network": network, "units_done": int(units_done), "units_total": int(units_total),
+        "metric": round(float(metric), 2), "metric_label": metric_label, "unit": unit,
+        "timestamp": time.time(),
+    })
+
+
+def get_progress_board(network: str, school: Optional[str] = None,
+                       class_section: Optional[str] = None) -> dict:
+    """{units_done: [entries ranked by metric, best first]} for one network,
+    most-completed group first, same scoping as get_network_leaderboard.
+    Each team sits in the group for the FURTHEST point it has reached (a
+    Redo or Restart doesn't drop it a group); within that, its latest
+    update counts, so re-simulating a year refreshes its number."""
+    latest = {}
+    for e in _storage.load_progress(PROGRESS_FILE):
+        if e.get("network") != network or not school_in_scope(e.get("school", ""), school):
+            continue
+        if class_section is not None and e.get("class_section", "") != class_section:
+            continue
+        key = (e.get("school", ""), e.get("class_section", ""), e.get("team_name"))
+        if key not in latest or e.get("units_done", 0) >= latest[key].get("units_done", 0):
+            latest[key] = e
+    groups = {}
+    for e in latest.values():
+        if e.get("units_done", 0) > 0:
+            groups.setdefault(e["units_done"], []).append(e)
+    for rows in groups.values():
+        rows.sort(key=lambda e: (-e["metric"], e["timestamp"]))
+        for i, r in enumerate(rows):
+            r["rank"] = i + 1
+    return dict(sorted(groups.items(), reverse=True))
 
 
 # ── Network identity ──────────────────────────────────────────────────────────

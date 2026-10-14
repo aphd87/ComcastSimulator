@@ -3009,6 +3009,7 @@ def _decisions(ss):
             "talent_partner_bonus": talent_bonus.get("partner_name"),
         }
         ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle] + [outcome]
+        _post_progress(ss)
         # Share the film and how it did on the class Pitch Board (2026-10-01).
         # Re-simulating the same cycle replaces its post.
         _post_film_pitch(ss, outcome)
@@ -3117,6 +3118,19 @@ def _decision_result_card(result: dict, ss=None):
       <div style="line-height:1.6;">{'<br>'.join(why)}</div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def _post_progress(ss):
+    """Update this team's spot on the in-progress Movies leaderboard
+    (2026-10-14): films done and slate NPV so far incl. deals (the same
+    figure as the pinned strip and Your Slate). Viewers never write."""
+    if ss.get("team_role", "driver") != "driver":
+        return
+    slate = sum(r["npv"] + _deal_totals(ss, r["cycle"])[1] for r in ss.movie_log)
+    from utils.game_state import record_progress
+    record_progress(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""),
+                    MOVIE_NETWORK_KEY, len(ss.movie_log), CYCLES_TOTAL, slate,
+                    "Slate NPV so far ($M)", unit="film")
 
 
 def _slate_score(ss):

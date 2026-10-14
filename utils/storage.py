@@ -145,18 +145,20 @@ def _ensure_schema(eng) -> None:
             " updated_at DOUBLE PRECISION NOT NULL,"
             " payload TEXT NOT NULL)"
         ))
-        # Peer Pitch Board (2026-10-01): one row per posted pitch, append-only.
-        c.execute(text(
-            "CREATE TABLE IF NOT EXISTS slate_pitches ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " created_at DOUBLE PRECISION NOT NULL,"
-            " payload TEXT NOT NULL)"
-            if eng.dialect.name == "sqlite" else
-            "CREATE TABLE IF NOT EXISTS slate_pitches ("
-            " id BIGSERIAL PRIMARY KEY,"
-            " created_at DOUBLE PRECISION NOT NULL,"
-            " payload TEXT NOT NULL)"
-        ))
+        # Peer Pitch Board (2026-10-01) and in-progress leaderboard
+        # (2026-10-14): one row per post / progress update, append-only.
+        for table in ("slate_pitches", "slate_progress"):
+            c.execute(text(
+                f"CREATE TABLE IF NOT EXISTS {table} ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " created_at DOUBLE PRECISION NOT NULL,"
+                " payload TEXT NOT NULL)"
+                if eng.dialect.name == "sqlite" else
+                f"CREATE TABLE IF NOT EXISTS {table} ("
+                " id BIGSERIAL PRIMARY KEY,"
+                " created_at DOUBLE PRECISION NOT NULL,"
+                " payload TEXT NOT NULL)"
+            ))
 
 
 def _db():
@@ -243,32 +245,53 @@ def load_state(file_path: Path, key: str) -> Optional[dict]:
 
 
 # ── Public API: Peer Pitch Board (2026-10-01) ────────────────────────────────
-def append_pitch(file_path: Path, entry: dict) -> None:
-    """Append one posted pitch. Same safety as append_entry: an INSERT on the
+def _append_row(table: str, file_path: Path, entry: dict) -> None:
+    """Append one JSON row. Same safety as append_entry: an INSERT on the
     database backend; lock + atomic write on the file backend."""
     eng = _db()
     if eng is not None:
         from sqlalchemy import text
         with eng.begin() as c:
-            c.execute(text("INSERT INTO slate_pitches (created_at, payload) VALUES (:t, :p)"),
+            c.execute(text(f"INSERT INTO {table} (created_at, payload) VALUES (:t, :p)"),
                       {"t": time.time(), "p": json.dumps(entry)})
         return
     with _LOCK:
-        pitches = _read_json(file_path, [], strict=True)
-        if not isinstance(pitches, list):
+        rows = _read_json(file_path, [], strict=True)
+        if not isinstance(rows, list):
             raise StorageError(f"{file_path.name} does not hold a list; nothing was overwritten.")
-        pitches.append(entry)
-        _write_json_atomic(file_path, pitches, indent=2)
+        rows.append(entry)
+        _write_json_atomic(file_path, rows, indent=2)
 
 
-def load_pitches(file_path: Path) -> list[dict]:
-    """All posted pitches, oldest first."""
+def _load_rows(table: str, file_path: Path) -> list[dict]:
+    """All rows, oldest first."""
     eng = _db()
     if eng is not None:
         from sqlalchemy import text
         with eng.connect() as c:
-            rows = c.execute(text("SELECT payload FROM slate_pitches ORDER BY id")).all()
+            rows = c.execute(text(f"SELECT payload FROM {table} ORDER BY id")).all()
         return [json.loads(r[0]) for r in rows]
     with _LOCK:
         data = _read_json(file_path, [], strict=False)
     return data if isinstance(data, list) else []
+
+
+def append_pitch(file_path: Path, entry: dict) -> None:
+    """Append one posted pitch."""
+    _append_row("slate_pitches", file_path, entry)
+
+
+def load_pitches(file_path: Path) -> list[dict]:
+    """All posted pitches, oldest first."""
+    return _load_rows("slate_pitches", file_path)
+
+
+def append_progress(file_path: Path, entry: dict) -> None:
+    """Append one in-progress update (2026-10-14); the latest row per team
+    and simulation is that team's current progress."""
+    _append_row("slate_progress", file_path, entry)
+
+
+def load_progress(file_path: Path) -> list[dict]:
+    """All progress updates, oldest first."""
+    return _load_rows("slate_progress", file_path)

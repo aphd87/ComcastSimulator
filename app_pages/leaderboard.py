@@ -16,6 +16,7 @@ from utils.game_state import (
     get_network_leaderboard, get_school_rollup, get_overall_leaderboard,
     NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard,
     get_attempt_count, MAX_ATTEMPTS, get_class_awards,
+    get_progress_board, university_of, UNIVERSITY_SCOPE,
 )
 from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text
 
@@ -31,6 +32,8 @@ RANK_COLORS = {1: "#e8c547", 2: "#c0c0c0", 3: "#cd7f32"}
 # top-level tab, not one of the sidebar's Oxygen/Bravo/Peacock TV networks.
 # Kept as its own minimal info dict rather than added to NETWORK_INFO, so it
 # can't leak into the sidebar's Active Network selector or LEVEL_BRIEFS.
+BOARD_VIEWS = ["🏁 Finished (official scores)", "⏳ By progress (how far teams got)"]
+
 MOVIES_INFO = {"emoji": "🎬", "display_name": "Universal Pictures", "color": "#1a6bb5", "color2": "#4fc3f7"}
 
 
@@ -201,19 +204,58 @@ def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: b
         """, unsafe_allow_html=True)
 
 
+def _render_progress_boards(team: str, net: str, info: dict,
+                            scope_school, scope_class, show_school_col: bool):
+    """Sub-leaderboards by completion (2026-10-14, per user): one table per
+    "N of M years/films done" group, most-completed first, ranked within the
+    group by the running metric (TV: OCF margin so far; Movies: slate NPV so
+    far). A team sits in the group for the furthest point it has reached."""
+    groups = get_progress_board(net, scope_school, scope_class)
+    if not groups:
+        st.markdown(f'<div style="text-align:center;padding:40px;font-family:DM Mono,monospace;font-size:15px;">'
+                    f'No team has simulated any {info["display_name"]} turns yet in this scope.</div>',
+                    unsafe_allow_html=True)
+        return
+    for done, rows in groups.items():
+        total, unit = rows[0]["units_total"], rows[0].get("unit", "year")
+        label = "Finished" if done >= total else "In progress"
+        st.markdown(f'<div class="section-title" style="margin-top:10px;">{label}: {done} of {total} '
+                    f'{unit}s done <span class="text-sm">({len(rows)} team{"s" if len(rows) != 1 else ""})'
+                    f'</span></div>', unsafe_allow_html=True)
+        table = []
+        for r in rows:
+            row = {"Rank": r["rank"], "Team": ("⭐ " if r["team_name"] == team else "") + r["team_name"]}
+            if show_school_col:
+                row["School"] = r.get("school", "")
+                row["Class"] = r.get("class_section", "")
+            row[r.get("metric_label", "Score so far")] = r["metric"]
+            row["Updated"] = datetime.fromtimestamp(r["timestamp"]).strftime("%b %d %H:%M")
+            table.append(row)
+        st.dataframe(pd.DataFrame(table), use_container_width=True, hide_index=True)
+    st.caption("Running numbers, not official scores: OCF margin so far for TV (the pass test), slate NPV so far "
+               "for Movies. Official scores are on 🏁 Finished.")
+
+
 def _render_board_tab(team: str, net: str, info: dict,
                        scope_school, scope_class, show_school_col: bool):
     """One network's full leaderboard tab body — shared by the TV networks
     (NETWORK_ORDER) and the Day 2 Movies leaderboard. scope_school/
     scope_class of None means unfiltered (cross-school); a value scopes
     down to that school, or that school+class."""
+    view = st.radio("Show", BOARD_VIEWS, horizontal=True, key=f"lb_view_{net}",
+                    help="Finished: each team's first finished playthrough. By progress: every team, grouped by "
+                         "how many years (TV) or films (Movies) it has simulated, ranked within each group.")
+    if view == BOARD_VIEWS[1]:
+        _render_progress_boards(team, net, info, scope_school, scope_class, show_school_col)
+        return
+
     board = get_network_leaderboard(net, scope_school, scope_class)
 
     if not board:
         st.markdown(f"""
         <div style="text-align:center;padding:40px;color:#ffffff;
              font-family:DM Mono,monospace;font-size:15px;">
-          No submissions yet for {info['display_name']} in this scope.
+          No finished scores yet for {info['display_name']} in this scope. Try ⏳ By progress.
         </div>
         """, unsafe_allow_html=True)
         return
@@ -494,20 +536,40 @@ def render():
     # to, so default them straight to "All Schools" instead of a scope that
     # would just come back empty.
     st.markdown('<div class="section-title">Leaderboard Scope</div>', unsafe_allow_html=True)
-    scope_options = ["My Class", "My School", "All Schools"]
+    # 2026-10-14: "My University" (every college at your university) and a
+    # picker any viewer (e.g. an instructor) can use to open one university
+    # or one class directly.
+    scope_options = ["My Class", "My School", "My University", "All Schools", "Pick a university / class"]
     scope = st.radio(
         "View", scope_options, horizontal=True, key="lb_scope",
         index=scope_options.index("All Schools") if not ss.get("registered") else 0,
-        help="My Class: just your section. My School: every class at your school. "
-             "All Schools: every team, everywhere — see how you stack up beyond your own campus.",
+        help="My Class: just your section. My School: every class at your school or college. "
+             "My University: every college at your university. All Schools: every team, everywhere. "
+             "Pick: choose any university, and optionally one class.",
     )
     if scope == "My Class":
         scope_school, scope_class = ss.school, ss.class_section
     elif scope == "My School":
         scope_school, scope_class = ss.school, None
-    else:
+    elif scope == "My University":
+        scope_school, scope_class = UNIVERSITY_SCOPE + university_of(ss.get("school", "")), None
+    elif scope == "All Schools":
         scope_school, scope_class = None, None
-    show_school_col = scope != "My Class"
+    else:
+        entries = load_leaderboard()
+        unis = sorted({university_of(e.get("school", "")) for e in entries if e.get("school")})
+        if not unis:
+            st.caption("No scores yet to pick from.")
+            scope_school, scope_class = None, None
+        else:
+            pc1, pc2 = st.columns(2)
+            uni = pc1.selectbox("University", unis, key="lb_pick_uni")
+            classes = sorted({e.get("class_section", "") for e in entries
+                              if university_of(e.get("school", "")) == uni and e.get("class_section")})
+            cls = pc2.selectbox("Class", ["All classes"] + classes, key="lb_pick_class")
+            scope_school = UNIVERSITY_SCOPE + uni
+            scope_class = None if cls == "All classes" else cls
+    show_school_col = scope != "My Class" and scope_class is None
 
     st.divider()
 

@@ -999,6 +999,7 @@ def _decisions(ss, shows, net_info, year, net):
                                          sports_cost_m=sports_pnl["cost_m"])
         result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
         ss.yearly_log.append(result)
+        _post_progress(ss, net)
         ss.cancelled_shows = ss.cancelled_shows | new_cancel
         # No manual ss.mkt_budget sync needed here (unlike the old per-step
         # wizard): Financing always renders on this page now, so its
@@ -1014,6 +1015,20 @@ def _decisions(ss, shows, net_info, year, net):
 
 
 # ── Results phase ──────────────────────────────────────────────────────────────
+
+def _post_progress(ss, net):
+    """Update this team's spot on the in-progress leaderboard (2026-10-14):
+    years done and OCF margin so far (revenue-weighted, same as the final
+    score's margin). Follow Along viewers never write."""
+    if ss.get("team_role", "driver") != "driver":
+        return
+    log = ss.yearly_log
+    rev = sum(r["revenue"] for r in log)
+    margin = (sum(r["ocf"] for r in log) / rev * 100) if rev > 0 else 0.0
+    from utils.game_state import record_progress
+    record_progress(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""), net,
+                    len(log), YEARS_PER_LEVEL, margin, "OCF margin so far (%)", unit="year")
+
 
 def _level_score(ss, shows, net, year):
     """Final level score, shared by the Complete screen and the automatic

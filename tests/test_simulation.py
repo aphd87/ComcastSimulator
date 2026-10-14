@@ -731,3 +731,12 @@ def test_finished_level_is_recorded_automatically_once():
 def test_unfinished_level_is_not_recorded():
     _decisions_sim_app()
     assert [e for e in gs.load_leaderboard() if e.get("team_name") == "AppTest Team"] == []
+
+
+def test_simulating_a_year_updates_the_progress_board():
+    at = _decisions_sim_app()
+    next(b for b in at.button if "Simulate Year" in b.label).click().run()
+    assert not at.exception
+    groups = gs.get_progress_board("oxygen")
+    assert [r["team_name"] for r in groups[1]] == ["AppTest Team"]
+    assert groups[1][0]["units_total"] == gs.YEARS_PER_LEVEL
