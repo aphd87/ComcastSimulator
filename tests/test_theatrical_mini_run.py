@@ -183,10 +183,14 @@ def _mini_run_button(at):
     return next(b for b in at.button if (b.key or "").startswith("run_theatrical_"))
 
 
-def test_simulate_is_disabled_before_the_mini_run():
-    at = _movies_app()
+def test_simulate_runs_the_mini_run_for_you_if_skipped():
+    """2026-10-14: the Theatrical Simulation is no longer a gate -- Simulate
+    runs it automatically (the handler already resolved a missing entry)."""
+    at = AppTest.from_function(_bare_app_script, default_timeout=30, args=("Skip AppTest Team",))
+    at.run()
     assert at.session_state["movie_theatrical_resolved"] == {}
-    assert _simulate_button(at).disabled is True
+    assert _simulate_button(at).disabled is False
+    assert "run its Theatrical Simulation for you" in " ".join(c.value for c in at.caption)
 
 
 def test_running_the_mini_run_locks_in_a_result_and_unlocks_simulate():
@@ -700,12 +704,14 @@ def _bare_app_script(team_name):
     movies.render()
 
 
-def test_simulate_stays_locked_until_partnerships_scouted_festivals_and_holds_are_done():
+def test_skipped_optional_steps_are_listed_but_do_not_lock_simulate():
+    """2026-10-14: Partnerships / Scouted / Festivals / Holding Deals are
+    optional. Skipped ones are listed above Simulate, which stays enabled."""
     at = AppTest.from_function(_bare_app_script, default_timeout=30, args=("Gate AppTest Team",))
     at.run()
     _mini_run_button(at).click().run()
     assert not at.exception, list(at.exception)
-    assert _simulate_button(at).disabled is True
+    assert _simulate_button(at).disabled is False
     captions = " ".join(c.value for c in at.caption)
     for step in ("Partnerships", "Scouted Concepts", "Festivals", "Holding Deals"):
         assert step in captions

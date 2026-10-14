@@ -365,13 +365,14 @@ def _active_talent_bonus(ss, genre: str, source_material: str = None) -> dict:
 
 
 def _step_status(ss) -> list:
-    """Every required step of a cycle, in page order, as (label, anchor,
-    done, todo) -- 2026-10-05, per explicit user request that Partnerships,
-    Scouted Concepts, Festivals and Holding Deals are required, not
-    optional ("no passing"). Drives both the step bar at the top of
-    Decisions and the Simulate gate at the bottom. Each step is only
-    required while it's actually possible (e.g. every banner already
-    poached, or no next film to hold an actor for)."""
+    """Every step of a cycle, in page order, as (label, anchor, done,
+    todo). Drives the step bar at the top of Decisions and the reminder
+    list above Simulate. 2026-10-14 (explicit user request: "students
+    should be able to simulate without completing everything"): only the
+    pitch is required now (see _simulate_blockers); every other step is
+    optional, and skipping one just means passing on that deal/option
+    (Pay-2 left undecided earns $0; an attraction left undecided is a
+    Pass). Supersedes the 2026-10-05 "no passing" rule."""
     cyc = ss.movie_cycle
     partnerships = ((bool(ss.movie_overall_deal) and not _partner_renewal_due(ss))
                     or all(k in ss.movie_rival_exclusive for k in STUDIO_PARTNERS))
@@ -448,6 +449,17 @@ def _partner_renewal_due(ss) -> bool:
             and ss.get("movie_overall_renewed_through", 0) < ss.movie_cycle)
 
 
+def _simulate_blockers(ss) -> list:
+    """What still stops Simulate (2026-10-14): just the pitch. Greenlight
+    and the Theatrical Simulation are done automatically on Simulate if the
+    team hasn't clicked them, so a team can go straight to results."""
+    cyc = ss.movie_cycle
+    logline = ss.get(f"movie_logline_{cyc}", ss.movie_draft.get("logline", ""))
+    if len((logline or "").strip()) < 20:
+        return [(4, "Pitch", "write your Pitch / Logline (at least a sentence) in step 4")]
+    return []
+
+
 def _numbered_steps(ss) -> list:
     """(number, label, anchor, done, todo). Numbers match the section titles
     1-6; the Pay-2 step for earlier films lives inside section 6."""
@@ -492,17 +504,16 @@ def _step_bar(ss):
 def _step_bar_html(ss) -> str:
     """Compact, clickable step bar -- the one place a student sees where
     they are in this film's cycle and what's left before Simulate."""
-    steps = _step_status(ss)
     chips = []
     for i, label, anchor, done, _ in _numbered_steps(ss):
         bg, border, mark = (("rgba(102,187,106,.15)", SUCCESS, "✓") if done
-                            else ("#1a1d26", "#252836", str(i)))
+                            else ("#1a1d26", "#8b93a8", str(i)))
         chips.append(f'<a href="#{anchor}" style="text-decoration:none;color:#ffffff;background:{bg};'
                      f'border:1px solid {border};border-radius:14px;padding:3px 10px;font-size:14px;'
                      f'white-space:nowrap;"><b>{mark}</b> {label}</a>')
-    ready = all(s[2] for s in steps)
+    ready = not _simulate_blockers(ss)
     chips.append(f'<a href="#simulate" style="text-decoration:none;color:{"#0b0c10" if ready else "#ffffff"};'
-                 f'background:{SUCCESS if ready else "#1a1d26"};border:1px solid {SUCCESS if ready else "#252836"};'
+                 f'background:{SUCCESS if ready else "#1a1d26"};border:1px solid {SUCCESS if ready else "#8b93a8"};'
                  f'border-radius:14px;padding:3px 10px;font-size:14px;white-space:nowrap;">'
                  f'<b>7</b> Simulate{" ▶" if ready else " 🔒"}</a>')
     return f'<div style="display:flex;flex-wrap:wrap;gap:6px;">{"".join(chips)}</div>'
@@ -980,7 +991,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     transition."""
     st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">1 · Studio Partnerships '
-                '<span class="text-xs text-muted">(required · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
+                '<span class="text-xs text-muted">(optional · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Sign a standing deal with a production banner for '
@@ -1127,7 +1138,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     directly into the Greenlight fields right below it."""
     st.markdown('<a id="scouted"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">2 · Scouted Concepts '
-                '<span class="text-xs text-muted">(required · option at least one each cycle)</span></div>',
+                '<span class="text-xs text-muted">(optional · option a concept or skip)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
         f'<p class="text-xs text-ink2 mb-2">The studio\'s scouts surface {SCOUTED_CONCEPTS_PER_CYCLE} concepts '
@@ -1237,7 +1248,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
     comment in utils/movie_models.py for why."""
     st.markdown('<a id="festivals"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">3 · Film Festival Acquisitions '
-                '<span class="text-xs text-muted">(required · bid on at least one each cycle)</span></div>',
+                '<span class="text-xs text-muted">(optional · bid or pass)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">Sundance, TIFF, and Cannes each offer one finished film with '
@@ -1356,7 +1367,7 @@ def _section_holding_deals(ss, resolved_hold_key):
     partnerships uses -- see that function's docstring."""
     st.markdown('<a id="holding"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision">5 · Holding Deals '
-                '<span class="text-xs text-muted">(required · hold or sign at least one actor for your '
+                '<span class="text-xs text-muted">(optional · hold or sign an actor for your '
                 'next film; skipped on your final film)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -2882,23 +2893,23 @@ def _decisions(ss):
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
     st.markdown('<div class="section-title decision action">7 · Simulate</div>', unsafe_allow_html=True)
     pending_pvod_response = ss.movie_pvod_pending_rejection.get(ss.movie_cycle) is not None
-    has_logline = len(ss.movie_draft.get("logline", "").strip()) >= 20
-    # Required steps (2026-10-05): Partnerships / Scouted / Festivals /
-    # Holding Deals gate Simulate alongside the pitch and theatrical run.
-    missing = [(i, label, todo) for i, label, _, done, todo in _numbered_steps(ss)
+    # Only the pitch is required (2026-10-14); everything else is optional
+    # and listed as a reminder so skipping is a choice, not an accident.
+    missing = _simulate_blockers(ss)
+    skipped = [(i, label, todo) for i, label, _, done, todo in _numbered_steps(ss)
                if not done and label not in ("Greenlight", "Release")]
-    if not has_logline:
-        missing.append((4, "Greenlight", "write your Pitch / Logline (at least a sentence), then click ✅ Greenlight"))
-    elif not ss.movie_greenlit.get(ss.movie_cycle):
-        missing.append((4, "Greenlight", f"click ✅ Greenlight Film {ss.movie_cycle} at the end of step 4"))
-    if resolved_entry is None:
-        missing.append((6, "Release", "click 🎬 Run Theatrical Simulation (under the Release Plan table)"))
     can_simulate = not missing and not pending_pvod_response
-    for i, label, todo in sorted(missing, key=lambda m: (m[0], m[1] != "Pay-2 (earlier films)")):
-        st.caption(f"⚠ Step {i} · {label}: {todo} before you can Simulate.")
+    for i, label, todo in missing:
+        st.caption(f"⚠ Required · Step {i}: {todo} before you can Simulate.")
+    if skipped:
+        st.caption("Optional steps you haven't done (you can simulate anyway; skipping means passing on that "
+                   "deal): " + "; ".join(f"step {i} {label}" for i, label, _ in skipped) + ".")
+    if not missing and resolved_entry is None:
+        st.caption("Simulate will greenlight this film and run its Theatrical Simulation for you.")
     if resolved_entry is not None and pending_pvod_response:
         st.caption("⚠ Respond to the PVOD Market Acceptance rejection above before you can Simulate the full year.")
     if st.button("▶  Simulate  →  See Results", type="primary", use_container_width=True, disabled=not can_simulate):
+        ss.movie_greenlit[ss.movie_cycle] = True
         project = _current_project(ss)
         if ss.movie_cycle >= CYCLES_TOTAL and project.release_strategy not in PEACOCK_EXCLUSIVE:
             # Final film: its Pay-2 call was made in its Release Plan row, so

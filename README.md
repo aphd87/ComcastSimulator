@@ -59,7 +59,7 @@ The app creates its tables automatically: `slate_leaderboard`, `slate_team_state
 
 ### Movies (Universal Pictures)
 - **Four films, one per two-year cycle** (Year 1 greenlight & produce = the *t* = 0 investment; Year 2 release): eight in-game years, sized for a 45–60 minute class session.
-- **A step bar** at the top of each film's page (1 Partnerships · 2 Scouted Concepts · 3 Festivals · 4 Greenlight · 5 Holding Deals · 6 Release · 7 Simulate) ticks off each step. **Every step is required**; Simulate stays locked until all are done, and the list under the button names what's missing.
+- **A step bar** at the top of each film's page (1 Partnerships · 2 Scouted Concepts · 3 Festivals · 4 Greenlight · 5 Holding Deals · 6 Release · 7 Simulate) ticks off each step. Only the pitch is required (2026-10-14); every other step is optional, and the list above Simulate names what was skipped. Simulate auto-greenlights and runs the Theatrical Simulation if the team hasn't.
 - **1 · Studio Partnerships:** sign a production banner (+Star Power or +Critical Reception in its genre), then renew it each cycle (more after a hit) or let it go, likely to a rival.
 - **2 · Scouted Concepts:** six concepts per cycle, each with a scout's read (demand stars ±1, risk band, NPV as scouted); one or two are "hot" with a named rival circling.
 - **3 · Festival Acquisitions:** sealed bids against Disney, Warner Bros., Paramount and Sony Pictures, with an analysts' break-even bid and a rival-interest signal per film.

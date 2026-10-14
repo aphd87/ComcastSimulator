@@ -448,12 +448,12 @@ def build_movies():
     page_break(doc)
     doc.add_heading("Step 2 — Make your decisions (one page per cycle)", level=1)
     para(doc, "Sections appear in this order, top to bottom, numbered 1–7 to match the step bar. "
-              "**Every step is required.** The ▶ Simulate button stays locked until each one has a ✓, and the list under the button tells you exactly what's missing.")
+              "**Only your pitch (logline) is required.** Every other step is optional: skip it and you simply pass on that deal. The list above ▶ Simulate shows which steps you skipped, and Simulate greenlights the film and runs its Theatrical Simulation for you if you haven't.")
 
     doc.add_heading("Distribution Pipeline — Slate Scorecard  (read only)", level=2)
     para(doc, "Shows where each of your earlier movies is now earning money (in theaters, PVOD, streaming, and so on).")
 
-    doc.add_heading("1 · Studio Partnerships  (required: sign, then renew or replace each cycle)", level=2)
+    doc.add_heading("1 · Studio Partnerships  (optional: sign, then renew or replace each cycle)", level=2)
     para(doc, "Sign a long-term deal with a production company. It gives every movie in that company's specialty genre either "
               "**+Star Power** or **+Critical Reception**. Click **Sign** to commit. From the next cycle on, the company asks for a "
               "**renewal fee** each cycle, and more after a hit, since they know their worth. **Renew**, or **Let them go**: the bonus "
@@ -465,14 +465,14 @@ def build_movies():
             "and merchandise eligibility (40+), and awards for Drama/Prestige (72+). Reviews are a random draw you can only "
             "shift upward. Pick the partner that matches how your movies make money.")
 
-    doc.add_heading("2 · Scouted Concepts  (required, option at least one)", level=2)
+    doc.add_heading("2 · Scouted Concepts  (optional)", level=2)
     para(doc, "Your scouts bring you **6** ready-made movie ideas each cycle. Each card has a **scout's read**: an audience-demand "
               "estimate in stars (it can be off by one star; paid Research gives the real signal), how risky the genre is (Steady, "
               "Moderate, Volatile), and what the concept earns as scouted on a weak and an expected run. Click **Option This Concept** "
-              "on at least one; it fills in your Greenlight form, and you can still change anything there. Ideas you skip may be made by "
+              "on one you like; it fills in your Greenlight form, and you can still change anything there. Ideas you skip may be made by "
               "a rival studio before the next cycle; one marked **🔥 [Studio] is circling** is very likely to be gone.")
 
-    doc.add_heading("3 · Film Festival Acquisitions  (required, bid on at least one)", level=2)
+    doc.add_heading("3 · Film Festival Acquisitions  (optional)", level=2)
     para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Each card shows your analysts' "
               "**break-even bid**: the most you can pay and still make money on a weak run, and on an expected run. It also shows how "
               "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on at least one and click **Submit Bid**. Bids are "
@@ -480,7 +480,7 @@ def build_movies():
               "(the **winner's curse**). You see the result, and what the film went on to earn, right away. A film you win joins your "
               "pipeline as an extra release; it does **not** use your greenlight slot.")
 
-    doc.add_heading("4 · Greenlight a New Movie  (required, one slot per cycle)", level=2)
+    doc.add_heading("4 · Greenlight a New Movie  (one slot per cycle)", level=2)
     para(doc, "This is the core decision. It has three parts:")
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
@@ -512,12 +512,12 @@ def build_movies():
             "Every extra $10M you commit pushes all three down about $10M unless the movie earns it back. The chart assumes a wide "
             "release and no reviews yet. If even the Base case is negative, rethink the plan.")
 
-    doc.add_heading("5 · Holding Deals  (required, except on your final film)", level=2)
-    para(doc, "Lock at least one actor for your **next** movie. Click **Place Hold** (cheap but risky: a rival may already have that actor "
+    doc.add_heading("5 · Holding Deals  (optional)", level=2)
+    para(doc, "Optionally lock an actor for your **next** movie. Click **Place Hold** (cheap but risky: a rival may already have that actor "
               "booked, and even a confirmed hold can fall through) or **Multi-Picture** (costs more, guaranteed for several cycles). "
               "Next cycle, any actor you hold or signed appears in Greenlight's **🎭 Lead Actor** list so you can cast them.")
 
-    doc.add_heading("6 · Release Plan — Your Slate  (required)", level=2)
+    doc.add_heading("6 · Release Plan — Your Slate", level=2)
     para(doc, "One table, **one row per film** in your slate, with each film's windows in the order they open: "
               "Season → Release → Run (days) → PVOD price → Pay-1 → Pay-2 → Status. Earlier films' rows show what you "
               "chose and how they did; later rows are placeholders until you greenlight them. Fill in **this film's row**:")
@@ -526,7 +526,7 @@ def build_movies():
         "**Release** (from Film 2 on; Film 1 is Wide Theatrical only). Five options, including two that skip theaters (see below). The line under the table shows each option's risk-adjusted NPV for this film. **Wide Theatrical** suits tentpoles, sci-fi, and animation. **Platform / Limited** opens small and expands on word of mouth; it's the strongest choice for drama and awards titles. **Day-and-Date** premieres in theaters and on Peacock together: it gives up box office, but a Peacock premiere is valuable in itself.",
         "**Straight to the home.** **Direct to PVOD** skips theaters: the film premieres as a premium home rental (about $20) and Universal keeps about 80% of each rental, with no screen fees and money in weeks, but fewer people show up without a big-screen launch. It suits mid-size comedy, horror and drama. **Direct to Peacock** skips theaters and rentals: there's no ticket or rental money, so the film's own cash never recoups its cost, and its value is what it does for Peacock. Choose a goal with the toggle that appears under the table: **🎯 Acquisition** (new subscribers; needs a big P&A push; best for broad, big-scale films like animation and sci-fi) or **🛡️ Retention** (keep current subscribers; a small P&A spend gets most of the value; best for fan-driven genres like horror and comedy).",
         "**Run (days)**: how long the film stays in theaters (not used for the two direct releases). Longer runs earn more box office, with diminishing returns, but delay every later window.",
-        "**Click the big 🎬 Run Theatrical Simulation button** right under the table (it reads Run Release Simulation for a direct release). This is required, and it locks in how the movie does in theaters, its reviews, and any surprises.",
+        "**Click the big 🎬 Run Theatrical Simulation button** right under the table (it reads Run Release Simulation for a direct release). If you skip it, ▶ Simulate runs it for you. It locks in how the movie does in theaters, its reviews, and any surprises.",
         "**PVOD price** (renting or buying at home while the movie is still new): set it within the band your real opening supports. If viewers later reject your price, choose **Hold** (keep the price, accept fewer sales) or **Cut** (lower it to win back volume) under the table.",
         "**Pay-1** (first streaming window): keep it on Peacock or license it to a platform for a flat fee. Or, under the table, click **🏷️ Shop This Window to Competitive Bid** and accept **any** bid, not just the highest: each has a 12- or 18-month term, and a shorter term returns the film to Peacock sooner. Don't like the offers? **🔁 Reject All & Take It Back to Market** once; new bids usually come in lower.",
         "**Why the windows work this way:** Pay-1 (about 18 months) is the first exclusive streaming window. Studios without a big streamer sell it (Sony licenses Pay-1 to Netflix); studios with one keep films in house (Disney+, Max, Paramount+). Universal sits in between: films start on Peacock, part of the window is licensed out, then they return. **Pay-2** comes after Pay-1, when production and P&A were paid long ago, so a Pay-2 licence fee is almost pure, high-margin profit.",
@@ -576,8 +576,8 @@ def build_movies():
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
         "**Sequel after sequel.** Franchise fatigue is real, and your diversification score drops.",
-        "**Forgetting the Theatrical Simulation.** You can't Simulate until you've clicked 🎬 Run Theatrical Simulation under the Release Plan table.",
-        "**Missing a required step.** If ▶ Simulate is locked, check the step bar at the top for a step without a ✓.",
+        "**Skipping the Theatrical Simulation.** Simulate will run it for you, but then you set PVOD and Pay-1 without seeing the opening first.",
+        "**No pitch.** ▶ Simulate stays locked until you write your logline in step 4.",
         "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
         "**Submitting too early.** Your first submission is your official score.",
     ])

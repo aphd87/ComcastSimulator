@@ -990,7 +990,7 @@ def test_release_plan_lets_you_choose_pay2_for_earlier_films_and_reprices_their_
     assert set(pay2_cells) == {"Pay-2 for Film 1", "Pay-2 for Film 2"}
     assert all(sb.value is None for sb in pay2_cells.values())   # a real choice, no silent default
     caption_text = " ".join(c.value for c in at.caption)
-    assert "Pay-2 (earlier films)" in caption_text                # gates Simulate until chosen
+    assert "Pay-2 (earlier films)" in caption_text                # listed as an optional step not yet done
 
     from utils.movie_models import MovieProject, LICENSING_PLATFORMS, draw_pay2_offer_mults
     film1 = next(r for r in at.session_state["movie_log"] if r["cycle"] == 1)
@@ -1041,3 +1041,25 @@ def test_direct_to_peacock_release_offers_a_goal_and_no_rental_or_licensing_cell
     assert at.session_state["movie_draft"]["pay1_licensing"] == "keep"
     goal.set_value("retention").run()
     assert at.session_state["movie_draft"]["peacock_goal"] == "retention"
+
+
+# ── Only the pitch is required to Simulate (2026-10-14) ─────────────────────
+class _SS(dict):
+    __getattr__ = dict.__getitem__
+
+
+def test_simulate_needs_only_a_pitch():
+    from app_pages.movies import _simulate_blockers
+    ss = _SS(movie_cycle=1, movie_draft={"logline": ""})
+    assert _simulate_blockers(ss) and _simulate_blockers(ss)[0][1] == "Pitch"
+    ss["movie_logline_1"] = "A studio intern has one weekend to save a doomed tentpole."
+    assert _simulate_blockers(ss) == []   # no partnerships/scouting/festivals/holds needed
+
+
+def test_fresh_cycle_can_simulate_with_just_a_pitch():
+    """Real page render: with only a logline written, Simulate is enabled."""
+    at = _movies_app()
+    at.session_state["movie_logline_1"] = "A studio intern has one weekend to save a doomed tentpole."
+    at.run()
+    sim = [b for b in at.button if "Simulate" in b.label and "See Results" in b.label]
+    assert sim and not sim[0].disabled
