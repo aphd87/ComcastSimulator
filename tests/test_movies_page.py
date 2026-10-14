@@ -1043,24 +1043,19 @@ def test_direct_to_peacock_release_offers_a_goal_and_no_rental_or_licensing_cell
     assert at.session_state["movie_draft"]["peacock_goal"] == "retention"
 
 
-# ── Only the pitch is required to Simulate (2026-10-14) ─────────────────────
+# ── Nothing is required to Simulate, not even a pitch (2026-10-14) ──────────
 class _SS(dict):
     __getattr__ = dict.__getitem__
 
 
-def test_simulate_needs_only_a_pitch():
+def test_simulate_has_no_required_steps():
     from app_pages.movies import _simulate_blockers
-    ss = _SS(movie_cycle=1, movie_draft={"logline": ""})
-    assert _simulate_blockers(ss) and _simulate_blockers(ss)[0][1] == "Pitch"
-    ss["movie_logline_1"] = "A studio intern has one weekend to save a doomed tentpole."
-    assert _simulate_blockers(ss) == []   # no partnerships/scouting/festivals/holds needed
+    assert _simulate_blockers(_SS(movie_cycle=1, movie_draft={"logline": ""})) == []
 
 
-def test_fresh_cycle_can_simulate_with_just_a_pitch():
-    """Real page render: with only a logline written, Simulate is enabled."""
+def test_fresh_cycle_can_simulate_with_nothing_filled_in():
+    """Real page render: a brand-new cycle, no pitch, Simulate is enabled."""
     at = _movies_app()
-    at.session_state["movie_logline_1"] = "A studio intern has one weekend to save a doomed tentpole."
-    at.run()
     sim = [b for b in at.button if "Simulate" in b.label and "See Results" in b.label]
     assert sim and not sim[0].disabled
 

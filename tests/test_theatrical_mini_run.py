@@ -679,15 +679,12 @@ def test_reshop_replaces_round_one_and_is_allowed_only_once():
     assert not any(b.key == "reshop_bids_1" for b in at.button)
 
 
-def test_simulate_stays_locked_without_a_logline():
+def test_simulate_is_open_without_a_logline():
+    """2026-10-14: the pitch is optional too (per user)."""
     at = _movies_app("MiniRun AppTest Team")
     at.text_area(key="movie_logline_1").set_value("").run()
     _mini_run_button(at).click().run()
     assert not at.exception, list(at.exception)
-    assert _simulate_button(at).disabled is True
-    assert any("write your Pitch / Logline" in c.value for c in at.caption)
-    at.text_area(key="movie_logline_1").set_value(
-        "A disgraced robot hunter must stop the machines he once built from taking the city.").run()
     assert _simulate_button(at).disabled is False
 
 

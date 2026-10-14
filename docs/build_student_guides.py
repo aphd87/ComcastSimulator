@@ -448,7 +448,7 @@ def build_movies():
     page_break(doc)
     doc.add_heading("Step 2 — Make your decisions (one page per cycle)", level=1)
     para(doc, "Sections appear in this order, top to bottom, numbered 1–7 to match the step bar. "
-              "**Only your pitch (logline) is required.** Every other step is optional: skip it and you simply pass on that deal. The list above ▶ Simulate shows which steps you skipped, and Simulate greenlights the film and runs its Theatrical Simulation for you if you haven't.")
+              "**Every step is optional, even the pitch.** Skip one and you simply pass on that deal. The list above ▶ Simulate shows which steps you skipped, and Simulate greenlights the film and runs its Theatrical Simulation for you if you haven't.")
 
     doc.add_heading("Distribution Pipeline — Slate Scorecard  (read only)", level=2)
     para(doc, "Shows where each of your earlier movies is now earning money (in theaters, PVOD, streaming, and so on).")
@@ -485,7 +485,7 @@ def build_movies():
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
         "**Working Title**: anything you like.",
-        "**Logline (required)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. You can't Simulate without one. Once the film is made, the logline and how the film did appear on your class's **📋 Pitch Board**.",
+        "**Logline (optional)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. Once the film is made, the logline and how the film did appear on your class's **📋 Pitch Board**.",
         "**Genre**: Action/Tentpole, Sci-Fi/Fantasy, Animated, Horror, Comedy, Drama, or Awards/Prestige. Big genres earn more overseas. Prestige genres can win awards.",
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",
@@ -577,7 +577,6 @@ def build_movies():
         "**Making a summer prestige drama.** Awards voters rarely remember summer releases. Use Fall/Awards.",
         "**Sequel after sequel.** Franchise fatigue is real, and your diversification score drops.",
         "**Skipping the Theatrical Simulation.** Simulate will run it for you, but then you set PVOD and Pay-1 without seeing the opening first.",
-        "**No pitch.** ▶ Simulate stays locked until you write your logline in step 4.",
         "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
         "**Finishing too early.** Your first finished playthrough is your official score, saved automatically.",
     ])

@@ -82,7 +82,7 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
               <div style="font-size:15px;font-weight:600;color:#ffffff;margin-top:2px;">{escape(e.get("title", ""))}</div>
               <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
                 {escape(e.get("genre", ""))}{" · " + _detail_line(e) if _detail_line(e) else ""}</div>
-              <div style="font-size:14px;color:#ffffff;line-height:1.5;">{escape(e.get("pitch", ""))}</div>
+              <div style="font-size:14px;color:#ffffff;line-height:1.5;">{escape(e.get("pitch", "")) or "<i>(no pitch written)</i>"}</div>
               {_outcome_line(e)}
             </div>
             """, unsafe_allow_html=True)

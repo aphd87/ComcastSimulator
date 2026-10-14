@@ -61,7 +61,7 @@ def build_plan():
     doc.add_heading("Before class", level=2)
     bullets(doc, [
         "**Instructor:** open the app the morning of class and click through once. If anything errors after an update, Streamlit Cloud → **Manage app → Reboot app**. Confirm the Leaderboard says scores are saved to the database (`DATABASE_URL`), or a restart erases the class's scores.",
-        "**Students (10 min pre-work):** skim the Movies student guide and **draft five loglines**, one per film. Simulate stays locked without one; drafting in class eats play time.",
+        "**Students (10 min pre-work):** skim the Movies student guide and **draft four loglines**, one per film. Pitches are optional, but they're what the class sees on the Pitch Board; drafting in class eats play time.",
         "**Bring:** two dark dry-erase markers, one bright marker for circling, an eraser, and this printout.",
     ])
 

@@ -368,9 +368,9 @@ def _step_status(ss) -> list:
     """Every step of a cycle, in page order, as (label, anchor, done,
     todo). Drives the step bar at the top of Decisions and the reminder
     list above Simulate. 2026-10-14 (explicit user request: "students
-    should be able to simulate without completing everything"): only the
-    pitch is required now (see _simulate_blockers); every other step is
-    optional, and skipping one just means passing on that deal/option
+    should be able to simulate without completing everything", then "no
+    pitch should be required either"): nothing is required now (see
+    _simulate_blockers); every step is optional, and skipping one just means passing on that deal/option
     (Pay-2 left undecided earns $0; an attraction left undecided is a
     Pass). Supersedes the 2026-10-05 "no passing" rule."""
     cyc = ss.movie_cycle
@@ -380,7 +380,7 @@ def _step_status(ss) -> list:
     fest_ids = {f["id"] for f in generate_festival_slate(ss.team_name, cyc)}
     festivals = any(i in ss.movie_festival_log or i in ss.movie_festival_rival_log for i in fest_ids)
     logline = ss.get(f"movie_logline_{cyc}", ss.movie_draft.get("logline", ""))
-    greenlight = len((logline or "").strip()) >= 20 and bool(ss.get("movie_greenlit", {}).get(cyc))
+    greenlight = bool(ss.get("movie_greenlit", {}).get(cyc))
     final_film = cyc >= CYCLES_TOTAL
     holding = (final_film
                or any(h.get("cycle_placed") == cyc for h in ss.movie_talent_holds.values())
@@ -450,13 +450,11 @@ def _partner_renewal_due(ss) -> bool:
 
 
 def _simulate_blockers(ss) -> list:
-    """What still stops Simulate (2026-10-14): just the pitch. Greenlight
-    and the Theatrical Simulation are done automatically on Simulate if the
-    team hasn't clicked them, so a team can go straight to results."""
-    cyc = ss.movie_cycle
-    logline = ss.get(f"movie_logline_{cyc}", ss.movie_draft.get("logline", ""))
-    if len((logline or "").strip()) < 20:
-        return [(4, "Pitch", "write your Pitch / Logline (at least a sentence) in step 4")]
+    """What still stops Simulate. Nothing, as of 2026-10-14 (per user: "no
+    pitch should be required either to simulate"). Greenlight and the
+    Theatrical Simulation are done automatically on Simulate if the team
+    hasn't clicked them. Kept as a function so a future required step has
+    one place to go."""
     return []
 
 
@@ -1863,18 +1861,17 @@ def _decisions(ss):
             placeholder="e.g. A stranded astronaut has to out-think a planet that's actively "
                         "trying to kill her, using only what she can scavenge...",
             help="A logline is the one- or two-sentence pitch a studio greenlights from. You don't need a "
-                 "full synopsis. Required before you can Simulate.",
+                 "full synopsis. Optional: it's shared on your class Pitch Board when you Simulate.",
         )
         ss.movie_draft["logline"] = logline
         _logline_len = len(logline.strip())
-        if _logline_len >= 20:
+        if _logline_len:
             st.markdown(f'<div style="font-size:14px;color:{SUCCESS};">✅ Pitch saved. It posts to the class '
                         f'Pitch Board when you Simulate at the bottom of the page.</div>', unsafe_allow_html=True)
         else:
-            _short = 20 - _logline_len
-            st.markdown(f'<div style="font-size:14px;color:{WARN};">✏️ Pitch needed before you can Simulate '
-                        f'({_short} more character{"s" if _short != 1 else ""}). Type it in, then click '
-                        f'outside the box (or press Ctrl+Enter) to save.</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:14px;">Optional: a pitch is shared with your class on the Pitch '
+                        'Board. Type it in, then click outside the box (or press Ctrl+Enter) to save.</div>',
+                        unsafe_allow_html=True)
 
         # ── Peer Pitch Board (2026-10-01; replaced AI pitch feedback) ──────────
         with st.expander("👀 See the movies other teams in your class have pitched", expanded=False):
@@ -2219,7 +2216,7 @@ def _decisions(ss):
     # is written; the film can still be edited afterwards (the Theatrical Sim
     # and Simulate always use what's in the form).
     st.markdown('<a id="greenlight-confirm"></a>', unsafe_allow_html=True)
-    pitch_ready = len((ss.movie_draft.get("logline") or "").strip()) >= 20
+    pitch_ready = True   # no pitch required (2026-10-14)
     if ss.movie_greenlit.get(ss.movie_cycle):
         st.success(f"✅ Film {ss.movie_cycle} greenlit: \"{title}\" ({genre}), "
                    f"\\${project.capital_at_risk():.1f}M at risk. Next: step 5 Holding Deals, then step 6 Release Plan. "
@@ -2229,8 +2226,7 @@ def _decisions(ss):
                      type="primary", use_container_width=True, disabled=not pitch_ready):
             ss.movie_greenlit[ss.movie_cycle] = True
             st.rerun()
-        st.caption("Write your pitch above to enable this button." if not pitch_ready else
-                   "Click to greenlight this film with the concept, cast and money set above.")
+        st.caption("Click to greenlight this film with the concept, cast and money set above.")
 
     st.divider()
 
