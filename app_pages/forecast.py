@@ -132,7 +132,7 @@ def render():
     ]:
         fig.add_vline(x=ph_y, line_dash="dash", line_color=ph_color, opacity=0.5,
                       annotation_text=ph_label_txt, annotation_font_color=ph_color,
-                      annotation_font_size=10)
+                      annotation_font_size=12)
 
     fig.update_layout(**base_layout("10-Year Simulation — $M", height=380), barmode="stack")
     fig.update_xaxes(tickvals=list(range(1,11)),
@@ -166,10 +166,10 @@ def render():
             x=phase_agg["Phase"], y=phase_agg["Cumulative OCF ($M)"],
             marker_color=phase_agg["Color"], opacity=0.8,
             text=phase_agg["Cumulative OCF ($M)"].apply(lambda v: f"${v:.0f}M"),
-            textposition="outside", textfont=dict(size=11, color="#ffffff"),
+            textposition="outside", textfont=dict(size=12, color="#ffffff"),
         ))
         fig_ph.update_layout(**base_layout("Cumulative OCF by Phase ($M)", height=280))
-        fig_ph.update_xaxes(tickfont=dict(size=9))
+        fig_ph.update_xaxes(tickfont=dict(size=12))
         st.plotly_chart(fig_ph, use_container_width=True, config={"displayModeBar":False})
 
     with c2:
@@ -209,7 +209,7 @@ def render():
             "Content Cost":"${:.1f}M","OCF":"${:.1f}M",
             "Budget":"${:.1f}M","Cable Subs (M)":"{:.1f}M"
         })
-        .set_properties(**{"font-family":"DM Mono,monospace","font-size":"11px"})
+        .set_properties(**{"font-family":"DM Mono,monospace","font-size":"14px"})
     )
     st.dataframe(styled_df, use_container_width=True)
 

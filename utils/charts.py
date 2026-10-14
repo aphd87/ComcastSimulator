@@ -24,6 +24,43 @@ BRAVO_C  = "#1a6bb5"
 OXY_C    = "#f2c200"
 SVOD_C   = "#8e44ad"
 
+
+# ── Accessible color helpers (WCAG 2.1 AA, 2026-10-14) ──────────────────────
+# Network brand colors (Bravo blue, Peacock purple) are too dark to read as
+# text on the app's near-black surfaces. Keep them for bars/borders/logos;
+# route any TEXT in a brand color through readable_text().
+def _luminance(hex_c: str) -> float:
+    h = hex_c.lstrip("#")
+    ch = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    ch = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in ch]
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+
+
+def contrast_ratio(fg: str, bg: str) -> float:
+    a, b = _luminance(fg), _luminance(bg)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+def readable_text(hex_c: str, bg: str = SURFACE2, target: float = 4.5) -> str:
+    """Lighten hex_c toward white just enough to reach `target` contrast
+    against bg (default: the lightest card surface, so it passes on all)."""
+    if not (isinstance(hex_c, str) and hex_c.startswith("#") and len(hex_c) == 7):
+        return hex_c
+    r, g, b = (int(hex_c[i:i + 2], 16) for i in (1, 3, 5))
+    for step in range(0, 101, 5):
+        t = step / 100
+        c = "#{:02x}{:02x}{:02x}".format(round(r + (255 - r) * t),
+                                         round(g + (255 - g) * t),
+                                         round(b + (255 - b) * t))
+        if contrast_ratio(c, bg) >= target:
+            return c
+    return "#ffffff"
+
+
+def ink_on(bg_hex: str) -> str:
+    """Black or white text, whichever reads better on a filled background."""
+    return "#0b0c10" if contrast_ratio("#0b0c10", bg_hex) >= contrast_ratio("#ffffff", bg_hex) else "#ffffff"
+
 GENRE_COLORS = {
     "Reality":     ACCENT,
     "Competition": ACCENT2,
@@ -36,19 +73,19 @@ GENRE_COLORS = {
 
 def base_layout(title: str = "", height: int = 320) -> dict:
     return dict(
-        title=dict(text=title, font=dict(color=TEXT2, size=12,
+        title=dict(text=title, font=dict(color=TEXT2, size=13,
                    family="DM Mono, monospace"), x=0),
         height=height,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="DM Mono, monospace", color=TEXT2, size=11),
+        font=dict(family="DM Mono, monospace", color=TEXT2, size=12),
         margin=dict(l=40, r=20, t=36, b=36),
         legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0,
-                    font=dict(size=10)),
+                    font=dict(size=12)),
         xaxis=dict(gridcolor=BORDER, zeroline=False,
-                   tickfont=dict(size=10)),
+                   tickfont=dict(size=12)),
         yaxis=dict(gridcolor=BORDER, zeroline=False,
-                   tickfont=dict(size=10)),
+                   tickfont=dict(size=12)),
     )
 
 def bar_chart(df: pd.DataFrame, x: str, y: list[str],
@@ -103,7 +140,7 @@ def donut_chart(labels: list, values: list, title: str = "",
         labels=labels, values=values,
         hole=0.55,
         marker=dict(colors=colors, line=dict(color=SURFACE, width=2)),
-        textfont=dict(size=10),
+        textfont=dict(size=12),
         hovertemplate="%{label}: $%{value:.1f}M<extra></extra>",
     ))
     fig.update_layout(**base_layout(title, height))
@@ -123,7 +160,7 @@ def waterfall_chart(labels: list, values: list,
         totals=dict(marker_color=ACCENT),
         texttemplate="%{y:.1f}",
         textposition="outside",
-        textfont=dict(size=10, color=TEXT),
+        textfont=dict(size=12, color=TEXT),
     ))
     fig.update_layout(**base_layout(title, height))
     return fig

@@ -141,7 +141,7 @@ def render():
                 fee   = contested_fee(tv_pitch_acquisition_fee_m(pitch), key)
                 rival = rival_for(key)
                 rival_line = (
-                    f'<div style="font-size:12px;color:#ffa726;margin-top:4px;">🔥 Competitor interest: '
+                    f'<div style="font-size:14px;color:#ffa726;margin-top:4px;">🔥 Competitor interest: '
                     f'{rival} is bidding. Fee includes a +{RIVAL_FEE_PREMIUM:.0%} competitive premium. '
                     f'Pass this year and there\'s a {RIVAL_POACH_CHANCE:.0%} chance {rival} signs it '
                     f'before next year.</div>' if rival else '<div></div>')
@@ -149,25 +149,25 @@ def render():
                 origin_badge = (f'🌍 International Format ({pitch["format_source"]})'
                                 if pitch["origin"] == "International Format" else "🏠 Domestic Original")
                 bp = pitch.get("brand_partner")
-                bp_line = (f'<div style="font-size:12px;color:#e8c547;margin-top:4px;">🤝 Brand Partnership: '
+                bp_line = (f'<div style="font-size:14px;color:#e8c547;margin-top:4px;">🤝 Brand Partnership: '
                            f'{bp["name"]} (+{bp["rating_bonus"]:.2f} rating)</div>' if bp else
-                           '<div style="font-size:12px;color:#ffffff;margin-top:4px;">No brand partnership</div>')
+                           '<div style="font-size:14px;color:#ffffff;margin-top:4px;">No brand partnership</div>')
                 with col:
                     st.markdown(f"""
                     <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
                          padding:14px;height:100%;">
                       <div style="font-size:15px;font-weight:600;color:#ffffff;">{pitch['name']}</div>
-                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
+                      <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
                         {pitch['genre']} · {origin_badge}</div>
-                      <div style="font-size:12px;color:#ffffff;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
-                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
+                      <div style="font-size:14px;color:#ffffff;line-height:1.5;margin-bottom:6px;">{pitch['bio']}</div>
+                      <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                         Demo: {demo['age']} · {demo['gender']} · {demo['reach']}</div>
-                      <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
+                      <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                         {pitch['episodes']} eps · ${pitch['ep_cost_k']}K/ep · rating {pitch['rating']:.1f} ·
                         SVOD appeal {pitch['svod_appeal']} · IP Score {pitch['ip_score']}</div>
                       {bp_line}
                       {rival_line}
-                      <div style="font-size:13px;color:#ffffff;margin-top:8px;">
+                      <div style="font-size:14px;color:#ffffff;margin-top:8px;">
                         Acquisition fee: <b>${fee:.2f}M</b> + ${season_cost:.2f}M season production cost
                       </div>
                     </div>
@@ -355,7 +355,7 @@ def render():
     # so it belongs after the actual action, not gating it.
     st.markdown('<div class="section-title">Platform P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#ffffff;margin-bottom:10px;line-height:1.6;">'
+        '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;line-height:1.6;">'
         '<b style="color:#ffffff;">What each line means:</b> '
         '<b>Total Season Cost</b> = episode cost × episode count. '
         '<b>Ad Revenue (Y1)</b> = what Linear earns this year from ratings. '
@@ -432,7 +432,7 @@ def render():
     # ── Charts ────────────────────────────────────────────────────────────────
     st.markdown('<div class="section-title">3-Year P&L Comparison</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
+        '<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">'
         'Same concept, extrapolated 3 years out: Linear\'s bars are Year-1 numbers × 3 (a flat '
         'run-rate). SVOD\'s "3yr Revenue" bar is its real 3-year LTV; its "3yr OCF" bar is Year-1 OCF '
         '× 3 for the same side-by-side comparison. SVOD often looks negative here because it only '
@@ -461,7 +461,7 @@ def render():
     # student prices out. See utils/charts.py::queue_supplement.
     def _render_cumulative_ltv(linear=linear, svod=svod):
         st.markdown(
-            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
+            '<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">'
             'Running total of revenue over time, not a single-year number. Linear\'s line spreads its '
             'Year-1 ad revenue rate evenly across all 36 months; SVOD\'s line spreads its full 3-year LTV '
             'evenly across the same 36 months. The dashed <b style="color:#ffffff;">Crossover</b> line '
@@ -534,7 +534,7 @@ def render():
     def _render_marketing_roi(eps=eps, ep_cost=ep_cost, rating=rating, appeal=appeal, year=year,
                                show_name=show_name):
         st.markdown(
-            '<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">'
+            '<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">'
             'Holds this concept\'s rating and cost fixed and reruns both P&Ls at increasing marketing '
             'budgets, so you can see where extra marketing dollars actually pay off. Linear OCF moves with '
             'the ad-rating lift marketing buys; SVOD OCF moves with the extra subscriber lift (and its 3-year '

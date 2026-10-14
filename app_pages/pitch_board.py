@@ -35,7 +35,7 @@ def _outcome_line(e: dict) -> str:
     if e.get("sim") == "movies" and isinstance(d.get("npv"), (int, float)):
         color = "#66bb6a" if d["npv"] >= 0 else "#ef5350"
         crit = f' · critics {d["critical_score"]:.0f}/100' if isinstance(d.get("critical_score"), (int, float)) else ""
-        return (f'<div style="font-size:13px;color:{color};margin-top:6px;">'
+        return (f'<div style="font-size:14px;color:{color};margin-top:6px;">'
                 f'Result: NPV ${d["npv"]:+.1f}M{crit}</div>')
     return ""
 
@@ -65,7 +65,7 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
         return
 
     shown = pitches[:limit] if limit else pitches
-    st.markdown(f'<div style="font-size:13px;color:#ffffff;margin-bottom:6px;">{len(pitches)} pitch'
+    st.markdown(f'<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">{len(pitches)} pitch'
                 f'{"es" if len(pitches) != 1 else ""} from {ss.class_section}'
                 f'{" — showing the latest " + str(len(shown)) if len(shown) < len(pitches) else ""}.</div>',
                 unsafe_allow_html=True)
@@ -77,10 +77,10 @@ def render_pitch_board(ss, sim: str | None = None, limit: int | None = None, key
         with cols[i % 2]:
             st.markdown(f"""
             <div style="background:#1a1d26;border:1px solid {border};border-radius:8px;padding:12px 14px;margin-bottom:10px;">
-              <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                 {_SIM_LABEL.get(e.get("sim"), "")} · {team}</div>
               <div style="font-size:15px;font-weight:600;color:#ffffff;margin-top:2px;">{escape(e.get("title", ""))}</div>
-              <div style="font-size:12px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin:2px 0 6px;">
                 {escape(e.get("genre", ""))}{" · " + _detail_line(e) if _detail_line(e) else ""}</div>
               <div style="font-size:14px;color:#ffffff;line-height:1.5;">{escape(e.get("pitch", ""))}</div>
               {_outcome_line(e)}

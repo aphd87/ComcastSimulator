@@ -170,7 +170,7 @@ def render():
                             for r in revealed.get("regions") or []:
                                 fit_c = SUCCESS if r["fit"] == "strong" else TEXT2
                                 regional_html += (
-                                    f'<div style="font-size:13px;color:{fit_c};font-family:DM Mono,monospace;'
+                                    f'<div style="font-size:14px;color:{fit_c};font-family:DM Mono,monospace;'
                                     f'margin-top:3px;">🌍 {r["region"]} ({r["fit"]} fit)<br>'
                                     f'Median age {r["median_age"]} · {r["gender"]} · '
                                     f'HH income ${r["household_income_k"]}K USD</div>'
@@ -332,7 +332,7 @@ def render():
                       <span class="badge badge-gray">{r['Genre']}</span>
                       <span class="badge badge-gray">{r['Network']}</span>
                     </div>
-                    {f'<div style="font-size:13px;color:#ffffff;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
+                    {f'<div style="font-size:14px;color:#ffffff;font-style:italic;margin-bottom:6px;">{s.description}</div>' if s.description else ''}
                     <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                       Rating {r['Proj Rating']:.2f} · IP {r['IP Score']}
                     </div>
@@ -343,7 +343,7 @@ def render():
 
                     demo = genre_demo(r["Genre"])
                     st.markdown(f"""
-                    <div style="font-size:13px;color:#ffffff;margin-bottom:8px;">
+                    <div style="font-size:14px;color:#ffffff;margin-bottom:8px;">
                       Demos: {demo['age']} · {demo['gender']} · {demo['reach']}
                     </div>
                     """, unsafe_allow_html=True)
@@ -419,7 +419,7 @@ def render():
             col.markdown(f"""
             <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
                  padding:6px 2px;text-align:center;min-height:56px;">
-              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
               <div style="font-size:16px;font-family:DM Serif Display,serif;color:#ffffff;margin-top:4px;">{count}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -492,7 +492,7 @@ def render():
         totals=dict(marker_color=ACCENT),
         texttemplate="%{y:+.1f}M",
         textposition="outside",
-        textfont=dict(size=10, color="#ffffff"),
+        textfont=dict(size=12, color="#ffffff"),
     ))
     fig_wf.update_layout(**base_layout("Year {} Budget Waterfall ($M)".format(next_year), height=300))
     st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar":False})
@@ -524,7 +524,7 @@ def render():
             "Proj Rating":"{:.2f}","Proj Rev":"${:.2f}M","Proj OCF":"${:.2f}M",
             "ROI Now":"{:.1f}%","ROI Next":"{:.1f}%"
         })
-        .set_properties(**{"font-size":"11px","font-family":"DM Mono, monospace"})
+        .set_properties(**{"font-size":"14px","font-family":"DM Mono, monospace"})
     )
     st.dataframe(styled, use_container_width=True, height=400)
 
@@ -601,7 +601,7 @@ def render():
     rating_median = sorted(ratings_this_year)[len(ratings_this_year)//2] if ratings_this_year else 0
 
     st.markdown(
-        '<div style="font-size:13px;color:#ffffff;margin:4px 0 6px;">'
+        '<div style="font-size:14px;color:#ffffff;margin:4px 0 6px;">'
         '📊 <b>Reference — sorted by rating.</b> Protect your highest-rated shows with their own best '
         'slots (see Day Profile); a show left unscheduled stays neutral. '
         '<b style="color:#e8c547;">⚠</b> = above-median rating, still unscheduled.</div>',
@@ -623,7 +623,7 @@ def render():
     # actually present in this year's roster, labeled with which real
     # genres use it, so the conflict is visible instead of hidden in the math.
     st.markdown(
-        '<div style="font-size:13px;color:#ffffff;margin:14px 0 6px;">'
+        '<div style="font-size:14px;color:#ffffff;margin:14px 0 6px;">'
         '🗺️ <b>Slot Value Map</b> — rating bonus/penalty per cell, same layout as the grid below. '
         'Two profiles now, because best slot depends on genre.</div>',
         unsafe_allow_html=True)
@@ -644,7 +644,7 @@ def render():
             continue
         sample_genre = profile_genres[0] if profile_name == "Weekend" else None
         st.markdown(
-            f'<div style="font-size:13px;color:#ffffff;margin:8px 0 4px;">'
+            f'<div style="font-size:14px;color:#ffffff;margin:8px 0 4px;">'
             f'<b>{profile_name}</b> profile — {", ".join(profile_genres)}</div>',
             unsafe_allow_html=True)
         value_rows = []
@@ -692,7 +692,7 @@ def render():
             st.rerun()
     with af_hint_col:
         st.markdown(
-            '<div style="font-size:13px;color:#ffffff;padding-top:8px;">'
+            '<div style="font-size:14px;color:#ffffff;padding-top:8px;">'
             'Fills every slot from your top-rated shows down, each claiming its own best remaining slot '
             '(genre-aware) — a starting point, not a final answer.</div>', unsafe_allow_html=True)
 

@@ -312,7 +312,7 @@ def render():
         fig_dist.update_layout(
             **base_layout("Distribution Revenue vs. Subscriber Erosion", height=280),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                        title="Subs (M)", tickfont=dict(size=10,color=DANGER)),
+                        title="Subs (M)", tickfont=dict(size=12,color=DANGER)),
         )
         st.plotly_chart(fig_dist, use_container_width=True, config={"displayModeBar":False})
 

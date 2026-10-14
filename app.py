@@ -35,6 +35,7 @@ sys.path.insert(0, ".")
 from dataclasses import asdict
 
 from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
+from utils.charts     import readable_text
 from utils.game_state import (
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
@@ -248,7 +249,7 @@ def _render_network_picker(ss) -> None:
         start  = LEVEL_START_YEAR[net]
         end    = start + YEARS_PER_LEVEL - 1
         off_sc = status.get("official_score")
-        done   = f'<div style="font-size:13px;color:#66bb6a;margin-top:6px;">Official score: {off_sc:.0f} pts</div>' if off_sc else '<div></div>'
+        done   = f'<div style="font-size:14px;color:#66bb6a;margin-top:6px;">Official score: {off_sc:.0f} pts</div>' if off_sc else '<div></div>'
         with col:
             st.markdown(f"""
             <div style="background:#1a1d26;border:1px solid #252836;border-top:3px solid {info['color2']};
@@ -256,7 +257,7 @@ def _render_network_picker(ss) -> None:
               <div style="font-size:38px;">{info['emoji']}</div>
               <div style="font-family:DM Serif Display,serif;font-size:21px;color:#ffffff;margin:8px 0 2px;">
                 {info['display_name']}</div>
-              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">LEVEL {i + 1} · {start}–{end}</div>
               <div style="font-size:14px;color:#ffffff;margin:10px 0;font-style:italic;">{info['tagline']}</div>
               <div style="font-size:14px;color:#ffffff;line-height:1.7;">
                 Starting budget ~${info['budget_base']:.0f}M<br>
@@ -365,10 +366,10 @@ if ss.registered:
     tcol1, tcol2 = st.columns([5, 1])
     with tcol1:
         role_badge = (
-            '<span style="font-size:13px;color:#0b0c10;background:#66bb6a;border-radius:4px;'
+            '<span style="font-size:14px;color:#0b0c10;background:#66bb6a;border-radius:4px;'
             'padding:2px 8px;margin-left:10px;font-family:DM Mono,monospace;">🎮 DRIVER</span>'
             if ss.team_role == "driver" else
-            '<span style="font-size:13px;color:#0b0c10;background:#ffa726;border-radius:4px;'
+            '<span style="font-size:14px;color:#0b0c10;background:#ffa726;border-radius:4px;'
             'padding:2px 8px;margin-left:10px;font-family:DM Mono,monospace;">👀 FOLLOW ALONG · read-only</span>'
         )
         st.markdown(
@@ -774,7 +775,7 @@ elif ss.active_section == "movies":
             earned. To <b style="color:#ffffff;">pass</b>, your decisions alone (risk-adjusted NPV, before luck) must average
             above $0: luck moves your score, but it can't pass a slate for you. Deals count too: partnership fees,
             actor holds, festival films and attractions add to or subtract from the film made that cycle.
-            <div style="font-size:13px;margin-top:8px;">Rival studios (Disney, Warner Bros., Paramount, Sony Pictures)
+            <div style="font-size:14px;margin-top:8px;">Rival studios (Disney, Warner Bros., Paramount, Sony Pictures)
             and streaming bidders (Netflix, Amazon Prime Video, Apple TV+, HBO Max) are real companies. Everything
             they bid, sign, or earn in this game is simulated, not real data.</div>
           </div>
@@ -835,7 +836,7 @@ else:
              rgba({','.join(str(int(net_info['color'][i:i+2],16)) for i in (1,3,5))},.15),
              rgba(26,29,38,.95));">
           <div>
-            <div class="net-logo-text" style="color:{net_info['color2']};">{net_info['logo_text']}</div>
+            <div class="net-logo-text" style="color:{readable_text(net_info['color2'])};">{net_info['logo_text']}</div>
             <div class="net-tagline">{net_info['tagline']}</div>
             <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;">
               <span class="badge badge-gray">Est. {net_info['founded']}</span>
@@ -963,7 +964,7 @@ else:
         <div style="flex:2;min-width:260px;">
           <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;
                text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Mission Brief</div>
-          <div style="font-size:15px;color:{brief['color']};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
+          <div style="font-size:15px;color:{readable_text(brief['color'])};font-weight:600;margin-bottom:6px;">{brief['objective']}</div>
           <div style="font-size:15px;color:#ffffff;line-height:1.7;">{brief['mission']}</div>
         </div>
         <div style="flex:1;min-width:220px;">

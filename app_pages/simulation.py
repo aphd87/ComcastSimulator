@@ -38,7 +38,7 @@ from utils.sports_models import (
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
     resolve_auction, SportsContract, held_this_year, sports_year_pnl,
 )
-from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ def _progress_bar(ss, net_info, year, phase, net):
         if done or phase == "complete":
             bg, txt, clr = "#66bb6a", "✓", "#0b0c10"
         elif current:
-            bg, txt, clr = net_info["color"], str(i), "#ffffff"
+            bg, txt, clr = net_info["color"], str(i), ink_on(net_info["color"])
         else:
             bg, txt, clr = "#252836", str(i), "#ffffff"
         dot_items.append(
@@ -244,7 +244,7 @@ def _progress_bar(ss, net_info, year, phase, net):
             f'<div style="width:34px;height:34px;border-radius:50%;background:{bg};'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:15px;font-weight:700;color:{clr};">{txt}</div>'
-            f'<div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;margin-top:2px;">'
+            f'<div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-top:2px;">'
             f'Yr {i}</div>'
             f'</div>'
         )
@@ -259,7 +259,7 @@ def _progress_bar(ss, net_info, year, phase, net):
          padding:14px 20px;margin-bottom:18px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;">{y_label}</div>
-        <div style="font-family:DM Mono,monospace;font-size:14px;color:{net_info['color']};
+        <div style="font-family:DM Mono,monospace;font-size:14px;color:{readable_text(net_info['color'])};
              text-transform:uppercase;letter-spacing:.08em;">{phase_label}</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:center;">
@@ -460,7 +460,7 @@ def _starting_position(net_info, shows, net):
 
 
 def _section_financing(ss, shows, year, net_info, level_budget):
-    st.markdown('<div class="section-title">1 · 💰 Financing</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title decision">1 · 💰 Financing</div>', unsafe_allow_html=True)
 
     # ── Mid-year emergency budget shock ─────────────────────────────────────
     # Rare, automated, seeded per team+year (see draw_emergency_budget_shock)
@@ -607,7 +607,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
     decision itself doesn't need to know this year's originals spend, only
     the retention math does (see _sports_pnl_recap below, which runs after
     Greenlighting once that spend is final)."""
-    st.markdown(f'<div class="section-title">{sec_num} · 🏈 Sports Rights</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title decision">{sec_num} · 🏈 Sports Rights</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
         'Real multi-year rights deals (5-7 years), auctioned sealed-bid against seeded '
@@ -649,7 +649,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
                  padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;
                  flex-wrap:wrap;gap:10px;">
               <div><b style="color:#ffffff;">{c.league}</b>
-                <span style="color:#ffffff;font-size:13px;"> · {info['tier']} · held through {c.end_year}
+                <span style="color:#ffffff;font-size:14px;"> · {info['tier']} · held through {c.end_year}
                 ({years_left} yr{'s' if years_left != 1 else ''} left)</span></div>
               <div style="font-family:DM Mono,monospace;font-size:14px;color:{WARN};">-${c.annual_cost_m:.1f}M/yr</div>
             </div>
@@ -690,7 +690,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
                 _bid_ratio = _live_bid / info["base_rights_cost_m"]
                 _ratio_c = SUCCESS if _bid_ratio <= 1.0 else (WARN if _bid_ratio <= 1.5 else DANGER)
                 st.markdown(
-                    f'<div style="font-size:12px;color:{_ratio_c};margin:-6px 0 8px;">'
+                    f'<div style="font-size:14px;color:{_ratio_c};margin:-6px 0 8px;">'
                     f'→ {_bid_ratio:.1f}x the ${info["base_rights_cost_m"]:.0f}M/yr market anchor'
                     f'{" — a real overpay risk" if _bid_ratio > 1.5 else ""}</div>',
                     unsafe_allow_html=True)
@@ -818,7 +818,7 @@ def _decisions(ss, shows, net_info, year, net):
 
     st.divider()
     st.markdown('<a id="renewal"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">2 · 🔄 Renewal</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title decision">2 · 🔄 Renewal</div>', unsafe_allow_html=True)
     from app_pages.renewal import render as render_renewal
     render_renewal()
 
@@ -850,7 +850,7 @@ def _decisions(ss, shows, net_info, year, net):
     st.divider()
     st.markdown('<a id="greenlighting"></a>', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="section-title">{next_sec} · 🎬 Greenlighting '
+        f'<div class="section-title decision">{next_sec} · 🎬 Greenlighting '
         '<span style="font-size:14px;color:#ffffff;">(optional)</span></div>',
         unsafe_allow_html=True)
     next_sec += 1
@@ -938,7 +938,8 @@ def _decisions(ss, shows, net_info, year, net):
           <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:3px;">
             <span style="color:#ffffff;font-family:DM Mono,monospace;">OCF Margin</span>
             <span style="color:{margin_c};font-family:DM Mono,monospace;">
-              {p['margin']:.1f}% / {threshold:.0f}% target
+              {'✓ ' if p['margin'] >= threshold else '▼ '}{p['margin']:.1f}% / {threshold:.0f}% target
+              {'(on track)' if p['margin'] >= threshold else '(below target)'}
             </span>
           </div>
           <div style="height:5px;background:#252836;border-radius:3px;overflow:hidden;">
@@ -976,7 +977,7 @@ def _decisions(ss, shows, net_info, year, net):
                  else ("color:#ef5350;" if "Cancel" in str(v) else "color:#ffffff;"),
                  subset=["Status"])
             .format({"Rating": "{:.2f}", "Annual Rev $M": "${:.2f}M", "Annual Cost $M": "${:.2f}M"})
-            .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "11px"}),
+            .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "14px"}),
             use_container_width=True, height=280,
         )
 
@@ -1030,21 +1031,21 @@ def _results(ss, shows, net_info, year, team, net):
       </div>
       <div style="display:flex;gap:32px;flex-wrap:wrap;">
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">REVENUE</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">REVENUE</div>
           <div style="font-size:26px;font-family:DM Serif Display,serif;color:#ffffff;">${result['revenue']:.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">CONTENT COST</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">CONTENT COST</div>
           <div style="font-size:26px;font-family:DM Serif Display,serif;color:{WARN};">${result['cost']:.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">OCF</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">OCF</div>
           <div style="font-size:26px;font-family:DM Serif Display,serif;color:{ocf_c};">${result['ocf']:+.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">MARGIN</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">MARGIN</div>
           <div style="font-size:26px;font-family:DM Serif Display,serif;color:{margin_c};">{result['margin']:.1f}%</div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">target {threshold:.0f}%</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">target {threshold:.0f}%</div>
         </div>
       </div>
     </div>
@@ -1071,7 +1072,7 @@ def _results(ss, shows, net_info, year, team, net):
         st.markdown('<div class="section-title">Rating Movers This Year</div>',
                     unsafe_allow_html=True)
         st.markdown(
-            '<div style="font-size:13px;color:#ffffff;margin-bottom:8px;">'
+            '<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
             'Rating = the show\'s 18-49 demo rating, the same audience-size figure that drives ad revenue '
             'throughout this tool (Bravo average: 1.0-1.5; a hit: 2.0+; a mega-hit: 3.0+). The 5 shows '
             'with the biggest swing this year, best or worst. Each card shows the point move (e.g. ▲0.15) '
@@ -1095,7 +1096,7 @@ def _results(ss, shows, net_info, year, team, net):
               <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-top:2px;">
                 {m['rating_base']:.1f} → {m['rating_adj']:.1f}
               </div>
-              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">
                 {'+' if delta>=0 else ''}{(m['variance']-1)*100:.1f}%
               </div>
             </div>
@@ -1133,7 +1134,7 @@ def _results(ss, shows, net_info, year, team, net):
               <div style="font-size:18px;font-family:DM Serif Display,serif;color:{badge_c};">
                 {r['emmy_score']:.0f}
               </div>
-              <div style="font-size:13px;color:{badge_c};font-family:DM Mono,monospace;">
+              <div style="font-size:14px;color:{badge_c};font-family:DM Mono,monospace;">
                 {badge}
               </div>
             </div>
@@ -1292,26 +1293,26 @@ def _complete(ss, shows, net_info, team, net):
       </div>
       <div style="display:flex;gap:32px;flex-wrap:wrap;">
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL REVENUE</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL REVENUE</div>
           <div style="font-size:28px;font-family:DM Serif Display,serif;color:#ffffff;">${total_rev:.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL COST</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL COST</div>
           <div style="font-size:28px;font-family:DM Serif Display,serif;color:{WARN};">${total_cost:.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL OCF</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">TOTAL OCF</div>
           <div style="font-size:28px;font-family:DM Serif Display,serif;color:{ocf_c};">${total_ocf:+.1f}M</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">AVG MARGIN</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">AVG MARGIN</div>
           <div style="font-size:28px;font-family:DM Serif Display,serif;color:{margin_c};">{avg_margin:.1f}%</div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">target {threshold:.0f}%</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">target {threshold:.0f}%</div>
         </div>
         <div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">SCORE</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">SCORE</div>
           <div style="font-size:28px;font-family:DM Serif Display,serif;color:{total_c};">{score_d['total']:.0f}</div>
-          <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">/ 100 pts</div>
+          <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">/ 100 pts</div>
         </div>
       </div>
     </div>
@@ -1423,7 +1424,7 @@ def _complete(ss, shows, net_info, team, net):
         fig_perf.update_layout(
             **base_layout("Budget ($M) vs. OCF Margin (%)", height=300),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                        title="OCF Margin (%)", tickfont=dict(size=10, color=TEXT2)),
+                        title="OCF Margin (%)", tickfont=dict(size=12, color=TEXT2)),
         )
         st.plotly_chart(fig_perf, use_container_width=True, config={"displayModeBar": False})
         st.caption("Rule: margin ≥ threshold → +8%/yr, 0–threshold → +3%/yr, negative → −6%/yr. Real mechanic — this is what you actually played with.")
@@ -1471,7 +1472,7 @@ def _complete(ss, shows, net_info, team, net):
         with col:
             st.markdown(f"""
             <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;padding:12px;height:100%;">
-              <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:4px;">{title}</div>
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;margin-bottom:4px;">{title}</div>
               <div style="font-size:17px;font-family:DM Serif Display,serif;color:{color};">{val}</div>
               <div style="font-size:14px;color:#ffffff;">{sub}</div>
             </div>

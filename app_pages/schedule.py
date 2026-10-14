@@ -203,11 +203,11 @@ def render():
                     [0.7,"rgba(239,83,80,0.6)"],[1,"rgba(239,83,80,0.9)"]],
         hovertemplate="<b>%{y}</b><br>%{x}: $%{z:.0f}K<extra></extra>",
         showscale=True,
-        colorbar=dict(title="$K/mo", tickfont=dict(size=10, color=TEXT2)),
+        colorbar=dict(title="$K/mo", tickfont=dict(size=12, color=TEXT2)),
         xgap=2, ygap=2,
     ))
     fig_h.update_layout(**base_layout("Monthly Cash Outflows ($K) — Active Shows", height=380))
-    fig_h.update_yaxes(tickfont=dict(size=10))
+    fig_h.update_yaxes(tickfont=dict(size=12))
     st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar":False})
 
     # ── Monthly Cash Bridge ───────────────────────────────────────────────────

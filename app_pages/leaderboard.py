@@ -17,7 +17,7 @@ from utils.game_state import (
     NETWORK_ORDER, NETWORK_INFO, get_team_network_status, load_leaderboard,
     get_attempt_count, MAX_ATTEMPTS, get_class_awards,
 )
-from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text
 
 
 # Crown for #1 (with a CSS glow, see utils/styles.py .crown-glow) instead of
@@ -354,7 +354,7 @@ def _render_board_tab(team: str, net: str, info: dict,
             marker_color=colors, opacity=0.8,
             text=[f"{s:.0f}" for s in scores],
             textposition="outside",
-            textfont=dict(size=11, color="#ffffff"),
+            textfont=dict(size=12, color="#ffffff"),
         ))
         # Highlight my team
         if team in teams:
@@ -365,7 +365,7 @@ def _render_board_tab(team: str, net: str, info: dict,
 
         fig.add_hline(y=70, line_dash="dash", line_color=SUCCESS, opacity=0.5,
                        annotation_text="Pass threshold", annotation_font_color=SUCCESS,
-                       annotation_font_size=10)
+                       annotation_font_size=12)
         fig.update_layout(**base_layout(f"{info['display_name']} Score Distribution", height=280))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
 
@@ -385,7 +385,7 @@ def _render_board_tab(team: str, net: str, info: dict,
                 st.markdown(f"""
                 <div style="background:#1a1d26;border:1px solid #252836;border-radius:8px;
                      padding:12px;margin-bottom:10px;height:100%;">
-                  <div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;
+                  <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;
                        margin-bottom:4px;">{award['title']}</div>
                   <div style="font-size:16px;font-weight:600;color:#e8c547;">{award['team']}</div>
                   <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">{award['value']}</div>
@@ -417,7 +417,7 @@ def _render_school_comparison(all_nets: list, all_infos: dict):
     df.columns = ["Rank", "School", "Teams", "Avg Score", "Pass Rate %", "Top Score"]
     st.dataframe(
         df.style.format({"Avg Score": "{:.1f}", "Pass Rate %": "{:.0f}%", "Top Score": "{:.1f}"})
-        .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "12px"}),
+        .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "14px"}),
         use_container_width=True, hide_index=True,
     )
 
@@ -425,7 +425,7 @@ def _render_school_comparison(all_nets: list, all_infos: dict):
         x=[r["school"] for r in rollup], y=[r["avg_score"] for r in rollup],
         marker_color=[ACCENT if i == 0 else ACCENT2 for i in range(len(rollup))],
         text=[f"{r['avg_score']:.0f}" for r in rollup], textposition="outside",
-        textfont=dict(size=11, color="#ffffff"),
+        textfont=dict(size=12, color="#ffffff"),
     ))
     fig.update_layout(**base_layout(f"Avg Score by School — {all_infos[net]['display_name']}", height=280))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -473,7 +473,7 @@ def render():
                      padding:16px;text-align:center;">
                   <div style="font-size:40px;margin-bottom:6px;">{info['emoji']}</div>
                   <div style="font-family:DM Mono,monospace;font-size:20px;font-weight:700;
-                       color:{info['color2']};">{info['display_name']}</div>
+                       color:{readable_text(info['color2'])};">{info['display_name']}</div>
                   <div style="font-family:DM Serif Display,serif;font-size:28px;
                        color:{score_c};margin:8px 0;">{f"{off:.0f}" if off else '—'}</div>
                   <div style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;">
@@ -574,7 +574,7 @@ def render():
             "Official":  "✅" if e["is_official"] else "—",
             "Time":      datetime.fromtimestamp(e["timestamp"]).strftime("%Y-%m-%d %H:%M"),
         } for e in all_entries])
-        st.dataframe(raw_df.style.set_properties(**{"font-family":"DM Mono,monospace","font-size":"11px"}),
+        st.dataframe(raw_df.style.set_properties(**{"font-family":"DM Mono,monospace","font-size":"14px"}),
                      use_container_width=True, height=300)
         st.download_button(
             "⬇️ Export Leaderboard CSV",

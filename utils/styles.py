@@ -71,6 +71,10 @@ html, body, [data-testid="stApp"] {
     color: #ffffff;
     font-family: 'DM Sans', sans-serif;
 }
+/* Readable base size (2026-10-14): body copy 16px, nothing below 14px. */
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li { font-size:16px; line-height:1.6; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p, .stCaption { font-size:14px !important; }
+[data-testid="stDataFrame"] { font-size:14px; }
 h1,h2,h3 { font-family:'DM Serif Display',serif !important; color:#ffffff !important; }
 h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important; }
 
@@ -92,24 +96,95 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important
 .stDataFrame thead th { background:#1a1d26 !important;color:#ffffff !important;
     font-family:'DM Mono',monospace;font-size:14px; }
 
-[data-testid="stSlider"] > div > div { background:#252836 !important; }
+[data-testid="stSlider"] > div > div { background:#7d8499 !important; }
 
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] div,
-[data-testid="stTextInput"] input {
-    background:#1a1d26 !important;border-color:#252836 !important;
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+    background:#1a1d26 !important;border-color:#8b93a8 !important;
     color:#ffffff !important;font-family:'DM Mono',monospace !important;
 }
+/* Input/select outlines visible at >=3:1 so students can see where to type or pick. */
+[data-baseweb="select"] > div, [data-baseweb="input"], [data-baseweb="base-input"],
+[data-baseweb="textarea"], [data-testid="stNumberInput"] > div > div {
+    border:2px solid #8b93a8 !important; border-radius:6px !important;
+}
+[data-baseweb="select"] > div:hover, [data-baseweb="input"]:hover { border-color:#e8c547 !important; }
+[data-baseweb="select"] svg { color:#ffffff !important; fill:#ffffff !important; }
+[data-testid="stNumberInput"] button { border-left:1px solid #8b93a8 !important; min-height:auto !important; }
+/* Radio + checkbox controls: visible outlines on the unchecked state. */
+[data-testid="stRadio"] label > div:first-child, [data-testid="stCheckbox"] label > span:first-child {
+    border-color:#8b93a8 !important;
+}
 [data-testid="stExpander"] {
-    background:#12141a !important;border:1px solid #252836 !important;border-radius:6px !important;
+    background:#12141a !important;border:1px solid #7d8499 !important;border-radius:6px !important;
 }
+[data-testid="stExpander"] summary { cursor:pointer !important; }
+[data-testid="stExpander"] summary:hover, [data-testid="stExpander"] summary:hover p { color:#e8c547 !important; }
 .stAlert { border-radius:6px !important;font-family:'DM Mono',monospace !important;font-size:15px; }
-.stButton button {
-    background:#1a1d26 !important;color:#ffffff !important;border:1px solid #252836 !important;
-    font-family:'DM Mono',monospace !important;font-size:15px !important;border-radius:5px !important;
-    transition: all .15s;
+/* ── Buttons that look like buttons (WCAG 2.1 AA, 2026-10-14) ──────────────
+   Secondary: filled chip with a 2px light border (>=3:1 non-text contrast,
+   SC 1.4.11) so it reads as clickable. Primary (type="primary": Simulate,
+   Greenlight, Register, Start, Submit, active nav tab): solid gold with dark
+   ink (11.6:1) so the next action is unmistakable. 44px min target (SC 2.5.5).
+   Disabled: dashed border + not-allowed cursor so it's clearly "not yet". */
+.stButton button, .stDownloadButton button, .stFormSubmitButton button,
+button[data-testid^="stBaseButton-secondary"] {
+    background:#232734 !important;color:#ffffff !important;border:2px solid #8b93a8 !important;
+    font-family:'DM Mono',monospace !important;font-size:15px !important;font-weight:600 !important;
+    border-radius:8px !important;min-height:44px !important;cursor:pointer !important;
+    box-shadow:0 2px 0 rgba(0,0,0,.45) !important;
+    transition: background .15s, border-color .15s, color .15s, transform .05s;
 }
-.stButton button:hover { border-color:#e8c547 !important;color:#e8c547 !important; }
+.stButton button:hover, .stDownloadButton button:hover, .stFormSubmitButton button:hover {
+    border-color:#e8c547 !important;color:#e8c547 !important;background:#2c3142 !important;
+}
+.stButton button:active { transform:translateY(1px); box-shadow:none !important; }
+.stButton button[kind="primary"], button[data-testid="stBaseButton-primary"],
+.stFormSubmitButton button[kind="primaryFormSubmit"] {
+    background:#e8c547 !important;color:#0b0c10 !important;border:2px solid #e8c547 !important;
+    font-weight:700 !important;font-size:16px !important;
+    box-shadow:0 3px 0 #9c8221, 0 0 0 1px rgba(232,197,71,.25) !important;
+}
+.stButton button[kind="primary"] *, [data-testid="stApp"] button[data-testid="stBaseButton-primary"] * {
+    color:#0b0c10 !important; -webkit-text-fill-color:#0b0c10 !important;
+}
+.stButton button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover {
+    background:#f3d76a !important;border-color:#f3d76a !important;color:#0b0c10 !important;
+}
+.stButton button:disabled, .stButton button[disabled],
+.stButton button[kind="primary"]:disabled, button[data-testid="stBaseButton-primary"]:disabled {
+    background:#15171e !important;color:#c9ccd6 !important;border:2px dashed #7d8499 !important;
+    box-shadow:none !important;cursor:not-allowed !important;
+}
+.stButton button:disabled *, [data-testid="stApp"] button[data-testid="stBaseButton-primary"]:disabled * {
+    color:#c9ccd6 !important; -webkit-text-fill-color:#c9ccd6 !important;
+}
+
+/* Visible keyboard focus everywhere (SC 2.4.7). */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible,
+[role="button"]:focus-visible, [role="tab"]:focus-visible, summary:focus-visible,
+[data-baseweb="select"] > div:focus-within {
+    outline:3px solid #4fc3f7 !important; outline-offset:2px !important;
+}
+
+/* Links read as links, not just colored text (SC 1.4.1). */
+[data-testid="stMarkdownContainer"] a { text-decoration:underline !important; text-underline-offset:3px; }
+
+/* ── Decision callouts (2026-10-14) ───────────────────────────────────────
+   Any section header tagged class="section-title decision" is somewhere the
+   student must act. Gold bar + label so it stands apart from read-only info. */
+.section-title.decision {
+    border-left:5px solid #e8c547; border-bottom:2px solid #e8c547;
+    padding-left:12px; background:linear-gradient(90deg, rgba(232,197,71,.12), transparent 70%);
+    padding-top:6px; border-radius:4px 0 0 0;
+}
+.section-title.decision::before {
+    content:"👉 Your decision"; display:block; font-size:14px; font-weight:600;
+    letter-spacing:.08em; color:#ffffff; margin-bottom:2px;
+}
+.section-title.decision.action::before { content:"👉 Next step — click the gold button"; }
 
 /* Submit button special styling */
 .submit-btn button {

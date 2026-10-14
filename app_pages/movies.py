@@ -219,7 +219,7 @@ def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
         # students read values off tick marks.
         text=[f"{name}<br>{_fmt_money(v)}" for name, v in zip(("Bear", "Base", "Bull"), vals)],
         textposition="top center",
-        textfont=dict(color="#ffffff", size=12),
+        textfont=dict(color="#ffffff", size=13),
         hovertemplate="%{text}<extra></extra>",
         showlegend=False,
     ))
@@ -228,7 +228,7 @@ def _bear_base_bull_chart(bear_npv: float, base_npv: float, bull_npv: float,
             x=[actual_npv], y=[0], mode="markers+text",
             marker=dict(size=24, symbol="diamond", color=ACCENT, line=dict(width=2, color="#12141a")),
             text=[f"Actual {_fmt_money(actual_npv)}"], textposition="bottom center",
-            textfont=dict(color="#ffffff", size=12),
+            textfont=dict(color="#ffffff", size=13),
             hovertemplate="%{text}<extra></extra>",
             showlegend=False,
         ))
@@ -464,7 +464,7 @@ def _numbered_steps(ss) -> list:
 def _slate_strip_html(ss) -> str:
     """Pinned strip: the numbers each decision moves, then the step chips."""
     def stat(label, value):
-        return (f'<span style="white-space:nowrap;margin-right:16px;"><span style="font-size:11px;'
+        return (f'<span style="white-space:nowrap;margin-right:16px;"><span style="font-size:14px;'
                 f'font-family:DM Mono,monospace;">{label}</span> <b style="font-size:14px;">{value}</b></span>')
     deals = _deal_totals(ss, ss.movie_cycle)[1]
     try:
@@ -498,12 +498,12 @@ def _step_bar_html(ss) -> str:
         bg, border, mark = (("rgba(102,187,106,.15)", SUCCESS, "✓") if done
                             else ("#1a1d26", "#252836", str(i)))
         chips.append(f'<a href="#{anchor}" style="text-decoration:none;color:#ffffff;background:{bg};'
-                     f'border:1px solid {border};border-radius:14px;padding:3px 10px;font-size:13px;'
+                     f'border:1px solid {border};border-radius:14px;padding:3px 10px;font-size:14px;'
                      f'white-space:nowrap;"><b>{mark}</b> {label}</a>')
     ready = all(s[2] for s in steps)
     chips.append(f'<a href="#simulate" style="text-decoration:none;color:{"#0b0c10" if ready else "#ffffff"};'
                  f'background:{SUCCESS if ready else "#1a1d26"};border:1px solid {SUCCESS if ready else "#252836"};'
-                 f'border-radius:14px;padding:3px 10px;font-size:13px;white-space:nowrap;">'
+                 f'border-radius:14px;padding:3px 10px;font-size:14px;white-space:nowrap;">'
                  f'<b>7</b> Simulate{" ▶" if ready else " 🔒"}</a>')
     return f'<div style="display:flex;flex-wrap:wrap;gap:6px;">{"".join(chips)}</div>'
 
@@ -891,30 +891,30 @@ def _render_research_card(ss, project: MovieProject, logline: str):
 
     st.markdown(f"""
     <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;">
-      <div style="font-size:13px;margin-bottom:8px;line-height:1.5;">
+      <div style="font-size:14px;margin-bottom:8px;line-height:1.5;">
         <b>Researching:</b> "{escape(project.title)}" · {genre} · {concept_type} · {escape(src_name)}<br>
         <b>Pitch:</b> {pitch}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:8px;">
         <div><div class="text-[10px] font-mono">AUDIENCE DEMAND</div>
           <div class="text-sm" style="color:{bo_c};">{star_str} {bo_word}</div>
-          <div style="font-size:12px;">{vs_base:+.0f}% vs. a typical run</div></div>
+          <div style="font-size:14px;">{vs_base:+.0f}% vs. a typical run</div></div>
         <div><div class="text-[10px] font-mono">OPENING WEEKEND</div>
           <div class="text-sm">${opening:,.1f}M</div>
-          <div style="font-size:12px;">at your current screens, stars &amp; P&amp;A</div></div>
+          <div style="font-size:14px;">at your current screens, stars &amp; P&amp;A</div></div>
         <div><div class="text-[10px] font-mono">WORLDWIDE BOX OFFICE</div>
           <div class="text-sm">${worldwide:,.0f}M</div>
-          <div style="font-size:12px;">${domestic:,.0f}M domestic + ${worldwide - domestic:,.0f}M intl</div></div>
+          <div style="font-size:14px;">${domestic:,.0f}M domestic + ${worldwide - domestic:,.0f}M intl</div></div>
         <div><div class="text-[10px] font-mono">CRITICS</div>
           <div class="text-sm" style="color:{cs_c};">{preview_cs:.0f}/100 · {cs_tier}</div></div>
         <div><div class="text-[10px] font-mono">NPV AT THESE SIGNALS</div>
           <div class="text-sm" style="color:{npv_c};">{_fmt_money(npv_here)}</div>
-          <div style="font-size:12px;">wide release, before risk events</div></div>
+          <div style="font-size:14px;">wide release, before risk events</div></div>
       </div>
-      <div style="font-size:12px;line-height:1.5;">
+      <div style="font-size:14px;line-height:1.5;">
         📚 {src_line}<br>🎭 {' · '.join(implications)}
       </div>
-      <div style="font-size:12px;line-height:1.5;margin-top:6px;">
+      <div style="font-size:14px;line-height:1.5;margin-top:6px;">
         Demand and critics are for this Genre and Concept Type. The dollar figures follow Source Material,
         Production Budget, P&amp;A, Star Power and Screens, so change those and watch these move.
         Your title and pitch are how the movie is presented to the class; they don't change the numbers.
@@ -933,7 +933,7 @@ def _star_vs_critical_explainer():
     st.markdown(f"""
     <div class="rounded-lg border border-line bg-surface2 p-3 mb-3" style="color:#ffffff;">
       <div class="text-sm font-semibold mb-2">⭐ Star Power vs 🎭 Critical Reception — what a partner bonus buys you</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:13px;line-height:1.5;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;font-size:14px;line-height:1.5;">
         <div>
           <b>⭐ Star Power = a bigger opening.</b> Recognizable talent draws audiences on name alone,
           so Star Power (0-100) scales your opening weekend by up to +{STAR_POWER_BOOST_MAX * 100:.0f}% at 100.
@@ -950,7 +950,7 @@ def _star_vs_critical_explainer():
           bump ({AWARDS_WIN_THRESHOLD}+ wins the Oscar). Best fit: prestige and franchise-building plays.
         </div>
       </div>
-      <div class="mt-2" style="font-size:13px;line-height:1.5;">
+      <div class="mt-2" style="font-size:14px;line-height:1.5;">
         <b>The trade-off:</b> Star Power is <i>marketability</i> — a known, near-term payoff.
         Critical Reception is <i>quality</i> — a riskier, back-loaded payoff that keeps paying for years.
         Match the bonus to how your movies actually make money.
@@ -979,7 +979,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     it separately per section would double-process the same cycle
     transition."""
     st.markdown('<a id="talent"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">1 · Studio Partnerships '
+    st.markdown('<div class="section-title decision">1 · Studio Partnerships '
                 '<span class="text-xs text-muted">(required · Overall/First-Look Deal: sign, then renew or replace each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1002,7 +1002,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
     if released:
         gone = (f"{released['rival']} signed them right away." if released.get("rival")
                 else "No rival has signed them yet; you can sign a banner below.")
-        st.markdown(f'<div style="font-size:13px;margin-bottom:8px;">👋 You let '
+        st.markdown(f'<div style="font-size:14px;margin-bottom:8px;">👋 You let '
                     f'<b>{STUDIO_PARTNERS[released["partner"]]["name"]}</b> go. {gone}</div>',
                     unsafe_allow_html=True)
 
@@ -1019,7 +1019,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
         st.markdown(f"""
         <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;">
           <div class="text-sm font-semibold">🤝 Renewal due: {partner['name']} wants ${fee:.1f}M to stay on</div>
-          <div style="font-size:13px;line-height:1.5;margin-top:4px;">They give {bonus_label} on
+          <div style="font-size:14px;line-height:1.5;margin-top:4px;">They give {bonus_label} on
           {partner['specialty']} films. {why} Let them go and the bonus ends; there's a
           ~{PARTNER_RELEASE_POACH_CHANCE:.0%} chance a rival signs them on the spot. You could then sign a
           different banner at its full price.</div>
@@ -1126,7 +1126,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
     Partnerships and Greenlight -- a scouted concept, once optioned, feeds
     directly into the Greenlight fields right below it."""
     st.markdown('<a id="scouted"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">2 · Scouted Concepts '
+    st.markdown('<div class="section-title decision">2 · Scouted Concepts '
                 '<span class="text-xs text-muted">(required · option at least one each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1156,7 +1156,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
             optioned = concept["id"] in ss.movie_scouted_optioned
             # Scout's read + hot badge (2026-10-05, per explicit user request for more intensity).
             read = scout_read(ss.team_name, concept)
-            hot_html = (f'<div style="font-size:12px;margin-bottom:4px;">🔥 <b>{concept["hot_rival"]} is circling</b>: '
+            hot_html = (f'<div style="font-size:14px;margin-bottom:4px;">🔥 <b>{concept["hot_rival"]} is circling</b>: '
                         f'~{SCOUTED_HOT_POACH_CHANCE:.0%} chance it\'s gone next cycle</div>'
                         if concept.get("hot_rival") and not optioned else "")
             stars_html = "⭐" * read["stars"] + "☆" * (5 - read["stars"])
@@ -1166,7 +1166,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
               <div class="text-[10px] text-muted font-mono mb-1">{concept['genre']} · {concept['concept_type']} · {concept['source_material']}</div>
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{concept['logline']}</div>
               <div class="text-[10px] text-muted font-mono">Est. Budget: ${concept['budget_m']:.0f}M</div>
-              <div style="font-size:12px;margin-top:6px;line-height:1.5;">🔭 <b>Scout's read</b>: {stars_html} demand (±1 star)
+              <div style="font-size:14px;margin-top:6px;line-height:1.5;">🔭 <b>Scout's read</b>: {stars_html} demand (±1 star)
                 · {read['risk']} risk<br>As scouted: {_fmt_money(read['npv_weak'])} (weak run) to
                 {_fmt_money(read['npv_expected'])} (expected run)</div>
               {'<div class="text-[10px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
@@ -1236,7 +1236,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
     out of ss.movie_log / compute_movie_score -- see the FESTIVALS module
     comment in utils/movie_models.py for why."""
     st.markdown('<a id="festivals"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">3 · Film Festival Acquisitions '
+    st.markdown('<div class="section-title decision">3 · Film Festival Acquisitions '
                 '<span class="text-xs text-muted">(required · bid on at least one each cycle)</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1288,9 +1288,9 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
               <div class="text-xs text-ink2 mb-2" style="line-height:1.4;">{film['logline']}</div>
               <div class="text-[10px] text-muted font-mono">Critics: {cs:.0f}/100 ({cs_tier}), already screened</div>
               <div class="text-[10px] text-muted font-mono">Asking price: ${film['asking_anchor_m']:.1f}M</div>
-              <div style="font-size:12px;margin-top:6px;line-height:1.45;">📈 Break-even bid: <b>${be_bear:.1f}M</b> (weak run)
+              <div style="font-size:14px;margin-top:6px;line-height:1.45;">📈 Break-even bid: <b>${be_bear:.1f}M</b> (weak run)
                 to <b>${be_base:.1f}M</b> (expected run)</div>
-              <div style="font-size:12px;line-height:1.45;">{interest_txt}</div>
+              <div style="font-size:14px;line-height:1.45;">{interest_txt}</div>
             </div>
             """, unsafe_allow_html=True)
             if resolved is not None:
@@ -1317,7 +1317,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                         verdict = "profitable on an expected run, a loss on a weak one"
                     else:
                         verdict = "above the expected-run break-even: you need a breakout to make money"
-                    st.markdown(f'<div style="font-size:12px;margin:-6px 0 6px;">→ ${bid:.1f}M is {verdict}.</div>',
+                    st.markdown(f'<div style="font-size:14px;margin:-6px 0 6px;">→ ${bid:.1f}M is {verdict}.</div>',
                                 unsafe_allow_html=True)
                 if st.button("Submit Bid", key=f"festival_submit_{fid}", use_container_width=True):
                     rival_bids = draw_festival_acquisition_bids(ss.team_name, ss.movie_cycle, fid,
@@ -1355,7 +1355,7 @@ def _section_holding_deals(ss, resolved_hold_key):
     shared _resolve_talent_cycle_transitions(ss) call _section_studio_
     partnerships uses -- see that function's docstring."""
     st.markdown('<a id="holding"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">5 · Holding Deals '
+    st.markdown('<div class="section-title decision">5 · Holding Deals '
                 '<span class="text-xs text-muted">(required · hold or sign at least one actor for your '
                 'next film; skipped on your final film)</span></div>',
                 unsafe_allow_html=True)
@@ -1486,14 +1486,14 @@ def _progress_bar(ss):
             f'<div style="width:32px;height:32px;border-radius:50%;background:{bg};'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-family:DM Mono,monospace;font-size:15px;font-weight:700;color:{clr};">{txt}</div>'
-            f'<div style="font-size:13px;color:#ffffff;font-family:DM Mono,monospace;">{label}</div></div>'
+            f'<div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">{label}</div></div>'
         )
     connector = '<div style="width:40px;height:2px;background:#252836;margin-bottom:16px;"></div>'
     if ss.movie_phase != "complete":
         y1, y2 = _cycle_year_range(ss.movie_cycle)
         # Year note (2026-10-01): ties the studio calendar to NPV's t=0 convention.
         cycle_label = (f"Film {ss.movie_cycle} of {CYCLES_TOTAL} · {_cycle_years_label(ss.movie_cycle)} of "
-                       f"{CYCLES_TOTAL * YEARS_PER_CYCLE}<div style=\"font-size:13px;margin-top:4px;\">"
+                       f"{CYCLES_TOTAL * YEARS_PER_CYCLE}<div style=\"font-size:14px;margin-top:4px;\">"
                        f"Year {y1} = greenlight &amp; produce (your t = 0 investment) · "
                        f"Year {y2} = release &amp; windows</div>")
     else:
@@ -1527,10 +1527,7 @@ div[data-testid="stElementContainer"]:has(.slate-strip), div.element-container:h
 }
 .slate-strip { background: #0b0c10; border-bottom: 1px solid #252836; padding: 8px 0 8px; }
 a[id] { scroll-margin-top: 11rem; }   /* step-chip jumps land below the pinned strip */
-/* The main action buttons (Greenlight, Run Simulation, Simulate) stand out. */
-.stButton button[kind="primary"], button[data-testid="stBaseButton-primary"] {
-    border: 2px solid #e8c547 !important; font-weight: 600 !important;
-}
+/* Main action buttons (Greenlight, Run Simulation, Simulate) are styled app-wide in utils/styles.py. */
 div[data-testid="stColumn"]:has(.eq-card) > div, div[data-testid="column"]:has(.eq-card) > div,
 div[data-testid="stColumn"]:has(.eq-card) div[data-testid="stVerticalBlock"],
 div[data-testid="column"]:has(.eq-card) div[data-testid="stVerticalBlock"] { height: 100%; }
@@ -1747,7 +1744,7 @@ def _decisions(ss):
 
     st.markdown('<a id="greenlight"></a>', unsafe_allow_html=True)
     _slots_left = CYCLES_TOTAL - ss.movie_cycle + 1
-    st.markdown(f'<div class="section-title">4 · Greenlight a New Movie '
+    st.markdown(f'<div class="section-title decision">4 · Greenlight a New Movie '
                 f'<span class="text-xs text-muted">(Greenlight Slot {ss.movie_cycle} of {CYCLES_TOTAL})</span></div>',
                 unsafe_allow_html=True)
     st.markdown(
@@ -1817,7 +1814,7 @@ def _decisions(ss):
                    if genre in ip["genres"] else
                    f"outside its home genre ({', '.join(ip['genres'])}), so only half the audience carries over")
             st.markdown(
-                f'<div style="font-size:13px;color:#ffffff;line-height:1.5;margin-bottom:6px;">'
+                f'<div style="font-size:14px;color:#ffffff;line-height:1.5;margin-bottom:6px;">'
                 f'🏛️ <b>{ip["name"]}</b>: {ip["note"]}<br>'
                 f'<b>+{ip_lift:.0f}% opening weekend</b>: {genre} is {fit}. '
                 f'<b>+${acq_cost:.0f}M legacy fee</b> added to Capital at Risk.</div>',
@@ -1845,11 +1842,11 @@ def _decisions(ss):
         ss.movie_draft["logline"] = logline
         _logline_len = len(logline.strip())
         if _logline_len >= 20:
-            st.markdown(f'<div style="font-size:13px;color:{SUCCESS};">✅ Pitch saved. It posts to the class '
+            st.markdown(f'<div style="font-size:14px;color:{SUCCESS};">✅ Pitch saved. It posts to the class '
                         f'Pitch Board when you Simulate at the bottom of the page.</div>', unsafe_allow_html=True)
         else:
             _short = 20 - _logline_len
-            st.markdown(f'<div style="font-size:13px;color:{WARN};">✏️ Pitch needed before you can Simulate '
+            st.markdown(f'<div style="font-size:14px;color:{WARN};">✏️ Pitch needed before you can Simulate '
                         f'({_short} more character{"s" if _short != 1 else ""}). Type it in, then click '
                         f'outside the box (or press Ctrl+Enter) to save.</div>', unsafe_allow_html=True)
 
@@ -1892,7 +1889,7 @@ def _decisions(ss):
         bought = ss.movie_research_paid.get(ss.movie_cycle)
         research_covers_this = _research_covers(bought, genre, concept_type)
         if bought and not research_covers_this:
-            st.markdown(f'<div style="font-size:13px;margin-bottom:6px;">🔎 Your research covers '
+            st.markdown(f'<div style="font-size:14px;margin-bottom:6px;">🔎 Your research covers '
                         f'<b>{escape(_research_label(bought))}</b>. You changed the concept, so buy new research '
                         f'to see this one.</div>', unsafe_allow_html=True)
         if not research_covers_this:
@@ -1915,7 +1912,7 @@ def _decisions(ss):
             # Genre norm (2026-10-01 balance pass): budget now buys production value.
             _typ = GENRE_TYPICAL_BUDGET_M.get(genre, 60.0)
             st.markdown(
-                f'<div style="font-size:13px;color:#e8c547;">🎯 Typical {genre} budget: ~${_typ:.0f}M. '
+                f'<div style="font-size:14px;color:#e8c547;">🎯 Typical {genre} budget: ~${_typ:.0f}M. '
                 f'Well below it, the film looks cheap and draws weaker audiences; above it, gains taper off.</div>',
                 unsafe_allow_html=True)
         with c2:
@@ -1950,7 +1947,7 @@ def _decisions(ss):
                 bonus_lbl = (f"+{talent['star_power_bonus']} Star Power" if "star_power_bonus" in talent
                              else f"+{talent['critical_score_bonus']:.0f} Critical Reception")
                 st.markdown(
-                    f'<div style="font-size:13px;color:#ffffff;line-height:1.5;">Star Power <b>{star}</b> '
+                    f'<div style="font-size:14px;color:#ffffff;line-height:1.5;">Star Power <b>{star}</b> '
                     f'(${star * STAR_POWER_COST_PER_POINT_M:.1f}M fee). '
                     + (f'✅ {genre} is one of their best genres, so their {bonus_lbl} bonus applies.'
                        if fits else
@@ -1993,7 +1990,7 @@ def _decisions(ss):
         with c4:
             screens = st.number_input("Planned Opening Screens", 500, 4500, int(d.get("screens", 3000)), step=250)
             st.markdown(
-                f'<div style="font-size:13px;color:#e8c547;">🎯 A {genre} audience fills about '
+                f'<div style="font-size:14px;color:#e8c547;">🎯 A {genre} audience fills about '
                 f'{GENRE_SCREEN_DEMAND.get(genre, 3000):,} screens. Booking more mostly adds empty seats.</div>',
                 unsafe_allow_html=True)
             st.caption(f"The U.S. has roughly 40,000 movie screens total (NATO estimate), of which only "
@@ -2087,7 +2084,7 @@ def _decisions(ss):
         if screens > realistic_max_screens:
             # A plain white note, not a yellow warning box (2026-10-05, per user).
             st.markdown(
-                f'<div style="font-size:13px;color:#ffffff;line-height:1.5;margin:4px 0 8px;">📝 Note: '
+                f'<div style="font-size:14px;color:#ffffff;line-height:1.5;margin:4px 0 8px;">📝 Note: '
                 f'{screens:,.0f} screens is a wide-release scale commitment for ${capital:.0f}M in total '
                 f'capital. Real distribution deals don\'t hand a small-budget film that many screens. The math '
                 f'will still run, but this combination isn\'t realistic; consider more capital or fewer screens.'
@@ -2179,7 +2176,7 @@ def _decisions(ss):
             use_container_width=True, config={"displayModeBar": False},
         )
         st.markdown(
-            '<div style="font-size:13px;color:#ffffff;line-height:1.55;">'
+            '<div style="font-size:14px;color:#ffffff;line-height:1.55;">'
             '<b>How to read this:</b> the chart shows <b>three possible outcomes</b> for this exact movie, '
             'one point each: <b>Bear</b> (a weak run), <b>Base</b> (the expected run), and <b>Bull</b> '
             '(a breakout hit). Each point is that outcome\'s NPV: all the revenue the movie would earn, '
@@ -2226,7 +2223,7 @@ def _decisions(ss):
     # that need a real interaction (Pay-1 competitive bids, PVOD market
     # rejections) render right under the table once they're triggered.
     st.markdown('<a id="release"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">6 · Release Plan — Your Slate</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title decision">6 · Release Plan — Your Slate</div>', unsafe_allow_html=True)
     st.markdown(
         '<p class="text-xs text-ink2 mb-2">One row per film, windows in the order they open: <b>theaters</b> '
         '(release type and run length) → <b>PVOD</b> (premium rental at home; you set the price) → <b>Pay-1</b> '
@@ -2245,11 +2242,11 @@ def _decisions(ss):
     widths = [1.3, 1.85, 2.15, 0.85, 1.0, 1.55, 1.7, 1.35]
     headers = ["Film", "Season", "Release", "Run (days)", "PVOD price", "Pay-1", "Pay-2", "Status"]
     for c, h in zip(st.columns(widths), headers):
-        c.markdown(f'<div class="font-mono" style="font-size:12px;border-bottom:1px solid #252836;'
+        c.markdown(f'<div class="font-mono" style="font-size:14px;border-bottom:1px solid #252836;'
                    f'padding-bottom:4px;">{h}</div>', unsafe_allow_html=True)
 
     def _cell(col, text):
-        col.markdown(f'<div style="font-size:13px;padding-top:8px;line-height:1.35;">{text}</div>',
+        col.markdown(f'<div style="font-size:14px;padding-top:8px;line-height:1.35;">{text}</div>',
                      unsafe_allow_html=True)
 
     def _pay1_text(kw):
@@ -2342,7 +2339,7 @@ def _decisions(ss):
         _cell(row[1], kw.get("debut_season", "Off-Peak"))
         rel_txt = RELEASE_LABELS.get(kw.get("release_strategy"), kw.get("release_strategy"))
         if kw.get("release_strategy") == "direct_to_peacock":
-            rel_txt += f"<br><span style='font-size:11px;'>{GOAL_LABELS.get(kw.get('peacock_goal'), '')}</span>"
+            rel_txt += f"<br><span style='font-size:14px;'>{GOAL_LABELS.get(kw.get('peacock_goal'), '')}</span>"
         _cell(row[2], rel_txt)
         _cell(row[3], "—" if kw.get("release_strategy") in NO_THEATERS else f"{MovieProject(**kw).window_days()}")
         _cell(row[4], "—" if is_dd or not kw.get("pvod_chosen_price") else f"${kw['pvod_chosen_price']:.2f}")
@@ -2379,7 +2376,7 @@ def _decisions(ss):
             _cell(row[7], f"{'✅' if entry['npv'] >= 0 else '❌'} {_fmt_money(entry['npv'])}")
 
     # ── The current film's row ────────────────────────────────────────────────
-    _cell(current_row[0], f"<b>{ss.movie_cycle} · {escape(title)}</b><br><span style='font-size:11px;'>this film</span>")
+    _cell(current_row[0], f"<b>{ss.movie_cycle} · {escape(title)}</b><br><span style='font-size:14px;'>this film</span>")
 
     # Debut Season (Phase 5, 2026-08-05): release timing. Summer/Holiday open
     # bigger but crowd out awards recall; Fall/Awards opens softer but is the
@@ -2431,7 +2428,7 @@ def _decisions(ss):
             if ss.get(goal_key) not in PEACOCK_GOALS:
                 ss[goal_key] = peacock_goal if peacock_goal in PEACOCK_GOALS else "acquisition"
             peacock_goal = ss[goal_key]
-            _cell(current_row[3], f"<span style='font-size:12px;'>{GOAL_LABELS[peacock_goal]}</span>")
+            _cell(current_row[3], f"<span style='font-size:14px;'>{GOAL_LABELS[peacock_goal]}</span>")
         else:
             _cell(current_row[3], "—")
         ss.movie_draft["peacock_goal"] = peacock_goal
@@ -2599,7 +2596,7 @@ def _decisions(ss):
                              "By then the film's production budget and P&A were paid long ago, so a Pay-2 licence fee is "
                              "almost pure, high-margin profit. Rival streamers like Pay-2 rights because they get a recent "
                              "hit for a fraction of a Pay-1 price.")
-        st.markdown('<div style="font-size:13px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
+        st.markdown('<div style="font-size:14px;line-height:1.6;margin:2px 0 6px;">' + "<br>".join(pay2_notes)
                     + '</div>', unsafe_allow_html=True)
 
     # 🎢 Universal Studios attraction offers (2026-10-05): a real, one-time
@@ -2609,7 +2606,7 @@ def _decisions(ss):
         offer = attraction_offer(kw.get("concept_type", "New IP"), entry.get("domestic_bo", 0.0),
                                  entry["critical_score"])
         st.markdown(f"""
-        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;font-size:13px;line-height:1.55;">
+        <div class="rounded-lg border border-line bg-surface2 p-3 mb-2" style="color:#ffffff;font-size:14px;line-height:1.55;">
           <div class="text-sm font-semibold">🎢 Film {entry['cycle']} "{escape(kw['title'])}" was a hit: build a Universal
           Studios attraction?</div>
           Cost now: <b>${offer['cost']:.1f}M</b>. Expected payoff ${offer['expected']:.1f}M (likely ${offer['p10']:.1f}M to
@@ -2647,7 +2644,7 @@ def _decisions(ss):
     if windowing_unlocked:
         with st.expander("📖 Straight to the home: Direct to PVOD vs Direct to Peacock", expanded=chosen in NO_THEATERS):
             st.markdown(
-                '<div style="font-size:13px;line-height:1.6;">'
+                '<div style="font-size:14px;line-height:1.6;">'
                 '<b>Direct to PVOD</b> skips theaters: the film premieres as a premium home rental (about $20), and '
                 'Universal keeps about 80% of every rental instead of roughly half a ticket. No screen fees, and the '
                 'money arrives in weeks. The catch: without a big-screen launch, fewer people show up. It suits '
@@ -2671,7 +2668,7 @@ def _decisions(ss):
                                    r["ancillary_reason"], r["ewom_reason"]) if n]
         stars = multiplier_to_stars(r["multiplier"], genre, concept_type)
         st.markdown(
-            f'<div style="font-size:13px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Simulation locked in:</b> '
+            f'<div style="font-size:14px;line-height:1.6;margin:4px 0 8px;">🎬 <b>Simulation locked in:</b> '
             f'{"⭐" * stars}{"☆" * (5 - stars)} audience demand · '
             + (f'${live_project.domestic_box_office(r["multiplier"]):.1f}M domestic · ' if chosen not in NO_THEATERS
                else 'no theaters · ')
@@ -2779,11 +2776,11 @@ def _decisions(ss):
     # Pay-1 window, sized off this film's ACTUAL theatrical result. An
     # accepted bid becomes the Pay-1 cell's own option in the table above.
     if chosen not in PEACOCK_EXCLUSIVE and resolved_entry is not None:
-        st.markdown('<div class="section-title mt-3" style="font-size:13px;">🏷️ Pay-1: Shop It to Competitive Bidders '
+        st.markdown('<div class="section-title mt-3" style="font-size:14px;">🏷️ Pay-1: Shop It to Competitive Bidders '
                     '<span class="text-xs text-muted">(optional)</span></div>', unsafe_allow_html=True)
         # Industry context (2026-10-05, per explicit user request).
         st.markdown(
-            '<div style="font-size:13px;line-height:1.55;margin-bottom:6px;">📖 <b>How Pay-1 works in the industry.</b> '
+            '<div style="font-size:14px;line-height:1.55;margin-bottom:6px;">📖 <b>How Pay-1 works in the industry.</b> '
             'Pay-1 is the first exclusive subscription-streaming window after theaters and PVOD, typically about 18 '
             'months. Studios without a big streamer of their own act as "arms dealers" and sell it: Sony licenses its '
             'Pay-1 window to Netflix. Studios with their own streamer keep their films in house to drive subscriptions: '
@@ -2848,12 +2845,12 @@ def _decisions(ss):
                     term = b.get("term_mo")
                     kept = sub_val * PAY1_REVERSION_SHARE.get(term, 0.0) if term else 0.0
                     term_html = f' · {term}-month term, ~${kept:.1f}M back to Peacock after' if term else ""
-                    flavor_html = f'<div style="font-size:11px;">{icon} {flavor}</div>' if flavor else ""
+                    flavor_html = f'<div style="font-size:14px;">{icon} {flavor}</div>' if flavor else ""
                     bc1, bc2 = st.columns([3, 1])
-                    bc1.markdown(f'<div style="font-size:13px;padding:4px 0;"><b>{b["bidder"]}</b>: '
+                    bc1.markdown(f'<div style="font-size:14px;padding:4px 0;"><b>{b["bidder"]}</b>: '
                                  f'${b["bid_m"]:.1f}M{term_html}{flavor_html}</div>', unsafe_allow_html=True)
                     if accepted == b["bidder"]:
-                        bc2.markdown('<div style="font-size:13px;padding:4px 0;">✅ Accepted</div>',
+                        bc2.markdown('<div style="font-size:14px;padding:4px 0;">✅ Accepted</div>',
                                      unsafe_allow_html=True)
                     else:
                         bc2.button("Accept", key=f"accept_bid_{ss.movie_cycle}_{round_num}_{b['bidder']}",
@@ -2883,7 +2880,7 @@ def _decisions(ss):
     # is ever violated (e.g. a legacy/malformed session) -- normal play
     # never exercises it.
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">7 · Simulate</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title decision action">7 · Simulate</div>', unsafe_allow_html=True)
     pending_pvod_response = ss.movie_pvod_pending_rejection.get(ss.movie_cycle) is not None
     has_logline = len(ss.movie_draft.get("logline", "").strip()) >= 20
     # Required steps (2026-10-05): Partnerships / Scouted / Festivals /
@@ -3091,7 +3088,7 @@ def _decision_result_card(result: dict, ss=None):
                        f'<span>{k}</span><b style="text-align:right;">{escape(str(v))}</b></div>'
                        for k, v in items)
     st.markdown(f"""
-    <div class="rounded-lg border border-line bg-surface2 p-4 mb-4" style="color:#ffffff;font-size:13px;">
+    <div class="rounded-lg border border-line bg-surface2 p-4 mb-4" style="color:#ffffff;font-size:14px;">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
         <div><div class="font-mono text-[11px] mb-1">WHAT YOU DECIDED</div>{_rows(decisions)}</div>
         <div><div class="font-mono text-[11px] mb-1">WHAT HAPPENED</div>{_rows(outcomes)}</div>
