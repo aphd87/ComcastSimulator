@@ -178,7 +178,7 @@ def build_plan():
         ["**36–48**", "Film 3", "Budgets far below the genre's typical budget (gold hint under Production Budget). Pay-2 calls: who gambled on Keep, and why?"],
         ["**48–60**", "Film 4 (final film: Pay-2 decided in its own row)", "Pay-1: anyone take a lower bid on a shorter term? Anyone go back to market?"],
         ["**60–70**", "**View Final Slate**", "Teams submitting without reading the Score Breakdown."],
-        ["**70–72**", "**Submit Official Score**", "First submission is official."],
+        ["**70–72**", "**Check the Leaderboard**", "Scores save automatically when the final film is simulated; the first finished slate is official."],
     ], [0.9, 2.5, 3.1])
     para(doc, "**Questions to ask while circulating:**")
     bullets(doc, [

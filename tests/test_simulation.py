@@ -719,3 +719,15 @@ def test_last_year_recap_omits_emmy_badge_for_legacy_entries_without_the_field()
     at = AppTest.from_function(script, default_timeout=30)
     at.run()
     assert not at.exception, f"Legacy-entry decisions phase raised: {list(at.exception)}"
+
+
+# ── Finished levels reach the leaderboard without clicking Submit (2026-10-14) ──
+def test_finished_level_is_recorded_automatically_once():
+    _complete_sim_app()
+    entries = [e for e in gs.load_leaderboard() if e.get("team_name") == "AppTest Team"]
+    assert len(entries) == 1 and entries[0]["network"] == "oxygen"
+
+
+def test_unfinished_level_is_not_recorded():
+    _decisions_sim_app()
+    assert [e for e in gs.load_leaderboard() if e.get("team_name") == "AppTest Team"] == []

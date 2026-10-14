@@ -1063,3 +1063,26 @@ def test_fresh_cycle_can_simulate_with_just_a_pitch():
     at.run()
     sim = [b for b in at.button if "Simulate" in b.label and "See Results" in b.label]
     assert sim and not sim[0].disabled
+
+
+# ── Finished slates reach the leaderboard without clicking Submit (2026-10-14) ──
+def test_finished_slate_auto_records_once(monkeypatch):
+    import app_pages.movies as movies
+    calls = []
+    monkeypatch.setattr(movies, "_record_slate", lambda ss: calls.append(1) or ss.__setitem__("movie_submitted", True))
+    ss = _SS(team_name="T", school="S", class_section="C", team_role="driver",
+             movie_log=[{"cycle": c} for c in range(1, movies.CYCLES_TOTAL + 1)])
+    movies._auto_record_slate_if_finished(ss)
+    movies._auto_record_slate_if_finished(ss)        # already recorded -> no second entry
+    assert calls == [1]
+
+
+def test_unfinished_slate_or_viewer_never_auto_records(monkeypatch):
+    import app_pages.movies as movies
+    calls = []
+    monkeypatch.setattr(movies, "_record_slate", lambda ss: calls.append(1))
+    movies._auto_record_slate_if_finished(_SS(team_name="T", school="S", class_section="C",
+                                              movie_log=[{"cycle": 1}]))
+    movies._auto_record_slate_if_finished(_SS(team_name="T", school="S", class_section="C", team_role="viewer",
+                                              movie_log=[{"cycle": c} for c in range(1, movies.CYCLES_TOTAL + 1)]))
+    assert calls == []

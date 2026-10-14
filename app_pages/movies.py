@@ -3119,12 +3119,73 @@ def _decision_result_card(result: dict, ss=None):
     """, unsafe_allow_html=True)
 
 
+def _slate_score(ss):
+    """Final slate score, shared by the Complete screen and the automatic
+    leaderboard record so both always show the same number."""
+    sorted_log = sorted(ss.movie_log, key=lambda r: r["cycle"])
+    projects = [MovieProject(**r["project_kwargs"]) for r in sorted_log]
+    critical_scores = [r["critical_score"] for r in sorted_log]
+    # 25% of each film's graded NPV is what it actually earned (MOVIE_LUCK_WEIGHT).
+    actual_npvs = [r.get("npv") for r in sorted_log]
+    deal_dec = [_deal_totals(ss, r["cycle"])[0] for r in sorted_log]
+    deal_act = [_deal_totals(ss, r["cycle"])[1] for r in sorted_log]
+    score = compute_movie_score(projects, critical_scores,
+                                actual_npvs=actual_npvs if all(v is not None for v in actual_npvs) else None,
+                                deal_adjustments=deal_dec, deal_adjustments_actual=deal_act)
+    return score, sorted_log, deal_act
+
+
+def _record_slate(ss) -> dict:
+    """Write this slate to the leaderboard (once). Used by the Submit button
+    and, since 2026-10-14, automatically as soon as the final film is
+    simulated, so a team that closes the tab still shows up."""
+    score, sorted_log, _ = _slate_score(ss)
+    attempts = get_attempt_count(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)
+    slate_summary = [
+        {"name": r["project_kwargs"]["title"], "genre": r["project_kwargs"]["genre"],
+         "concept_type": r["project_kwargs"].get("concept_type", "New IP"),
+         "release_strategy": RELEASE_LABELS[r["project_kwargs"]["release_strategy"]],
+         "npv": round(r["npv"], 1)}
+        for r in sorted_log
+    ]
+    entry = record_attempt(
+        team_name=ss.team_name, network=MOVIE_NETWORK_KEY,
+        attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
+        school=ss.school, class_section=ss.class_section,
+        class_abbrev=ss.get("class_abbrev", ""),
+        slate_summary=slate_summary,
+        notables=compute_movie_notables(sorted_log),
+    )
+    ss.movie_last_score = entry
+    ss.movie_submitted = True
+    return entry
+
+
+def _auto_record_slate_if_finished(ss):
+    """Record the slate the moment its last film is simulated, unless this
+    slate is already recorded, Movies is already passed, or the attempts are
+    used up. Follow Along viewers never write scores."""
+    if ss.get("movie_submitted") or ss.get("team_role", "driver") != "driver" or not ss.get("team_name"):
+        return
+    if len(ss.movie_log) < CYCLES_TOTAL:
+        return
+    prev = get_official_score(ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section)
+    if (prev and prev.get("passed")) or get_attempt_count(
+            ss.team_name, MOVIE_NETWORK_KEY, ss.school, ss.class_section) >= MAX_ATTEMPTS:
+        return
+    _record_slate(ss)
+
+
 def _results(ss):
     result = next((r for r in ss.movie_log if r["cycle"] == ss.movie_cycle), None)
     if not result:
         ss.movie_phase = "decisions"
         st.rerun()
         return
+    _auto_record_slate_if_finished(ss)
+    if len(ss.movie_log) >= CYCLES_TOTAL and ss.get("movie_submitted"):
+        st.success("✅ Slate finished: your score is saved to the Leaderboard automatically "
+                   "(your first finished slate is the official score).")
 
     npv_ok = result["npv"] >= 0
     npv_c = SUCCESS if npv_ok else DANGER
@@ -3363,16 +3424,8 @@ def _complete(ss):
         st.rerun()
         return
 
-    sorted_log = sorted(ss.movie_log, key=lambda r: r["cycle"])
-    projects = [MovieProject(**r["project_kwargs"]) for r in sorted_log]
-    critical_scores = [r["critical_score"] for r in sorted_log]
-    # 25% of each film's graded NPV is what it actually earned (MOVIE_LUCK_WEIGHT).
-    actual_npvs = [r.get("npv") for r in sorted_log]
-    deal_dec = [_deal_totals(ss, r["cycle"])[0] for r in sorted_log]
-    deal_act = [_deal_totals(ss, r["cycle"])[1] for r in sorted_log]
-    score = compute_movie_score(projects, critical_scores,
-                                actual_npvs=actual_npvs if all(v is not None for v in actual_npvs) else None,
-                                deal_adjustments=deal_dec, deal_adjustments_actual=deal_act)
+    _auto_record_slate_if_finished(ss)
+    score, sorted_log, deal_act = _slate_score(ss)
 
     total_c = SUCCESS if score["total"] >= 70 else (WARN if score["total"] >= 50 else DANGER)
     npv_c = SUCCESS if score["avg_ra_npv_m"] >= 0 else DANGER
@@ -3562,31 +3615,17 @@ def _complete(ss):
         elif not can_sub:
             st.warning(f"All {MAX_ATTEMPTS} attempts used.")
         else:
-            if attempts > 0:
+            if attempts > 0 and not ss.get("movie_submitted"):
                 st.markdown(
                     f'<p class="text-sm text-ink2 mb-2">⚠ Attempt {attempts + 1} of {MAX_ATTEMPTS}. '
                     f'Your <b>first submission</b> is the official score — retries are practice only.</p>',
                     unsafe_allow_html=True)
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
             btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score['total']:.0f} pts)"
-            if st.button(btn_lbl, use_container_width=True):
-                slate_summary = [
-                    {"name": r["project_kwargs"]["title"], "genre": r["project_kwargs"]["genre"],
-                     "concept_type": r["project_kwargs"].get("concept_type", "New IP"),
-                     "release_strategy": RELEASE_LABELS[r["project_kwargs"]["release_strategy"]],
-                     "npv": round(r["npv"], 1)}
-                    for r in sorted_log
-                ]
-                entry = record_attempt(
-                    team_name=ss.team_name, network=MOVIE_NETWORK_KEY,
-                    attempt_num=attempts + 1, score=score["total"], passed=score["passed"], details=score,
-                    school=ss.school, class_section=ss.class_section,
-                    class_abbrev=ss.get("class_abbrev", ""),
-                    slate_summary=slate_summary,
-                    notables=compute_movie_notables(sorted_log),
-                )
-                ss.movie_last_score = entry
-                ss.movie_submitted = True
+            if ss.get("movie_submitted"):
+                st.caption("This slate is already saved to the Leaderboard.")
+            elif st.button(btn_lbl, use_container_width=True):
+                _record_slate(ss)
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 

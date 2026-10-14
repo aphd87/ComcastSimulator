@@ -200,23 +200,23 @@ def sign_in_section(doc, game_button: str, movies: bool):
                 "to show the Driver's choices.")
     callout(doc, "warn",
             "Don't close or refresh your browser tab mid-level. Your in-progress decisions live in that tab. "
-            "Only submitted scores are saved to the leaderboard.")
+            "Finished levels and slates save to the leaderboard automatically; one you leave halfway does not.")
 
 
 def submit_section(doc, final_button: str, unit: str = "year", whole: str = "level"):
-    doc.add_heading("Submitting your score", level=1)
-    para(doc, f"After your last {unit}, click **{final_button}**. You will see your score, a breakdown, and your highlights.")
+    doc.add_heading("Your score and the Leaderboard", level=1)
+    para(doc, f"The moment you simulate your last {unit}, your score is **saved to the Leaderboard automatically**, "
+              f"even if you close the tab. Click **{final_button}** to see your score, a breakdown, and your highlights.")
     steps(doc, [
         "Review the Score Breakdown. It shows exactly where you earned and lost points.",
-        "Click **🎯 Submit Official Score**.",
         "Check the **🏆 Leaderboard** to see where you rank in your class.",
     ])
     callout(doc, "warn",
-            "**Your FIRST submission is your official score.** You get 3 attempts in total, but attempts 2 and 3 "
-            "are practice only. Don't click Submit until your team agrees you are done.")
+            f"**Your FIRST finished {whole} is your official score.** You get 3 attempts in total, but attempts 2 and 3 "
+            f"are practice only. Agree as a team before you simulate the last {unit}.")
     callout(doc, "tip",
-            f"Before you submit, you can still go back: **← Redo** replays only the most recent {unit}, and "
-            f"**↺ Restart** wipes the whole {whole}. Neither one uses up an attempt. Only Submit does.")
+            f"Before your last {unit}, you can still go back: **← Redo** replays only the most recent {unit}, and "
+            f"**↺ Restart** wipes the whole {whole}. Neither one uses up an attempt. Finishing the {whole} does.")
 
 
 # ── TV / Streaming guide ─────────────────────────────────────────────────────
@@ -384,7 +384,7 @@ def build_tv():
         "**Spreading marketing too thin.** Under $3M per show buys very little.",
         "**Greenlighting because you can.** New shows cost money right away, and they hurt this year's margin.",
         "**Judging streaming on Year 1.** Streaming shows pay off over three years.",
-        "**Submitting too early.** Your first submission is your official score.",
+        "**Finishing too early.** Your first finished playthrough is your official score, saved automatically.",
         "**Mismatched team details.** Teammates who type the team name differently end up on separate teams.",
     ])
 
@@ -579,7 +579,7 @@ def build_movies():
         "**Skipping the Theatrical Simulation.** Simulate will run it for you, but then you set PVOD and Pay-1 without seeing the opening first.",
         "**No pitch.** ▶ Simulate stays locked until you write your logline in step 4.",
         "**Holding an actor and never casting them.** A held actor's bonus only applies if you pick them as Lead Actor next cycle.",
-        "**Submitting too early.** Your first submission is your official score.",
+        "**Finishing too early.** Your first finished playthrough is your official score, saved automatically.",
     ])
 
     doc.add_heading("Glossary", level=1)

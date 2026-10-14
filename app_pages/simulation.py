@@ -573,12 +573,14 @@ def _section_financing(ss, shows, year, net_info, level_budget):
         'Higher spend lifts ratings and ad revenue. Each $1M ≈ +1.5% ad rev lift. '
         'Diminishing returns above $16M.</div>', unsafe_allow_html=True)
 
-    # key="mkt_budget" binds this widget directly to ss.mkt_budget — reads
-    # its current value as the default and writes back on every change, so
-    # every other step (and the pinned P&L preview) always sees the live
-    # figure instead of a value only synced at End Year (a real staleness
-    # bug the old per-year-keyed slider had, fixed incidentally here).
-    st.slider("Marketing ($M this year)", 0.0, 24.0, step=0.5, key="mkt_budget")
+    # The slider has its own widget key and writes ss.mkt_budget on every
+    # run, so every other step (and the P&L preview) sees the live figure.
+    # 2026-10-14: it used to bind key="mkt_budget" directly, but on
+    # Streamlit 1.45 the browser then drew the slider at 0.00 while the
+    # model used the pre-seeded $5.0M, and one nudge dropped spend to $0.5M
+    # (found in a browser check). An explicit value= keeps both in step.
+    ss.mkt_budget = st.slider("Marketing ($M this year)", 0.0, 24.0,
+                              value=float(ss.get("mkt_budget", 5.0)), step=0.5, key="mkt_budget_slider")
 
     # Zach Schlessel's feedback: shows below a per-show marketing floor
     # aren't realistically viable. Soft warning, not a hard block — the
@@ -1013,6 +1015,66 @@ def _decisions(ss, shows, net_info, year, net):
 
 # ── Results phase ──────────────────────────────────────────────────────────────
 
+def _level_score(ss, shows, net, year):
+    """Final level score, shared by the Complete screen and the automatic
+    leaderboard record so both always show the same number."""
+    log        = ss.yearly_log
+    total_rev  = sum(r["revenue"] for r in log)
+    total_mkt  = sum(r["mkt"]     for r in log)
+    total_ocf  = sum(r["ocf"]     for r in log)
+    avg_margin = (total_ocf / total_rev * 100) if total_rev > 0 else 0.0
+    active = _active_shows(shows, ss.cancelled_shows)
+    per = (total_mkt / YEARS_PER_LEVEL) / max(len(active), 1)   # avg annual mkt per show
+    rois = [s.roi(year, per) for s in active]
+    avg_roi = sum(rois) / len(rois) if rois else 0.0
+    genre_costs = {}
+    for s in active:
+        genre_costs[s.genre] = genre_costs.get(s.genre, 0) + s.total_cost(year)
+    hhi         = hhi_from_genres(genre_costs)
+    renewal_pct = (sum(1 for r in rois if r > 0) / len(rois) * 100) if rois else 0.0
+    mkt_eff     = (total_rev / total_mkt) if total_mkt > 0 else 0.0
+    score_d     = compute_score_for_network(net, avg_margin, avg_roi, hhi, renewal_pct, mkt_eff)
+    return score_d, active, avg_margin
+
+
+def _record_level(ss, shows, team, net, year) -> dict:
+    """Write this playthrough to the leaderboard (once). Used by the Submit
+    button and, since 2026-10-14, automatically as soon as the final year is
+    simulated, so a team that closes the tab still shows up. The first
+    recorded attempt is the official score, as before."""
+    score_d, active, _ = _level_score(ss, shows, net, year)
+    attempts = get_attempt_count(team, net, ss.school, ss.class_section)
+    entry = record_attempt(
+        team_name=team, network=net,
+        attempt_num=attempts + 1,
+        score=score_d["total"],
+        passed=score_d["passed"],
+        details=score_d,
+        school=ss.school, class_section=ss.class_section,
+        class_abbrev=ss.get("class_abbrev", ""),
+        slate_summary=[{"name": s.name, "genre": s.genre, "network": s.network,
+                        "rating": round(s.rating, 2)} for s in active],
+        notables=compute_level_notables(ss.yearly_log, ss.get("total_shows_greenlit", 0)),
+    )
+    ss.last_score = entry
+    ss.submitted  = True
+    return entry
+
+
+def _auto_record_if_finished(ss, shows, team, net, year):
+    """Record the level the moment its last year is simulated, unless this
+    playthrough is already recorded, the network is already passed, or the
+    attempts are used up. Follow Along viewers never write scores."""
+    if ss.get("submitted") or ss.get("team_role", "driver") != "driver" or not team:
+        return
+    if year < YEARS_PER_LEVEL or len(ss.yearly_log) < YEARS_PER_LEVEL:
+        return
+    prev = get_official_score(team, net, ss.school, ss.class_section)
+    if (prev and prev.get("passed")) or get_attempt_count(team, net, ss.school, ss.class_section) >= MAX_ATTEMPTS:
+        return
+    _record_level(ss, shows, team, net, year)
+
+
 def _results(ss, shows, net_info, year, team, net):
     log    = ss.yearly_log
     result = next((r for r in log if r["year"] == year), None)
@@ -1020,6 +1082,10 @@ def _results(ss, shows, net_info, year, team, net):
         ss.sim_phase = "decisions"
         st.rerun()
         return
+    _auto_record_if_finished(ss, shows, team, net, year)
+    if year >= YEARS_PER_LEVEL and ss.get("submitted"):
+        st.success("✅ Level finished: your score is saved to the Leaderboard automatically "
+                   "(your first finished playthrough is the official score).")
 
     threshold = net_info["pass_threshold"]
     ocf_ok    = result["ocf"] >= 0
@@ -1266,18 +1332,9 @@ def _complete(ss, shows, net_info, team, net):
     total_ocf  = sum(r["ocf"]     for r in log)
     avg_margin = (total_ocf / total_rev * 100) if total_rev > 0 else 0.0
 
-    # Compute score
-    active = _active_shows(shows, ss.cancelled_shows)
-    per = (total_mkt / YEARS_PER_LEVEL) / max(len(active), 1)   # avg annual mkt per show
-    rois = [s.roi(year, per) for s in active]
-    avg_roi = sum(rois) / len(rois) if rois else 0.0
-    genre_costs = {}
-    for s in active:
-        genre_costs[s.genre] = genre_costs.get(s.genre, 0) + s.total_cost(year)
-    hhi         = hhi_from_genres(genre_costs)
-    renewal_pct = (sum(1 for r in rois if r > 0) / len(rois) * 100) if rois else 0.0
-    mkt_eff     = (total_rev / total_mkt) if total_mkt > 0 else 0.0
-    score_d     = compute_score_for_network(net, avg_margin, avg_roi, hhi, renewal_pct, mkt_eff)
+    # Compute score (shared with the automatic leaderboard record)
+    _auto_record_if_finished(ss, shows, team, net, year)
+    score_d, active, _ = _level_score(ss, shows, net, year)
 
     attempts      = get_attempt_count(team, net, ss.school, ss.class_section)
     prev_official = get_official_score(team, net, ss.school, ss.class_section)
@@ -1505,7 +1562,7 @@ def _complete(ss, shows, net_info, team, net):
         elif not can_sub:
             st.warning(f"All {MAX_ATTEMPTS} attempts used for this network.")
         else:
-            if attempts > 0:
+            if attempts > 0 and not ss.get("submitted"):
                 st.markdown(
                     f'<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
                     f'⚠ Attempt {attempts + 1} of {MAX_ATTEMPTS}. '
@@ -1513,25 +1570,10 @@ def _complete(ss, shows, net_info, team, net):
                     unsafe_allow_html=True)
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
             btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score_d['total']:.0f} pts)"
-            if st.button(f"{btn_lbl}", use_container_width=True):
-                slate_summary = [
-                    {"name": s.name, "genre": s.genre, "network": s.network,
-                     "rating": round(s.rating, 2)}
-                    for s in active
-                ]
-                entry = record_attempt(
-                    team_name=team, network=net,
-                    attempt_num=attempts + 1,
-                    score=score_d["total"],
-                    passed=score_d["passed"],
-                    details=score_d,
-                    school=ss.school, class_section=ss.class_section,
-                    class_abbrev=ss.get("class_abbrev", ""),
-                    slate_summary=slate_summary,
-                    notables=compute_level_notables(log, ss.get("total_shows_greenlit", 0)),
-                )
-                ss.last_score = entry
-                ss.submitted  = True
+            if ss.get("submitted"):
+                st.caption("This playthrough is already saved to the Leaderboard.")
+            elif st.button(f"{btn_lbl}", use_container_width=True):
+                _record_level(ss, shows, team, net, year)
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 

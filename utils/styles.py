@@ -96,7 +96,7 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important
 .stDataFrame thead th { background:#1a1d26 !important;color:#ffffff !important;
     font-family:'DM Mono',monospace;font-size:14px; }
 
-[data-testid="stSlider"] > div > div { background:#7d8499 !important; }
+[data-testid="stSlider"] > div > div { background:#252836 !important; }
 
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] div,
@@ -170,7 +170,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 /* Links read as links, not just colored text (SC 1.4.1). */
-[data-testid="stMarkdownContainer"] a { text-decoration:underline !important; text-underline-offset:3px; }
+[data-testid="stMarkdownContainer"] a:not([style*="text-decoration"]) { text-decoration:underline; text-underline-offset:3px; }
 
 /* ── Decision callouts (2026-10-14) ───────────────────────────────────────
    Any section header tagged class="section-title decision" is somewhere the
@@ -184,7 +184,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     content:"👉 Your decision"; display:block; font-size:14px; font-weight:600;
     letter-spacing:.08em; color:#ffffff; margin-bottom:2px;
 }
-.section-title.decision.action::before { content:"👉 Next step — click the gold button"; }
+.section-title.decision.action::before { content:"👉 Next step — click ▶ Simulate below"; }
 
 /* Submit button special styling */
 .submit-btn button {
