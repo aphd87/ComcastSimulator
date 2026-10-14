@@ -1853,8 +1853,8 @@ def _decisions(ss):
             st.caption("An original screenplay has no rights to acquire, but also no built-in "
                        "audience — every dollar of awareness has to be earned through P&A and Star Power.")
 
-        # Logline (2026-10-01): always available and required to Simulate --
-        # it's posted to the class Pitch Board when the film is simulated.
+        # Logline (2026-10-01): optional since 2026-10-14; posted to the class
+        # Pitch Board when the film is simulated.
         logline = st.text_area(
             "Your Pitch / Logline (1-3 sentences): who it's about, what they want, and what's in the way",
             value=d.get("logline", ""), max_chars=500, key=f"movie_logline_{ss.movie_cycle}",
@@ -1864,14 +1864,26 @@ def _decisions(ss):
                  "full synopsis. Optional: it's shared on your class Pitch Board when you Simulate.",
         )
         ss.movie_draft["logline"] = logline
-        _logline_len = len(logline.strip())
-        if _logline_len:
-            st.markdown(f'<div style="font-size:14px;color:{SUCCESS};">✅ Pitch saved. It posts to the class '
-                        f'Pitch Board when you Simulate at the bottom of the page.</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="font-size:14px;">Optional: a pitch is shared with your class on the Pitch '
-                        'Board. Type it in, then click outside the box (or press Ctrl+Enter) to save.</div>',
+        # Explicit Save Pitch button (2026-10-14, per user: "if there is a
+        # pitch made, we need a clear button to click so that it is
+        # processed"). Clicking it also commits whatever is typed in the box
+        # (the click blurs the text area first). Simulate still uses the
+        # box's current text, so an unsaved pitch is never lost.
+        saved_key = f"movie_pitch_saved_{ss.movie_cycle}"
+        if st.button("💾 Save Pitch", key=f"save_pitch_{ss.movie_cycle}",
+                     disabled=not logline.strip(),
+                     help="Saves your pitch for this film. It posts to the class Pitch Board when you Simulate."):
+            ss[saved_key] = logline.strip()
+        saved = ss.get(saved_key)
+        if logline.strip() and saved == logline.strip():
+            st.markdown('<div style="font-size:14px;">✅ <b>Pitch saved.</b> It posts to the class Pitch Board '
+                        'when you Simulate at the bottom of the page.</div>', unsafe_allow_html=True)
+        elif logline.strip():
+            st.markdown('<div style="font-size:14px;">✏️ <b>Not saved yet</b>: click 💾 Save Pitch.</div>',
                         unsafe_allow_html=True)
+        else:
+            st.markdown('<div style="font-size:14px;">Optional: write a pitch, then click 💾 Save Pitch. '
+                        'It is shared with your class on the Pitch Board.</div>', unsafe_allow_html=True)
 
         # ── Peer Pitch Board (2026-10-01; replaced AI pitch feedback) ──────────
         with st.expander("👀 See the movies other teams in your class have pitched", expanded=False):

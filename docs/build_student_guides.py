@@ -485,7 +485,7 @@ def build_movies():
     doc.add_heading("🎬 Concept", level=3)
     bullets(doc, [
         "**Working Title**: anything you like.",
-        "**Logline (optional)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. Once the film is made, the logline and how the film did appear on your class's **📋 Pitch Board**.",
+        "**Logline (optional)**: 1–3 sentences on who the movie is about, what they want, and what's in the way. Click **💾 Save Pitch** under the box (you'll see ✅ Pitch saved). Once the film is made, the logline and how the film did appear on your class's **📋 Pitch Board**.",
         "**Genre**: Action/Tentpole, Sci-Fi/Fantasy, Animated, Horror, Comedy, Drama, or Awards/Prestige. Big genres earn more overseas. Prestige genres can win awards.",
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",

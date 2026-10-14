@@ -1081,3 +1081,15 @@ def test_unfinished_slate_or_viewer_never_auto_records(monkeypatch):
     movies._auto_record_slate_if_finished(_SS(team_name="T", school="S", class_section="C", team_role="viewer",
                                               movie_log=[{"cycle": c} for c in range(1, movies.CYCLES_TOTAL + 1)]))
     assert calls == []
+
+
+# ── Explicit Save Pitch button (2026-10-14) ─────────────────────────────────
+def test_save_pitch_button_saves_and_confirms():
+    at = _movies_app()
+    btn = next(b for b in at.button if "Save Pitch" in b.label)
+    assert btn.disabled                                    # nothing typed yet
+    at.text_area(key="movie_logline_1").set_value("A rookie stuntwoman has one take to save the movie.").run()
+    next(b for b in at.button if "Save Pitch" in b.label).click().run()
+    assert not at.exception, list(at.exception)
+    assert at.session_state["movie_pitch_saved_1"] == "A rookie stuntwoman has one take to save the movie."
+    assert any("Pitch saved" in m.value for m in at.markdown)
