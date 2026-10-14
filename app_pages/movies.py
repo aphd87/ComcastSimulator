@@ -1870,10 +1870,15 @@ def _decisions(ss):
         # (the click blurs the text area first). Simulate still uses the
         # box's current text, so an unsaved pitch is never lost.
         saved_key = f"movie_pitch_saved_{ss.movie_cycle}"
+        # Never disabled: the box only sends its text when it loses focus, so
+        # a button disabled-while-empty swallowed the first click after typing
+        # (found in a browser check, 2026-10-14).
         if st.button("💾 Save Pitch", key=f"save_pitch_{ss.movie_cycle}",
-                     disabled=not logline.strip(),
                      help="Saves your pitch for this film. It posts to the class Pitch Board when you Simulate."):
-            ss[saved_key] = logline.strip()
+            if logline.strip():
+                ss[saved_key] = logline.strip()
+            else:
+                st.caption("Type a pitch in the box above first.")
         saved = ss.get(saved_key)
         if logline.strip() and saved == logline.strip():
             st.markdown('<div style="font-size:14px;">✅ <b>Pitch saved.</b> It posts to the class Pitch Board '

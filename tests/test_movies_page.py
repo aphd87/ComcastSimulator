@@ -1087,7 +1087,7 @@ def test_unfinished_slate_or_viewer_never_auto_records(monkeypatch):
 def test_save_pitch_button_saves_and_confirms():
     at = _movies_app()
     btn = next(b for b in at.button if "Save Pitch" in b.label)
-    assert btn.disabled                                    # nothing typed yet
+    assert not btn.disabled          # always clickable: a disabled button ate the first click after typing
     at.text_area(key="movie_logline_1").set_value("A rookie stuntwoman has one take to save the movie.").run()
     next(b for b in at.button if "Save Pitch" in b.label).click().run()
     assert not at.exception, list(at.exception)
