@@ -108,3 +108,61 @@ def test_auto_fill_by_rating_assigns_every_show_to_a_distinct_slot():
     assert all(s.slot_day is not None and s.slot_hour is not None for s in shows)
     assigned = [(s.slot_day, s.slot_hour) for s in shows]
     assert len(assigned) == len(set(assigned))   # no two shows share a slot
+
+
+def _schedule_script():
+    import streamlit as st
+    import sys
+    sys.path.insert(0, ".")
+    from utils.models import Show
+    defaults = {
+        "active_network": "oxygen", "year": 1, "mkt_budget": 5.0,
+        "cancelled_shows": set(), "renewal_decisions": {2: "Cancel"},
+        "greenlit_ids_this_year": set(),
+        "oxygen_shows": [
+            Show(id=1, name="Show A", genre="Reality", episodes=10, ep_cost_k=300,
+                 rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
+            Show(id=2, name="Show B", genre="True Crime", episodes=8, ep_cost_k=350,
+                 rating=0.9, ip_score=45, air_month=3, network="Oxygen"),
+            Show(id=3, name="Show C", genre="True Crime", episodes=10, ep_cost_k=400,
+                 rating=1.2, ip_score=50, air_month=9, network="Oxygen"),
+        ],
+        "bravo_shows": [], "peacock_shows": [],
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+    import app_pages.schedule as schedule
+    schedule.render()
+
+
+def test_amortization_table_total_matches_the_pnl_content_cost():
+    """2026-11-03: the amortization table's 'Charged This Year' total must be
+    the same figure the P&L preview charges (simulation._annual_cost), incl.
+    the 25% charge for a show cancelled this year."""
+    from utils.models import Show
+    from app_pages.simulation import _annual_cost
+    at = AppTest.from_function(_schedule_script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Schedule page raised: {list(at.exception)}"
+    shows = at.session_state["oxygen_shows"]
+    expected = _annual_cost(shows, 1, set(), {2})
+    text = "\n".join(md.value for md in at.markdown)
+    assert f"<b>${expected:.1f}M</b> of that hits this year" in text
+    assert "Key takeaway" in text
+
+
+def test_payoff_schedule_this_year_matches_table_and_defers_true_crime():
+    """2026-11-03: the Payoff Schedule's first year equals what the table
+    charges this year (non-cancelled shows), and a True Crime show's
+    remaining half shows up in the following year."""
+    at = AppTest.from_function(_schedule_script, default_timeout=30)
+    at.run()
+    assert not at.exception, f"Schedule page raised: {list(at.exception)}"
+    shows = at.session_state["oxygen_shows"]
+    a, c = shows[0], shows[2]                     # show 2 is cancelled in the fixture
+    now = a.annual_amort_expense(1) + c.annual_amort_expense(1)
+    later = c.total_cost(1) - c.annual_amort_expense(1)
+    text = "\n".join(md.value for md in at.markdown)
+    assert f"<b>${now:.1f}M</b> of this season's cost is charged this year" in text
+    assert f"<b>${later:.1f}M</b> rolls into the next two years" in text

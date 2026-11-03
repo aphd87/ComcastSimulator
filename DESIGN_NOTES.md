@@ -8,6 +8,14 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## 2026-11-03 session — Class-ready QA: TV amortization rebuilt, key takeaways, clearer buttons
+
+- **TV amortization now has one rule everywhere**: the P&L's `Show.annual_amort_expense` (season cost ÷ 12 / 24 True Crime / 36 Peacock months, × 12 per year). The old Scheduling heatmap billed only on-air months (a 10-episode show showed 5/12 of its cost) and the cash bridge used a different divisor plus a made-up sine-wave revenue curve, so none of it matched Content Cost. Replaced in `app_pages/schedule.py` by: an explained **Amortization Table** (total = Content Cost, tested), a **Payoff Schedule** (this season's cost by year + table: what rolls into future P&Ls), and a **Monthly Cash Flow** chart where cost is charged evenly and ad revenue arrives only in on-air months. `finance.py`'s monthly trend, cost donuts and Cost/Point use the same basis.
+- **Key takeaways** (`utils/charts.takeaway`) under every chart and table in TV, Movies and Leaderboard, computed from the numbers shown.
+- **Buttons say what they commit and cost**: Sign / Option / Submit Sealed Bid / Hold / Multi-Picture / Research; "Retry" → "Save as Practice Attempt"; Advance to next network is primary.
+- **Fixed**: TV "Expected This Year" budget line double-counted shows greenlit this year (production cost deducted at greenlight AND their amortization counted as committed).
+- **Still open**: Movies has no Driver / Follow-Along view (TV does). Not browser-verified this session.
+
 ## 2026-10-05 session — Movies restructured for clarity and decision tension
 
 **Structure (per explicit user requests).** Four films, not five (`CYCLES_TOTAL` 5 → 4), sized for one 45–60 minute session; the user weighed several-films-per-cycle and kept one (TV already teaches portfolio thinking; Movies teaches the concentrated bet across a slate). A 1–7 step bar (`_step_status` / `_numbered_steps` / `_step_bar`) gates Simulate: Partnerships, Scouted Concepts, Festivals and Holding Deals are **required** ("no passing"). Step 6 is a **Release Plan table**, one row per film, windows in real order: theaters → PVOD → Pay-1 → Pay-2 (Pay-2 used to render before the theatrical run). Results gained a "What you decided → What happened → Why" card and a **Your Slate** table (own films only; other teams live on the Leaderboard).

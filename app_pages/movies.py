@@ -63,7 +63,7 @@ from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
     compute_movie_notables, render_vs_competitors_board,
 )
-from utils.charts import base_layout, waterfall_chart, donut_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, takeaway, waterfall_chart, donut_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 MOVIE_NETWORK_KEY = "movies"   # leaderboard/attempt-tracking key — same FERPA-safe infra as Day 1
 RESEARCH_FEE_M = 4.0   # $M -- Movies-side parallel to TV's RESEARCH_FEE (app_pages/renewal.py),
@@ -558,6 +558,11 @@ def _section_your_slate(ss, title: str = "🎬 Your Slate"):
     st.caption("Deals = partnership and renewal fees, actor holds, festival films won and attractions built "
                "that cycle. They count in your score alongside each film's NPV.")
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    _wins = sum(1 for r in log if r["npv"] >= 0)
+    _best = max(log, key=lambda r: r["npv"])
+    takeaway(f"<b>{_wins} of {len(log)}</b> films made money so far, and the slate is worth "
+             f"<b>{_fmt_money(total)}</b> including deals. Your best film is "
+             f"<b>{_best['project_kwargs']['title']}</b> ({_fmt_money(_best['npv'])}).")
 
 
 def _pending_pay2_films(ss) -> list:
@@ -854,6 +859,11 @@ def _section_distribution_pipeline(ss):
                  column_config={"Description": st.column_config.TextColumn(
                      "Description", width=420,
                      help="What the movie is about and what its concept type means commercially.")})
+    _yours = [r for _, r in rows if r["Slate"] == "Yours"]
+    _others = len(rows) - len(_yours)
+    takeaway(f"<b>{len(_yours)}</b> of your films are in release right now, next to {_others} rival or "
+             f"partner title{'s' if _others != 1 else ''}. A film keeps earning as it moves through each "
+             f"window (theaters → PVOD → Pay-1 → Pay-2), so older films still add value.")
     st.divider()
 
 
@@ -1094,7 +1104,7 @@ def _section_studio_partnerships(ss, newly_poached: dict):
                   {f'<div class="text-[14px] mt-1" style="color:{DANGER};">Signed by {poached_by}</div>' if poached_by else ''}
                 </div>
                 """, unsafe_allow_html=True)
-                if not poached_by and st.button("Sign", key=f"sign_overall_{key}", use_container_width=True):
+                if not poached_by and st.button(f"✍️ Sign {partner['name']} (${partner['deal_cost_m']:.0f}M)", key=f"sign_overall_{key}", use_container_width=True):
                     ss.movie_overall_deal = key
                     ss.movie_overall_deal_signed_cycle = ss.movie_cycle
                     ss.movie_talent_total_spend += partner["deal_cost_m"]
@@ -1196,7 +1206,7 @@ def _section_scouted_concepts(ss, newly_poached: dict):
               {'<div class="text-[14px] mt-1" style="color:' + SUCCESS + ';">✅ Optioned</div>' if optioned else ''}
             </div>
             """, unsafe_allow_html=True)
-            if not optioned and st.button("Option This Concept", key=f"option_{concept['id']}", use_container_width=True):
+            if not optioned and st.button(f"📝 Option This Concept for Film {ss.movie_cycle}", key=f"option_{concept['id']}", use_container_width=True):
                 ss.movie_scouted_optioned.add(concept["id"])
                 ss.movie_draft = {
                     **ss.movie_draft,
@@ -1343,7 +1353,7 @@ def _section_festival_acquisitions(ss, newly_resolved: dict):
                         verdict = "above the expected-run break-even: you need a breakout to make money"
                     st.markdown(f'<div style="font-size:14px;margin:-6px 0 6px;">→ ${bid:.1f}M is {verdict}.</div>',
                                 unsafe_allow_html=True)
-                if st.button("Submit Bid", key=f"festival_submit_{fid}", use_container_width=True):
+                if st.button(f"📨 Submit Sealed Bid of ${bid:.1f}M", key=f"festival_submit_{fid}", use_container_width=True):
                     rival_bids = draw_festival_acquisition_bids(ss.team_name, ss.movie_cycle, fid,
                                                                   film["asking_anchor_m"], appetite_mult)
                     auction = resolve_festival_acquisition(bid, rival_bids)
@@ -1469,7 +1479,7 @@ def _section_holding_deals(ss, resolved_hold_key):
                     # Stacked, full width (2026-10-05: side by side, "Multi-Picture" was cut to "Multi-Pic…").
                     bcol1 = bcol2 = st.container()
                     with bcol1:
-                        if st.button("Place Hold", key=f"hold_{key}", use_container_width=True):
+                        if st.button(f"🤝 Hold for Your Next Film (${partner['hold_cost_m']:.1f}M)", key=f"hold_{key}", use_container_width=True):
                             ss.movie_talent_total_spend += partner["hold_cost_m"]
                             _book_deal(ss, f"Hold on {partner['name']}", -partner["hold_cost_m"])
                             rival = draw_rival_claim(ss.team_name, ss.movie_cycle, key)
@@ -1480,7 +1490,7 @@ def _section_holding_deals(ss, resolved_hold_key):
                                 ss.movie_talent_holds[key] = {"status": "pending", "cycle_placed": ss.movie_cycle}
                             st.rerun()
                     with bcol2:
-                        if st.button("Multi-Picture", key=f"multi_{key}", use_container_width=True):
+                        if st.button(f"📜 Multi-Picture Deal (${partner['multi_picture_cost_m']:.0f}M)", key=f"multi_{key}", use_container_width=True):
                             ss.movie_talent_total_spend += partner["multi_picture_cost_m"]
                             _book_deal(ss, f"Multi-picture deal: {partner['name']}", -partner["multi_picture_cost_m"])
                             ss.movie_multi_picture_deals[key] = ss.movie_cycle
@@ -1636,6 +1646,10 @@ def _progress_chart(ss):
     st.markdown('<div class="mb-4">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown('</div>', unsafe_allow_html=True)
+    takeaway(f"Your films so far add up to <b>{_fmt_money(sum(npvs))}</b> of NPV "
+             f"({sum(1 for v in npvs if v >= 0)} of {len(npvs)} in the green). "
+             + ("Your last film did worse than the one before; check what changed."
+                if npvs[-1] < npvs[-2] else "Your last film beat the one before."))
 
 
 def _resolve_movie_outcome(ss, project) -> dict:
@@ -2227,6 +2241,17 @@ def _decisions(ss):
             '<b>no reviews yet</b>; critics are revealed when the movie comes out. The real result lands '
             'somewhere between Bear and Bull.</div>',
             unsafe_allow_html=True)
+        if bear_npv >= 0:
+            _tk = "This film makes money even if it underperforms (Bear is above $0). That's a safe bet."
+        elif base_npv >= 0:
+            _tk = (f"This film makes money on an expected run ({_fmt_money(base_npv)}) but loses "
+                   f"{_fmt_money(-bear_npv)} if it underperforms. Trim budget or P&amp;A to lift the Bear case.")
+        elif bull_npv >= 0:
+            _tk = (f"This film only makes money if it breaks out (Bull {_fmt_money(bull_npv)}); the expected "
+                   f"run loses {_fmt_money(-base_npv)}. Spend less or pick a stronger concept.")
+        else:
+            _tk = "This film loses money in every outcome. Cut cost before you greenlight it."
+        takeaway(_tk)
 
     # ✅ Greenlight button (2026-10-05): the form above saves as you go, but a
     # team needs a clear "this film is done" action. Clickable once the pitch
@@ -3267,6 +3292,13 @@ def _results(ss):
                                title="Where This Landed: Bear → Base → Bull, Actual NPV Marked"),
         use_container_width=True, config={"displayModeBar": False},
     )
+    _act = result["npv"]
+    _where = ("above even the Bull case" if _act > _bull_npv else
+              "between Base and Bull: better than expected" if _act >= _base_npv else
+              "between Bear and Base: worse than expected" if _act >= _bear_npv else
+              "below even the Bear case")
+    takeaway(f"<b>{title}</b> earned {_fmt_money(_act)}, landing <b>{_where}</b>. Only 25% of your grade "
+             f"is this luck; 75% is the risk-adjusted value of the decisions you made.")
 
     # ── Production Trouble — a real, involuntary setback, not a choice ────────
     if trouble_reason:
@@ -3375,6 +3407,13 @@ def _results(ss):
     vals.append(result["total_revenue"])
     fig = waterfall_chart(labels, vals, title="Revenue by Window ($M)", height=300)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    _parts = list(zip(labels[:-1], vals[:-1]))
+    _top = max(_parts, key=lambda lv: lv[1])
+    _tot = result["total_revenue"] or 1
+    _after = sum(v for l, v in _parts if l != "Theatrical Net") / _tot * 100
+    takeaway(f"<b>{_top[0]}</b> brought in the most ({_top[1] / _tot * 100:.0f}% of "
+             f"${result['total_revenue']:.0f}M). Revenue after theaters (PVOD, Peacock, library) is "
+             f"{_after:.0f}% of the total, which is why the release plan matters as much as opening weekend.")
 
     # ── Deal Waterfall — where revenue goes, not where it comes from ─────────
     # 2026-08-04: the chart above answers "where did the money come from";
@@ -3396,6 +3435,11 @@ def _results(ss):
                    -result["producer_take"], result["studio_residual"]]
         fig_wf = waterfall_chart(wf_labels, wf_vals, title="Distribution & Participation ($M)", height=300)
         st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar": False})
+        takeaway(f"Of ${result['total_revenue']:.0f}M in revenue, talent took ${result['talent_take']:.0f}M off "
+                 f"the top before you got your money back. The studio kept "
+                 f"<b>{_fmt_money(result['studio_residual'])}</b>. "
+                 + ("Big star deals can turn a box-office hit into a studio loss."
+                    if result["studio_residual"] < 0 else "That's what's left to fund the next film."))
 
     # Chart cut 2026-08-24 (found in a QA pass): this NPV-by-cycle bar chart
     # was a near-exact duplicate of _progress_chart (shown in Decisions,
@@ -3492,6 +3536,11 @@ def _complete(ss):
         fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.4)
         fig.update_layout(**base_layout("NPV per Cycle ($M)", height=280))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        _bi = max(range(len(npvs)), key=lambda i: npvs[i])
+        _wi = min(range(len(npvs)), key=lambda i: npvs[i])
+        takeaway(f"Your best film was <b>{rows[_bi]['project_kwargs']['title']}</b> ({_fmt_money(npvs[_bi])}); "
+                 f"your weakest was {rows[_wi]['project_kwargs']['title']} ({_fmt_money(npvs[_wi])}). "
+                 f"One hit can carry a slate, which is why studios spread their bets.")
 
         # Genre/Concept-Type mix (2026-08-24 add, found in a QA pass) --
         # Portfolio Diversification is a real, 15%-weighted score component
@@ -3513,8 +3562,12 @@ def _complete(ss):
             fig_c = donut_chart(list(concept_capital.keys()), [round(v, 1) for v in concept_capital.values()],
                                  "Capital by Concept Type", height=210)
             st.plotly_chart(fig_c, use_container_width=True, config={"displayModeBar": False})
-        st.caption("Both feed Portfolio Diversification below — three Sequels in a row scores low here "
-                   "even if each one individually did well.")
+        _tg = max(genre_capital, key=genre_capital.get)
+        _tc = max(concept_capital, key=concept_capital.get)
+        _cap = sum(genre_capital.values()) or 1
+        takeaway(f"<b>{_tg}</b> took {genre_capital[_tg] / _cap * 100:.0f}% of your capital and "
+                 f"<b>{_tc}</b> {concept_capital[_tc] / _cap * 100:.0f}%. Both feed Portfolio Diversification: "
+                 f"three sequels in a row scores low even if each one did well.")
 
     with score_col:
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
@@ -3585,6 +3638,9 @@ def _complete(ss):
         wf_vals = [total_revenue_all, -talent_take_all, -capital_all, -producer_take_all, residual_all]
         fig_slate_wf = waterfall_chart(wf_labels, wf_vals, title="Slate-Wide Distribution & Participation ($M)", height=300)
         st.plotly_chart(fig_slate_wf, use_container_width=True, config={"displayModeBar": False})
+        takeaway(f"Across the slate, talent took <b>${talent_take_all:.0f}M</b> "
+                 f"({talent_take_all / (total_revenue_all or 1) * 100:.0f}% of revenue) and producers "
+                 f"${producer_take_all:.0f}M. The studio kept <b>{_fmt_money(residual_all)}</b>.")
 
     # ── Slate Notables ────────────────────────────────────────────────────────
     # Movies-track equivalent of the TV side's Level Notables, shown to the
@@ -3648,7 +3704,7 @@ def _complete(ss):
                     f'Your <b>first submission</b> is the official score — retries are practice only.</p>',
                     unsafe_allow_html=True)
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
-            btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score['total']:.0f} pts)"
+            btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Save as Practice Attempt ({score['total']:.0f} pts)"
             if ss.get("movie_submitted"):
                 st.caption("This slate is already saved to the Leaderboard.")
             elif st.button(btn_lbl, use_container_width=True):

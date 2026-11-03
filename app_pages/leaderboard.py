@@ -18,7 +18,7 @@ from utils.game_state import (
     get_attempt_count, MAX_ATTEMPTS, get_class_awards,
     get_progress_board, university_of, UNIVERSITY_SCOPE,
 )
-from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text
+from utils.charts import base_layout, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text
 
 
 # Crown for #1 (with a CSS glow, see utils/styles.py .crown-glow) instead of
@@ -232,6 +232,10 @@ def _render_progress_boards(team: str, net: str, info: dict,
             row["Updated"] = datetime.fromtimestamp(r["timestamp"]).strftime("%b %d %H:%M")
             table.append(row)
         st.dataframe(pd.DataFrame(table), use_container_width=True, hide_index=True)
+        _mine = next((r for r in rows if r["team_name"] == team), None)
+        if _mine:
+            takeaway(f"You're <b>#{_mine['rank']} of {len(rows)}</b> among teams at this point "
+                     f"({_mine.get('metric_label', 'score')}: {_mine['metric']:.1f}).")
     st.caption("Running numbers, not official scores: OCF margin so far for TV (the pass test), slate NPV so far "
                "for Movies. Official scores are on 🏁 Finished.")
 
@@ -410,6 +414,11 @@ def _render_board_tab(team: str, net: str, info: dict,
                        annotation_font_size=12)
         fig.update_layout(**base_layout(f"{info['display_name']} Score Distribution", height=280))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+        _n_pass = sum(1 for sc in scores if sc >= 70)
+        _mid = sorted(scores)[len(scores) // 2]
+        takeaway(f"<b>{_n_pass} of {len(scores)}</b> teams cleared the 70-point pass line; the middle score "
+                 f"is {_mid:.0f}."
+                 + (f" Your team scored {scores[teams.index(team)]:.0f} (gold outline)." if team in teams else ""))
 
     # ── Class Awards — superlatives, one per metric ─────────────────────────
     # Complements the single composite Score ranking above: "who's #1
@@ -471,6 +480,8 @@ def _render_school_comparison(all_nets: list, all_infos: dict):
     ))
     fig.update_layout(**base_layout(f"Avg Score by School — {all_infos[net]['display_name']}", height=280))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    takeaway(f"<b>{rollup[0]['school']}</b> leads with an average of {rollup[0]['avg_score']:.0f} points "
+             f"({rollup[0]['pass_rate']:.0f}% pass rate). Schools with only a few teams can swing a lot.")
 
 
 def render():
@@ -637,7 +648,9 @@ def render():
             "Time":      datetime.fromtimestamp(e["timestamp"]).strftime("%Y-%m-%d %H:%M"),
         } for e in all_entries])
         st.dataframe(raw_df.style.set_properties(**{"font-family":"DM Mono,monospace","font-size":"14px"}),
-                     use_container_width=True, height=300)
+                     use_container_width=True, height=300, hide_index=True)
+        takeaway(f"{len(raw_df)} submissions from {raw_df['Team'].nunique()} teams; "
+                 f"{(raw_df['Passed'] == '✅').sum()} passed. Only rows marked Official count as grades.")
         st.download_button(
             "⬇️ Export Leaderboard CSV",
             raw_df.to_csv(index=False),

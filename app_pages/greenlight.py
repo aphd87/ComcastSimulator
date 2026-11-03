@@ -9,7 +9,7 @@ from utils.models import (
     greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS, Show, MONTHS,
     TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m, genre_demo,
 )
-from utils.charts import base_layout, queue_supplement, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
+from utils.charts import base_layout, queue_supplement, takeaway, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
 from utils.game_state import NETWORK_INFO, MAX_NEW_SHOWS_PER_YEAR, YEARS_PER_LEVEL, LEVEL_START_YEAR
 from utils.pitch_market import (
@@ -454,6 +454,11 @@ def render():
                               marker_color=ACCENT2, opacity=0.7))
     fig_cmp.update_layout(**base_layout("Linear vs. SVOD — Revenue, Cost, OCF ($M)", height=300))
     st.plotly_chart(fig_cmp, use_container_width=True, config={"displayModeBar":False})
+    takeaway(f"On linear, \"{show_name}\" makes <b>${linear['ocf']:+.1f}M</b> in Year 1; on streaming, "
+             f"<b>${svod['ocf']:+.1f}M</b>. Over three years streaming brings in ${svod['ltv_3yr']:.1f}M vs. "
+             f"linear's ${linear['revenue'] * 3:.1f}M. "
+             + ("Linear is the better deal on both counts here." if linear['revenue'] * 3 >= svod['ltv_3yr']
+                else "Streaming wins over three years, but you pay for it with a weaker Year 1."))
 
     # Cumulative LTV Curve — explanatory, not a decision input. Deferred
     # (2026-08-25) to the consolidated "Supplementary Insights" expander in
@@ -486,6 +491,10 @@ def render():
                                annotation_text=f"Crossover: M{crossover}", annotation_font_color=WARN)
         fig_ltv.update_layout(**base_layout("Cumulative Revenue: Linear vs. SVOD ($M)", height=300))
         st.plotly_chart(fig_ltv, use_container_width=True, config={"displayModeBar":False})
+        takeaway(f"Streaming catches up with linear in <b>month {int(crossover)}</b>; before that, linear is ahead."
+                 if crossover and not pd.isna(crossover) else
+                 "Streaming never catches up with linear within 36 months for this concept, so linear is the "
+                 "stronger home for it.")
 
     queue_supplement(f"Cumulative LTV Curve (36 months) — \"{show_name}\"", _render_cumulative_ltv,
                      when_to_use="the 3-Year P&L makes streaming look bad; it shows when subscriber value catches up to linear.")
@@ -526,6 +535,13 @@ def render():
         use_container_width=True
     )
     st.caption("Rows = episode cost (Ep Cost col). Columns = projected 18-49 rating. Cell = Linear OCF in $M.")
+    _be = {}
+    for ep_c in cost_range:
+        ok = [r for r in rating_range if greenlight_linear(eps, ep_c, r, mkt_spend, year)["ocf"] > 0]
+        _be[ep_c] = ok[0] if ok else None
+    _parts = [f"${c}K/ep needs a {r:.1f}" if r is not None else f"${c}K/ep never breaks even" for c, r in _be.items()]
+    takeaway("The rating you need to break even rises with episode cost: " + "; ".join(_parts)
+             + f". Your concept is ${ep_cost:,.0f}K/ep at a projected {rating:.1f} rating.")
 
     # ── Marketing ROI ──────────────────────────────────────────────────────────
     # Explanatory sensitivity tool, not a decision input on its own — deferred
@@ -570,7 +586,12 @@ def render():
             st.dataframe(mkt_df.style.format({
                 "Linear OCF":"${:.2f}M","Linear ROI %":"{:.1f}%",
                 "SVOD OCF":"${:.2f}M","SVOD ROI %":"{:.1f}%"
-            }), use_container_width=True, height=280)
+            }), use_container_width=True, height=280, hide_index=True)
+        _best_l = mkt_df.loc[mkt_df["Linear OCF"].idxmax(), "Marketing ($M)"]
+        _best_s = mkt_df.loc[mkt_df["SVOD OCF"].idxmax(), "Marketing ($M)"]
+        takeaway(f"Linear OCF is highest at <b>${_best_l:.0f}M</b> of marketing and streaming OCF at "
+                 f"<b>${_best_s:.0f}M</b>. Past those points, each extra marketing dollar costs more than it "
+                 f"brings back.")
 
     queue_supplement(f"Marketing ROI: Linear vs. SVOD — \"{show_name}\"", _render_marketing_roi,
                      when_to_use="setting this concept's Marketing Budget; it shows where extra marketing stops paying off.")

@@ -7,11 +7,12 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from utils.models import (
-    distribution_revenue, portfolio_ad_rev, AMORT_MONTHS_LINEAR,
+    distribution_revenue, portfolio_ad_rev, AMORT_MONTHS_LINEAR, AMORT_MONTHS_SVOD,
+    TRUE_CRIME_AMORT_MONTHS,
     MONTHS, HOUR_LABELS, HOURLY_INDEX,
 )
 from utils.charts import (
-    base_layout, bar_chart, line_chart,
+    base_layout, bar_chart, line_chart, takeaway,
     ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2, BORDER, SURFACE, SURFACE2
 )
 
@@ -41,9 +42,10 @@ def render():
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
          border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#ffffff;">
-    💡 <b style="color:#ffffff;">Key insight:</b> You pay 1/12 of a show's total annual cost on the 1st of each month the show is on air — 
-    regardless of when in the month it premieres. A March 30 launch means you absorb a full monthly 
-    amortization payment with only 2 days of ad revenue. Your cash cows must fund this gap.
+    💡 <b style="color:#ffffff;">Key insight:</b> From its premiere month on, a show charges its season cost ÷ its
+    amortization months (12 for most linear shows, 24 for True Crime, 36 for Peacock) on the 1st of every month,
+    whatever day it premieres. A March 30 launch absorbs a full monthly charge with only 2 days of ad revenue.
+    Your cash cows must fund this gap.
     </div>
     """, unsafe_allow_html=True)
 
@@ -80,7 +82,8 @@ def render():
                                         key=f"sched_cost_k_{pd_show_name}")
 
     total_season_cost = pd_eps * pd_cost_k / 1000     # $M
-    monthly_amort     = total_season_cost / 12         # $M per month
+    amort_months      = selected_show.effective_amort_months() if selected_show else AMORT_MONTHS_LINEAR
+    monthly_amort     = total_season_cost / amort_months   # $M per month, same rule as the P&L
     days_in_month     = 31
     revenue_days      = days_in_month - pd_launch + 1
     daily_ad_rev      = (portfolio_ad_rev(shows, year, mkt) / len(shows)) / 365
@@ -165,72 +168,187 @@ def render():
         </div>
         """, unsafe_allow_html=True)
 
+    if pd_launch == 1:
+        takeaway(f"A day-1 launch earns a full month of ad revenue against the ${monthly_amort:.3f}M monthly "
+                 f"charge. Try day 30 to see the trough: the charge is the same, but revenue shrinks to 2 days.")
+    else:
+        takeaway(f"Premiering on day {pd_launch} instead of day 1 costs <b>${abs(gap):.3f}M</b> of revenue in "
+                 f"the premiere month, while the ${monthly_amort:.3f}M charge stays the same. "
+                 + ("Your cash cows cover it this time." if "✅" in funded else
+                    "Your cash cows can't cover it, so premiere earlier in the month or hold a reserve."))
+
     st.divider()
 
-    # ── Section 2: Monthly Amortization Grid ─────────────────────────────────
-    st.markdown('<div class="section-title">Monthly Amortization Grid — Top 12 by Cost</div>', unsafe_allow_html=True)
+    # ── Section 2: Amortization Table (rebuilt 2026-11-03) ───────────────────
+    # The old heatmap put each show's bill only in its on-air months and
+    # divided by a different number than the P&L did, so its totals never
+    # matched Content Cost. This table uses the P&L's own rule
+    # (Show.annual_amort_expense) so its total IS the Content Cost line.
+    st.markdown('<div class="section-title">Amortization Table — What Each Show Costs You This Year</div>',
+                unsafe_allow_html=True)
     st.markdown(f"""
-    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
-    Red cells = months with active amortization bills. Shows premiering in the same quarter stack costs —
-    a deep-red column means your cash cows must bridge a large up-front gap before ad revenue catches up.
-    {'<br><br>⚠ Showing the <b>12 costliest of ' + str(len(shows)) + '</b> active shows — a show with no red '
-     'here may just not have made this cut, not zero cost exposure.' if len(shows) > 12 else ''}
+    <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:12px 16px;
+         margin-bottom:12px;font-size:15px;color:#ffffff;line-height:1.7;">
+    <b>How amortization works here.</b> A season is paid for up front (episodes × cost per episode), but the
+    P&amp;L doesn't take the whole hit at once. It spreads the season cost evenly over a set number of months:
+    <br>• <b>{AMORT_MONTHS_LINEAR} months</b> for most linear (cable) shows, so the full cost lands this year
+    <br>• <b>{TRUE_CRIME_AMORT_MONTHS} months</b> for True Crime, which keeps earning in reruns, so half lands this year
+    <br>• <b>{AMORT_MONTHS_SVOD} months</b> for Peacock (streaming) shows, so a third lands this year
+    <br><b>Monthly charge</b> = season cost ÷ months. <b>Charged this year</b> = monthly charge × 12. The rest is
+    pushed into later years. A show you cancel this year costs 25% of its normal charge (work already done).
+    Premiere month does <b>not</b> change the yearly charge; it only changes <i>when</i> ad revenue arrives (chart below).
     </div>
     """, unsafe_allow_html=True)
 
-    # Title/caption corrected 2026-08-24 (found in a QA pass) -- this was
-    # previously labeled "All Active Shows" while silently truncating to
-    # the 12 costliest via this same sort+slice, which at Bravo/Peacock
-    # scale (up to ~50 combined active shows) could read as "no cost
-    # exposure" for a show that simply didn't make the top-12 cut.
-    grid_shows = sorted(shows, key=lambda s: -s.total_cost(year))[:12]
-    amort_rows = []
-    for s in grid_shows:
-        row = {"Show": s.name[:22]}
-        active_months = set(s.cash_months(s.air_month, s.episodes))
-        for i, m in enumerate(MONTHS):
-            row[m] = round(s.monthly_amort(year) * 1000, 1) if i in active_months else 0
-        amort_rows.append(row)
+    prev_cancel = ss.get("cancelled_shows", set())
+    renew       = ss.get("renewal_decisions", {})
+    new_ids     = ss.get("greenlit_ids_this_year", set())
+    active      = [s for s in shows if s.id not in prev_cancel]
 
-    amort_df = pd.DataFrame(amort_rows).set_index("Show")
+    def _rule(s):
+        if s.network == "Peacock":
+            return f"{AMORT_MONTHS_SVOD} (streaming)"
+        if s.genre == "True Crime":
+            return f"{TRUE_CRIME_AMORT_MONTHS} (True Crime)"
+        return f"{AMORT_MONTHS_LINEAR} (linear)"
 
-    # Plotly heatmap
-    fig_h = go.Figure(go.Heatmap(
-        z=amort_df.values,
-        x=MONTHS,
-        y=amort_df.index.tolist(),
-        colorscale=[[0,"rgba(37,40,54,0.4)"],[0.3,"rgba(239,83,80,0.3)"],
-                    [0.7,"rgba(239,83,80,0.6)"],[1,"rgba(239,83,80,0.9)"]],
-        hovertemplate="<b>%{y}</b><br>%{x}: $%{z:.0f}K<extra></extra>",
-        showscale=True,
-        colorbar=dict(title="$K/mo", tickfont=dict(size=12, color=TEXT2)),
-        xgap=2, ygap=2,
-    ))
-    fig_h.update_layout(**base_layout("Monthly Cash Outflows ($K) — Active Shows", height=380))
-    fig_h.update_yaxes(tickfont=dict(size=12))
-    st.plotly_chart(fig_h, use_container_width=True, config={"displayModeBar":False})
+    def _air_span(s):
+        months = s.cash_months(s.air_month, s.episodes)
+        return f"{MONTHS[months[0]]}–{MONTHS[months[-1]]}" if len(months) > 1 else MONTHS[months[0]]
 
-    # ── Monthly Cash Bridge ───────────────────────────────────────────────────
-    st.markdown('<div class="section-title">Monthly Cash Flow Bridge</div>', unsafe_allow_html=True)
+    amort_rows, totals = [], {"season": 0.0, "charged": 0.0, "later": 0.0}
+    for s in sorted(active, key=lambda s: -s.annual_amort_expense(year)):
+        season  = s.total_cost(year)
+        A       = s.effective_amort_months()
+        annual  = s.annual_amort_expense(year)
+        cancel  = renew.get(s.id) == "Cancel"
+        charged = annual * 0.25 if cancel else annual
+        later   = 0.0 if cancel else max(season - annual, 0.0)
+        totals["season"] += season; totals["charged"] += charged; totals["later"] += later
+        amort_rows.append({
+            "Show":              s.name,
+            "Network":           s.network,
+            "Genre":             s.genre,
+            "Episodes × Cost":   f"{s.episodes} × ${s.ep_cost_k:,.0f}K",
+            "Season Cost":       f"${season:.2f}M",
+            "Spread Over (mo)":  _rule(s),
+            "Monthly Charge":    f"${season / A:.3f}M",
+            "Charged This Year": f"${charged:.2f}M",
+            "Pushed to Later Years": f"${later:.2f}M" if later else "—",
+            "On Air":            _air_span(s),
+            "Status":            "Cancel (25% charge)" if cancel else ("New this year" if s.id in new_ids else "Returning"),
+        })
+    if amort_rows:
+        st.dataframe(pd.DataFrame(amort_rows), use_container_width=True, hide_index=True)
+        top = max(active, key=lambda s: s.annual_amort_expense(year) * (0.25 if renew.get(s.id) == "Cancel" else 1))
+        top_charge = top.annual_amort_expense(year) * (0.25 if renew.get(top.id) == "Cancel" else 1)
+        share = top_charge / totals["charged"] * 100 if totals["charged"] else 0
+        deferred = (f" <b>${totals['later']:.1f}M</b> is pushed into later years by the longer True Crime / "
+                    f"Peacock windows, which flatters this year's margin but is a bill you still owe."
+                    if totals["later"] > 0.05 else
+                    " Nothing is pushed into later years: every show here is a 12-month linear show.")
+        takeaway(
+            f"Your active shows cost <b>${totals['season']:.1f}M</b> to make; <b>${totals['charged']:.1f}M</b> "
+            f"of that hits this year's P&amp;L (the <b>Content Cost</b> line in Expected This Year, before any "
+            f"sports rights).{deferred} Your biggest charge is <b>{top.name}</b> at ${top_charge:.1f}M "
+            f"({share:.0f}% of the total), so it has to earn its keep in Renewal.")
+    else:
+        st.caption("No active shows yet.")
+
+    st.divider()
+
+    # ── Section 2b: Payoff Schedule (2026-11-03, per user request) ───────────
+    # "How a TV series is paid off over time": this season's cost spread
+    # across this year and the next one or two, by amortization window. Same
+    # rule as the table above (season cost ÷ months, 12 months per year), so
+    # the "This Year" column equals the table's "Charged This Year".
+    st.markdown('<div class="section-title">Payoff Schedule — How This Season Gets Paid Off Over Time</div>',
+                unsafe_allow_html=True)
     st.markdown("""
     <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
-    Green bars = revenue in; red bars = content cost out; gold line = net monthly cash flow.
-    Months where the line dips below zero are squeeze points — your reserve must cover that shortfall or you risk a cash crisis.
+    Each bar is one year of P&amp;L charges for the seasons you're making <b>now</b>. A 12-month linear show is
+    paid off within this year. A True Crime show takes two years and a Peacock show three, so part of this
+    year's spending keeps showing up in your future P&amp;Ls. Renewing a show adds <i>next</i> season's cost on
+    top of these bars.
     </div>
     """, unsafe_allow_html=True)
 
-    monthly_rev  = [portfolio_ad_rev(shows,year,mkt)/12 * (0.8+0.4*np.sin(i*0.5)) for i in range(12)]
-    monthly_dist = [distribution_revenue(year)/12] * 12
-    monthly_cost = [sum(s.total_cost(year)/12 * (1 if i in s.cash_months(s.air_month,s.episodes) else 0)
-                        for s in shows) for i in range(12)]
-    monthly_net  = [monthly_rev[i]+monthly_dist[i]-monthly_cost[i] for i in range(12)]
+    group_of = lambda s: ("Peacock (36 mo)" if s.network == "Peacock" else
+                          "True Crime (24 mo)" if s.genre == "True Crime" else "Linear (12 mo)")
+    group_colors = {"Linear (12 mo)": ACCENT, "True Crime (24 mo)": WARN, "Peacock (36 mo)": ACCENT2}
+    paying = [s for s in active if renew.get(s.id) != "Cancel"]
+    year_cols = [f"Year {year}", f"Year {year + 1}", f"Year {year + 2}"]
+    by_group = {g: [0.0, 0.0, 0.0] for g in group_colors}
+    payoff_rows = []
+    for s in sorted(paying, key=lambda s: -s.total_cost(year)):
+        season, A = s.total_cost(year), s.effective_amort_months()
+        per_year = [season * min(12, max(A - 12 * k, 0)) / A for k in range(3)]
+        for k in range(3):
+            by_group[group_of(s)][k] += per_year[k]
+        payoff_rows.append({
+            "Show": s.name, "Window": group_of(s), "Season Cost": f"${season:.2f}M",
+            **{c: (f"${v:.2f}M" if v else "—") for c, v in zip(year_cols, per_year)},
+            "Paid Off By": f"End of Year {year + A // 12 - 1}",
+        })
+
+    if payoff_rows:
+        fig_po = go.Figure()
+        for g, vals in by_group.items():
+            if any(vals):
+                fig_po.add_trace(go.Bar(name=g, x=year_cols, y=[round(v, 2) for v in vals],
+                                        marker_color=group_colors[g], opacity=0.85,
+                                        text=[f"${v:.1f}M" if v else "" for v in vals],
+                                        textposition="inside"))
+        fig_po.update_layout(**base_layout("This Season's Cost, Charged by Year ($M)", height=300),
+                             barmode="stack")
+        st.plotly_chart(fig_po, use_container_width=True, config={"displayModeBar": False})
+
+        st.dataframe(pd.DataFrame(payoff_rows), use_container_width=True, hide_index=True)
+        later = sum(sum(v[1:]) for v in by_group.values())
+        now = sum(v[0] for v in by_group.values())
+        takeaway((f"<b>${now:.1f}M</b> of this season's cost is charged this year and <b>${later:.1f}M</b> "
+                  f"rolls into the next two years. That deferred amount is already spent: it will lower "
+                  f"future margins even if you make no new shows."
+                  if later > 0.05 else
+                  f"All <b>${now:.1f}M</b> of this season's cost is charged this year: every show is a "
+                  f"12-month linear show, so nothing carries into future years."))
+    else:
+        st.caption("No shows being paid off this year.")
+
+    st.divider()
+
+    # ── Section 3: Monthly Cash Flow ────────────────────────────────────────
+    # Costs are charged evenly every month; ad revenue only arrives while a
+    # show is on air (its cash_months). That timing gap is the lesson; the
+    # yearly totals match the P&L preview (before marketing and G&A).
+    st.markdown('<div class="section-title">Monthly Cash Flow — When Money Comes In vs. Goes Out</div>',
+                unsafe_allow_html=True)
+    st.markdown("""
+    <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
+    <b>Red</b> = the amortization charge from the table above, the same every month.
+    <b>Green</b> = ad revenue, earned only in the months each show is on air (about 2 episodes a month, from its
+    premiere month). <b>Blue</b> = distribution fees from cable operators, steady all year.
+    <b>Gold line</b> = net for the month. Months below zero are squeeze months your hit shows have to carry.
+    </div>
+    """, unsafe_allow_html=True)
+
+    earning  = [s for s in active if renew.get(s.id) != "Cancel"]
+    per_show = mkt / max(len(earning), 1)
+    monthly_rev = [0.0] * 12
+    for s in earning:
+        months = s.cash_months(s.air_month, s.episodes)
+        for m in months:
+            monthly_rev[m] += s.ad_revenue(year, per_show) / len(months)
+    monthly_dist = [distribution_revenue(year) / 12] * 12
+    monthly_cost = [totals["charged"] / 12] * 12
+    monthly_net  = [monthly_rev[i] + monthly_dist[i] - monthly_cost[i] for i in range(12)]
 
     bridge_df = pd.DataFrame({
         "Month": MONTHS,
-        "Ad Revenue":     [round(v,2) for v in monthly_rev],
-        "Distribution":   [round(v,2) for v in monthly_dist],
-        "Content Cost":   [round(v,2) for v in monthly_cost],
-        "Net Cash Flow":  [round(v,2) for v in monthly_net],
+        "Ad Revenue":    [round(v, 2) for v in monthly_rev],
+        "Distribution":  [round(v, 2) for v in monthly_dist],
+        "Content Cost":  [round(v, 2) for v in monthly_cost],
+        "Net Cash Flow": [round(v, 2) for v in monthly_net],
     })
 
     fig_b = go.Figure()
@@ -243,17 +361,34 @@ def render():
     fig_b.add_trace(go.Scatter(name="Net Monthly", x=MONTHS, y=bridge_df["Net Cash Flow"],
                                 mode="lines+markers", line=dict(color=ACCENT, width=2.5),
                                 marker=dict(size=7, color=ACCENT)))
-    fig_b.update_layout(**base_layout("Monthly P&L Bridge ($M)", height=320), barmode="relative")
-    st.plotly_chart(fig_b, use_container_width=True, config={"displayModeBar":False})
+    fig_b.update_layout(**base_layout("Monthly Cash Flow ($M), before marketing and G&A", height=320),
+                        barmode="relative")
+    st.plotly_chart(fig_b, use_container_width=True, config={"displayModeBar": False})
+
+    squeeze = [MONTHS[i] for i in range(12) if monthly_net[i] < 0]
+    best_i  = max(range(12), key=lambda i: monthly_rev[i])
+    worst_i = min(range(12), key=lambda i: monthly_net[i])
+    if squeeze:
+        cushion = sum(-v for v in monthly_net if v < 0)
+        msg = (f"<b>{len(squeeze)} squeeze month{'s' if len(squeeze) != 1 else ''}</b> ({', '.join(squeeze)}): "
+               f"costs keep coming while few shows are on air. The worst is <b>{MONTHS[worst_i]}</b> at "
+               f"${monthly_net[worst_i]:+.2f}M, and together they need a <b>${cushion:.2f}M</b> cushion. "
+               f"Moving a premiere into a squeeze month (in Renewal) spreads revenue more evenly.")
+    else:
+        msg = (f"No month runs negative: on-air revenue plus distribution covers the monthly charge all year. "
+               f"Your weakest month is <b>{MONTHS[worst_i]}</b> (${monthly_net[worst_i]:+.2f}M).")
+    takeaway(f"{msg} Ad revenue peaks in <b>{MONTHS[best_i]}</b>, when the most shows are on air. "
+             f"For the full year, net is <b>${sum(monthly_net):+.1f}M</b> before marketing and G&amp;A.")
 
     # Checkbox toggle instead of st.expander -- see the note on the scenario
     # container above (no expanders nested inside Supplementary Insights).
     if st.checkbox("📋 Show Monthly Detail Table", key="sched_show_detail_table"):
         st.dataframe(bridge_df.style.format({
-            "Ad Revenue":"${:.2f}M","Distribution":"${:.2f}M",
-            "Content Cost":"${:.2f}M","Net Cash Flow":"${:.2f}M"
+            "Ad Revenue": "${:.2f}M", "Distribution": "${:.2f}M",
+            "Content Cost": "${:.2f}M", "Net Cash Flow": "${:.2f}M"
         }).map(lambda v: "color:#66bb6a;" if v >= 0 else "color:#ef5350;",
-                    subset=["Net Cash Flow"]), use_container_width=True)
+               subset=["Net Cash Flow"]), use_container_width=True, hide_index=True)
+        st.caption("Same numbers as the chart above, by month.")
 
     # Primetime Scheduling — Assign Your Shows moved to app_pages/renewal.py
     # (2026-08-03, per user request), right after the Full Renewal Analysis
@@ -278,4 +413,7 @@ def render():
     fig_hr.update_layout(**base_layout(
         "Daily Ad Revenue Distribution ($M) — Primetime peaks 8–10PM", height=220))
     st.plotly_chart(fig_hr, use_container_width=True, config={"displayModeBar":False})
-    st.caption("Revenue ratio applied per hour. Premiere episodes earn a 1.5–2× premium above daily average.")
+    _pk = max(range(len(HOURLY_INDEX)), key=lambda i: HOURLY_INDEX[i])
+    takeaway(f"Ad revenue is concentrated in a few evening hours: <b>{HOUR_LABELS[_pk]}</b> is the single best "
+             f"hour. That is why the primetime slots you assign in Renewal change real ad revenue, while "
+             f"daytime slots barely move it. Premiere episodes earn a 1.5–2× premium on top.")

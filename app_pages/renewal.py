@@ -14,7 +14,7 @@ from utils.models import (
     REV_PER_RATING_POINT,
 )
 from utils.game_state import NETWORK_INFO
-from utils.charts import base_layout, queue_supplement, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, queue_supplement, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 
 def render():
@@ -119,6 +119,11 @@ def render():
             fig_decay.update_xaxes(title_text="Year", dtick=1)
             st.plotly_chart(fig_decay, use_container_width=True, config={"displayModeBar": False})
             st.caption("Maturation = 1 + (avg IP score / 100) × 0.06 − 0.02 per year — genres above ~33 avg IP grow, below decay. Same formula as Show.projected_rating().")
+            _grow = [g for g, gs in genre_groups.items() if sum(x.ip_score for x in gs) / len(gs) > 33.4]
+            _fall = [g for g in genre_groups if g not in _grow]
+            takeaway((f"<b>Gaining</b> ratings over time: {', '.join(sorted(_grow))}. " if _grow else "")
+                     + (f"<b>Losing</b> ratings: {', '.join(sorted(_fall))}. Older shows in these genres get "
+                        f"weaker every year you renew them." if _fall else "No genre in your slate is decaying."))
 
         queue_supplement("Genre Decay Curves — Rating Trajectory", _render_genre_decay,
                          when_to_use="deciding whether to renew an aging show; it shows which genres gain or lose ratings year over year.")
@@ -181,7 +186,7 @@ def render():
                                 f'{regional_html}',
                                 unsafe_allow_html=True)
                         else:
-                            if st.button(f"🔬 {s.name[:16]}", key=f"research_{s.id}_{year}",
+                            if st.button(f"🔬 Research {s.name[:16]} (${RESEARCH_FEE:.0f}M)", key=f"research_{s.id}_{year}",
                                          help=f"${RESEARCH_FEE:.0f}M — reveal this year's variance signal "
                                               f"(and sometimes a regional fit hint)"):
                                 v = preview_show_variance(ss.team_name, year, shows, s.id)
@@ -285,6 +290,13 @@ def render():
         ))
 
     st.plotly_chart(fig_ip, use_container_width=True, config={"displayModeBar":False})
+    _below = scatter_data[(scatter_data["Projected OCF"] < 0) & (scatter_data["Decision"] != "Cancel")]
+    takeaway((f"<b>{len(_below)} show{'s' if len(_below) != 1 else ''} you're renewing will lose money next "
+              f"year</b> (below the red line): {', '.join(_below.sort_values('Projected OCF')['Show'].head(5))}"
+              f"{'…' if len(_below) > 5 else ''}. Keep one only if a high IP score (right of the gray line) "
+              f"means it will grow." if len(_below) else
+              "Every show you're renewing is projected to make money next year (above the red line). Big "
+              "bubbles are your expensive bets: check that they sit well above it."))
 
     st.divider()
 
@@ -496,6 +508,11 @@ def render():
     ))
     fig_wf.update_layout(**base_layout("Year {} Budget Waterfall ($M)".format(next_year), height=300))
     st.plotly_chart(fig_wf, use_container_width=True, config={"displayModeBar":False})
+    takeaway((f"Even in a bad year, you'd have <b>${new_show_cap:.1f}M</b> left for new shows after renewals "
+              f"and marketing." if new_show_cap >= 0 else
+              f"In a bad year your renewals plus marketing would <b>overshoot the budget by "
+              f"${-new_show_cap:.1f}M</b>. Cancel a weak show or cut marketing to make room.")
+             + (f" Cancelling frees ${freed_budget:.1f}M." if freed_budget else ""))
 
     # ── Full Decision Table ───────────────────────────────────────────────────
     st.divider()
@@ -526,7 +543,14 @@ def render():
         })
         .set_properties(**{"font-size":"14px","font-family":"DM Mono, monospace"})
     )
-    st.dataframe(styled, use_container_width=True, height=400)
+    st.dataframe(styled, use_container_width=True, height=400, hide_index=True)
+    _neg_renew = [r["Show"] for r in rows
+                  if r["Proj OCF"] < 0 and ss.renewal_decisions.get(r["_id"], "Renew") != "Cancel"]
+    _rising = sum(1 for r in rows if r["Δ Cost"] > 0)
+    takeaway(f"Costs rise for <b>{_rising} of {len(rows)}</b> shows if renewed (Δ Cost). "
+             + (f"Renewed but projected to lose money: <b>{', '.join(_neg_renew[:5])}"
+                f"{'…' if len(_neg_renew) > 5 else ''}</b>." if _neg_renew else
+                "None of your renewed shows is projected to lose money."))
 
     # Download
     st.download_button(
@@ -614,6 +638,10 @@ def render():
          for s in shows],
         key=lambda r: -r["Rating"])
     st.dataframe(pd.DataFrame(ref_rows), use_container_width=True, height=220, hide_index=True)
+    _unsched = [r["Show"] for r in ref_rows if r["⚠"]]
+    takeaway((f"<b>{len(_unsched)} of your better shows have no slot yet</b>: {', '.join(_unsched[:5])}"
+              f"{'…' if len(_unsched) > 5 else ''}. Give them strong slots before weaker shows take them."
+              if _unsched else "All of your above-median shows have a primetime slot."))
 
     # Slot Value Map (2026-09-22, per user request: "give some of them
     # conflicting information... a show does well during weekend nights").
@@ -655,6 +683,11 @@ def render():
             value_rows.append(row)
         value_df = pd.DataFrame(value_rows).set_index("Time")
         st.dataframe(value_df.style.map(_style_slot_pct), use_container_width=True, height=190)
+        _cells = [(d, h, slot_rating_multiplier(d, h, sample_genre)) for h in PRIMETIME_HOURS for d in PRIMETIME_DAYS]
+        _hi = max(_cells, key=lambda c: c[2]); _lo = min(_cells, key=lambda c: c[2])
+        takeaway(f"For {profile_name.lower()} genres, the best slot is <b>{_hi[0]} {_hi[1]}</b> "
+                 f"({(_hi[2] - 1) * 100:+.0f}% rating) and the worst is {_lo[0]} {_lo[1]} "
+                 f"({(_lo[2] - 1) * 100:+.0f}%). Put your strongest shows in green cells.")
 
     # Auto-Fill — a one-click starting point, not a drag-and-drop substitute.
     # Streamlit's data_editor has no drag-across-cells interaction (that

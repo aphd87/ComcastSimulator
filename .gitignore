@@ -5,3 +5,4 @@ __pycache__/
 leaderboard.json
 team_state.json
 pitch_board.json
+progress.json

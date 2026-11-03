@@ -209,7 +209,7 @@ def test_festival_section_renders_three_targets_with_revealed_reception():
     for fest in FESTIVALS.values():
         assert fest["name"] in text
     assert len(at.number_input) >= len(FESTIVALS)
-    assert sum(1 for b in at.button if b.label == "Submit Bid") == len(FESTIVALS)
+    assert sum(1 for b in at.button if b.label.startswith("📨 Submit Sealed Bid")) == len(FESTIVALS)
 
 
 def test_bid_shows_live_ratio_against_the_asking_anchor():

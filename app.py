@@ -321,7 +321,13 @@ def _render_follow_along_summary(ss, net_info, net):
             "Show": s.name, "Genre": s.genre, "Network": s.network,
             "Rating": s.rating, "Ep Cost ($K)": s.ep_cost_k, "Status": status,
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=min(400, 40 + 35 * len(rows)))
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=min(400, 40 + 35 * len(rows)),
+                 hide_index=True)
+    from utils.charts import takeaway
+    _n_cut = sum(1 for r in rows if r["Status"] == "❌ Cancelled")
+    _n_new = sum(1 for r in rows if r["Status"] == "🎬 Greenlit")
+    takeaway(f"Your Driver's slate has <b>{len(rows) - _n_cut}</b> active shows: {_n_new} greenlit this level "
+             f"and {_n_cut} cancelled so far. This updates every few seconds as they decide.")
 
 # ── TOP HEADER — replaces the old left sidebar (2026-07-30, per explicit user
 # request: "We don't need a left hand panel, but people should be able to

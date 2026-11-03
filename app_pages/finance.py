@@ -13,7 +13,7 @@ from utils.models import (
 )
 from utils.sports_models import held_this_year, sports_year_pnl
 from utils.charts import (
-    base_layout, bar_chart, line_chart, donut_chart,
+    base_layout, bar_chart, line_chart, donut_chart, takeaway,
     SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, BORDER
 )
 
@@ -137,6 +137,11 @@ def render():
             {"Line Item": l, "Amount ($M)": round(v,2), "% of Revenue": round(abs(v)/total_rev*100,1)}
             for l,v,_ in pl_data if v is not None
         ])
+        cost_pct = cost / total_rev * 100 if total_rev else 0
+        takeaway(f"Content eats <b>{cost_pct:.0f}%</b> of revenue and you keep <b>{margin:.1f}%</b> as OCF "
+                 f"(${net_ocf:.1f}M). " + ("Every point of rating you add, or dollar of weak content you cut, "
+                 "drops straight to that bottom line." if net_ocf >= 0 else
+                 "You're losing money: cut the weakest shows in Renewal or trim marketing."))
         st.download_button("⬇️ Download P&L as CSV", pl_df.to_csv(index=False),
                            file_name=f"cableos_pl_year{year}.csv", mime="text/csv")
 
@@ -147,17 +152,25 @@ def render():
             [round(ad_rev,2), round(dist_rev,2)],
             "Revenue Mix", height=240)
         st.plotly_chart(fig_rev, use_container_width=True, config={"displayModeBar":False})
+        ad_share = ad_rev / (ad_rev + dist_rev) * 100 if (ad_rev + dist_rev) else 0
+        takeaway(f"<b>{ad_share:.0f}%</b> of revenue comes from ads, which your ratings drive; the other "
+                 f"{100 - ad_share:.0f}% is distribution fees, which shrink as viewers cut the cord.")
 
         # Cost donut
         network_costs = {}
         for s in shows:
-            network_costs[s.network] = network_costs.get(s.network,0) + s.total_cost(year)
+            network_costs[s.network] = network_costs.get(s.network,0) + s.annual_amort_expense(year)
         fig_cost = donut_chart(
             list(network_costs.keys()),
             [round(v,2) for v in network_costs.values()],
             "Content Cost by Network", height=220)
         fig_cost.update_traces(marker_colors=["#1a6bb5","#f2c200","#8e44ad"][:len(network_costs)])
         st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar":False})
+        if network_costs:
+            _top_net = max(network_costs, key=network_costs.get)
+            _tot = sum(network_costs.values())
+            takeaway(f"<b>{_top_net}</b> carries {network_costs[_top_net] / _tot * 100:.0f}% of this year's "
+                     f"content charge (amortized, as in the P&amp;L).")
 
         # Cost-by-genre donut (2026-08-24 add, found in a QA pass) --
         # Genre Diversity is a real, 15%-weighted score component
@@ -167,15 +180,19 @@ def render():
         # which genres they're actually concentrated in.
         genre_costs = {}
         for s in shows:
-            genre_costs[s.genre] = genre_costs.get(s.genre, 0) + s.total_cost(year)
+            genre_costs[s.genre] = genre_costs.get(s.genre, 0) + s.annual_amort_expense(year)
         if genre_costs:
             fig_genre = donut_chart(
                 list(genre_costs.keys()),
                 [round(v, 2) for v in genre_costs.values()],
                 "Content Cost by Genre", height=220)
             st.plotly_chart(fig_genre, use_container_width=True, config={"displayModeBar": False})
-            st.caption("Feeds the Genre Diversity component of your official score — a heavily concentrated "
-                       "slate scores lower here, regardless of how any single genre performs.")
+            _top_g = max(genre_costs, key=genre_costs.get)
+            _g_share = genre_costs[_top_g] / sum(genre_costs.values()) * 100
+            takeaway(f"<b>{_top_g}</b> is {_g_share:.0f}% of your content spend across {len(genre_costs)} "
+                     f"genre{'s' if len(genre_costs) != 1 else ''}. This feeds the Genre Diversity part of your "
+                     f"score: " + ("that's concentrated, so diversity is costing you points."
+                                    if _g_share > 50 else "that's reasonably spread out."))
 
     st.divider()
 
@@ -183,13 +200,23 @@ def render():
     st.markdown('<div class="section-title">Monthly Revenue & Cost Trend</div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
-    Ad revenue follows a seasonal curve — summer dip, fall and spring peaks. Content cost follows each
-    show's real premiere month, same curve as the "Scheduling & cash-flow tools" box on the Simulation page. The OCF chart below turns red in
-    months where cost outpaces revenue; those are the months your reserve is doing the heavy lifting.
+    Content cost is the amortization charge, the same every month (see the Amortization Table in the
+    Simulation page's "Scheduling &amp; cash-flow tools"). Ad revenue arrives only in the months each show is on
+    air. The OCF chart below turns red in months where cost outpaces revenue; those are the months your
+    reserve is doing the heavy lifting.
     </div>
     """, unsafe_allow_html=True)
 
-    monthly_ad   = [ad_rev/12*(0.8+0.4*np.sin(i*0.5)) for i in range(12)]
+    # On-air timing (2026-11-03): each show's ad revenue lands in its on-air
+    # months, scaled so the 12 months sum to this year's ad_rev exactly.
+    _per = mkt / max(len(shows), 1)
+    _shape = [0.0] * 12
+    for _s in shows:
+        _m = _s.cash_months(_s.air_month, _s.episodes)
+        for _i in _m:
+            _shape[_i] += _s.ad_revenue(year, _per) / len(_m)
+    _tot_shape = sum(_shape)
+    monthly_ad   = [ad_rev * v / _tot_shape for v in _shape] if _tot_shape else [ad_rev / 12] * 12
     monthly_dist = [dist_rev/12]*12
     # Real premiere-timed cost curve (2026-08-24 fix, found in a QA pass) --
     # previously a flat cost/12 every month, which contradicted the
@@ -197,8 +224,7 @@ def render():
     # shows/year (two different-shaped "monthly cost" charts with no
     # cross-reference). Same formula app_pages/schedule.py's Monthly Cash
     # Flow Bridge already uses.
-    monthly_cost = [sum(s.total_cost(year)/12 * (1 if i in s.cash_months(s.air_month, s.episodes) else 0)
-                        for s in shows) for i in range(12)]
+    monthly_cost = [cost / 12] * 12   # amortization charges evenly; sums to the annual Content Cost
     # G&A included here too (2026-08-24 fix) -- the annual Net OCF metric
     # above already subtracts it (net_ocf = total_rev - cost - mkt - ga),
     # so this monthly breakdown previously wouldn't sum back to that annual
@@ -239,6 +265,13 @@ def render():
     fig_ocf.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.4)
     fig_ocf.update_layout(**base_layout("Monthly OCF ($M) — red = cash-negative month", height=220))
     st.plotly_chart(fig_ocf, use_container_width=True, config={"displayModeBar":False})
+    _neg = [MONTHS[i] for i, v in enumerate(monthly_ocf) if v < 0]
+    _best = max(range(12), key=lambda i: monthly_ocf[i])
+    takeaway((f"<b>{len(_neg)} cash-negative month{'s' if len(_neg) != 1 else ''}</b> ({', '.join(_neg)}), "
+              f"when few shows are on air but every show is still being charged. "
+              if _neg else "Every month is cash-positive. ")
+             + f"Your best month is <b>{MONTHS[_best]}</b> (${monthly_ocf[_best]:+.1f}M). The 12 months add up "
+               f"to the year's ${net_ocf:.1f}M OCF; premiere timing moves cash between months, not the total.")
 
     st.divider()
 
@@ -315,6 +348,11 @@ def render():
                         title="Subs (M)", tickfont=dict(size=12,color=DANGER)),
         )
         st.plotly_chart(fig_dist, use_container_width=True, config={"displayModeBar":False})
+    _pk = dist_df.loc[dist_df["Distrib Rev ($M)"].idxmax()]
+    _last = dist_df.iloc[-1]
+    takeaway(f"Distribution revenue peaks in <b>Year {int(_pk['Year'])}</b> at ${_pk['Distrib Rev ($M)']:.1f}M, "
+             f"then falls to ${_last['Distrib Rev ($M)']:.1f}M by Year 10 once fee increases stop and subscribers "
+             f"keep leaving. Plan on ad revenue, not fees, for growth after that.")
 
     # ── Revenue per Rating Point ──────────────────────────────────────────────
     st.divider()
@@ -343,13 +381,19 @@ def render():
             "Rating (18-49)": s.rating,
             "Ad Revenue ($M)": round(rev,2),
             "Rev/Point ($M)": round(rev/s.rating,2) if s.rating else 0,
-            "Cost/Point ($M)": round(s.total_cost(year)/s.rating,2) if s.rating else 0,
+            "Cost/Point ($M)": round(s.annual_amort_expense(year)/s.rating,2) if s.rating else 0,
         })
     rpp_df = pd.DataFrame(rpp_rows)
     st.dataframe(rpp_df.style.format({
         "Rating (18-49)":"{:.2f}","Ad Revenue ($M)":"${:.2f}M",
         "Rev/Point ($M)":"${:.2f}M","Cost/Point ($M)":"${:.2f}M"
-    }), use_container_width=True)
+    }), use_container_width=True, hide_index=True)
+    _losers = [r["Show"] for r in rpp_rows if r["Cost/Point ($M)"] > r["Rev/Point ($M)"]]
+    takeaway((f"<b>{len(_losers)} of these top-rated shows cost more per point than they earn</b>: "
+              f"{', '.join(_losers)}. Even a good rating doesn't save a show that's too expensive; look at "
+              f"these first in Renewal." if _losers else
+              "Every one of your top-rated shows earns more per rating point than it costs. "
+              "Your cancellation candidates, if any, are further down the ratings."))
 
 
 # Allow direct access to BASE_SUBS_M inside the expander fallback

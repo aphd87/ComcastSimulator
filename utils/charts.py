@@ -177,3 +177,17 @@ def scatter_chart(df: pd.DataFrame, x: str, y: str, size: str,
     fig.update_layout(**base_layout(title, height))
     fig.update_traces(marker=dict(line=dict(width=1, color=SURFACE)))
     return fig
+
+
+def takeaway(text: str) -> None:
+    """Key-takeaway callout placed directly under a chart or table
+    (2026-11-03, per user: "key takeaways under charts and tables"). One
+    shared style so students learn to look for it. `text` may contain
+    simple HTML (<b>); it should be computed from the numbers shown, not
+    generic advice."""
+    import streamlit as st
+    st.markdown(
+        f'<div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;'
+        f'border-radius:6px;padding:10px 14px;margin:4px 0 16px;font-size:15px;color:#ffffff;'
+        f'line-height:1.6;">📌 <b>Key takeaway:</b> {text}</div>',
+        unsafe_allow_html=True)

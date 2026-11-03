@@ -38,7 +38,7 @@ from utils.sports_models import (
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
     resolve_auction, SportsContract, held_this_year, sports_year_pnl,
 )
-from utils.charts import base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
+from utils.charts import base_layout, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -423,6 +423,12 @@ def _progress_chart(ss, threshold: float):
     st.markdown('<div style="margin-bottom:16px;">', unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown('</div>', unsafe_allow_html=True)
+    _trend = log[-1]["ocf"] - log[-2]["ocf"]
+    takeaway(f"OCF went <b>{'up' if _trend >= 0 else 'down'} ${abs(_trend):.1f}M</b> last year, and you've "
+             f"generated <b>${cum_ocf[-1]:+.1f}M</b> so far this level. "
+             + (f"Margin last year was {log[-1]['margin']:.1f}%, "
+                + ("above" if log[-1]["margin"] >= threshold else "below")
+                + f" the {threshold:.0f}% pass line."))
 
 
 def _starting_position(net_info, shows, net):
@@ -562,6 +568,11 @@ def _section_financing(ss, shows, year, net_info, level_budget):
         fig_ls.update_layout(**base_layout("Average Show OCF: Linear vs. SVOD ($M)", height=240), barmode="group")
         st.plotly_chart(fig_ls, use_container_width=True, config={"displayModeBar": False})
         st.caption("Genre appeal fixed at 65/100 (moderate streaming conversion) for this comparison — the Greenlighting tab lets you tune it per concept.")
+        _flip = next((y for y, l, v in zip(checkpoints, lin_vals, svod_vals) if v > l), None)
+        takeaway(f"For your average show, linear makes ${lin_vals[0]:+.1f}M vs. streaming's "
+                 f"${svod_vals[0]:+.1f}M this year. "
+                 + (f"Streaming pulls ahead by <b>Year {_flip}</b>, as cord-cutting shrinks ad revenue."
+                    if _flip else "Linear stays ahead at every checkpoint shown."))
 
     st.divider()
 
@@ -922,7 +933,13 @@ def _decisions(ss, shows, net_info, year, net):
     else:
         penalty_note = ""
 
-    spend_this_year = p["cost"] + mkt
+    # Shows greenlit THIS year already had their production cost deducted
+    # from level_budget at greenlight time (greenlight.py), so counting their
+    # amortization here too would charge them twice against the budget.
+    already_paid = sum(s.annual_amort_expense(year) for s in shows
+                       if s.id in ss.get("greenlit_ids_this_year", set())
+                       and s.id not in new_cancel and s.id not in ss.cancelled_shows)
+    spend_this_year = p["cost"] - already_paid + mkt
     if spend_this_year > level_budget:
         over = spend_this_year - level_budget
         budget_note = (f'<div style="font-size:14px;color:{DANGER};margin-top:6px;'
@@ -986,8 +1003,15 @@ def _decisions(ss, shows, net_info, year, net):
                  subset=["Status"])
             .format({"Rating": "{:.2f}", "Annual Rev $M": "${:.2f}M", "Annual Cost $M": "${:.2f}M"})
             .set_properties(**{"font-family": "DM Mono,monospace", "font-size": "14px"}),
-            use_container_width=True, height=280,
+            use_container_width=True, height=280, hide_index=True,
         )
+        _act = df[df["Status"] == "✅ Active"]
+        _losers = _act[_act["Annual Rev $M"] < _act["Annual Cost $M"]]["Show"].tolist()
+        takeaway(f"<b>{len(_act)}</b> active shows earning ${_act['Annual Rev $M'].sum():.1f}M in ad revenue "
+                 f"against ${df['Annual Cost $M'].sum():.1f}M in content cost. "
+                 + (f"{len(_losers)} cost more than their ad revenue: {', '.join(_losers[:5])}"
+                    f"{'…' if len(_losers) > 5 else ''} (distribution fees help cover them)."
+                    if _losers else "Every active show covers its own cost from ads."))
 
     st.divider()
 
@@ -1418,6 +1442,12 @@ def _complete(ss, shows, net_info, team, net):
         fig.add_hline(y=0, line_dash="dash", line_color=WARN, opacity=0.3)
         fig.update_layout(**base_layout("Annual P&L ($M)", height=280), barmode="relative")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        _best = max(log, key=lambda r: r["ocf"])
+        _worst = min(log, key=lambda r: r["ocf"])
+        takeaway(f"Over the level you generated <b>${cum_ocf[-1]:+.1f}M</b> of OCF. Best year: "
+                 f"{_best['label'].split(' · ')[0]} (${_best['ocf']:+.1f}M); weakest: "
+                 f"{_worst['label'].split(' · ')[0]} (${_worst['ocf']:+.1f}M). Look at what you changed "
+                 f"between them.")
 
     with score_col:
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
@@ -1506,6 +1536,10 @@ def _complete(ss, shows, net_info, team, net):
         )
         st.plotly_chart(fig_perf, use_container_width=True, config={"displayModeBar": False})
         st.caption("Rule: margin ≥ threshold → +8%/yr, 0–threshold → +3%/yr, negative → −6%/yr. Real mechanic — this is what you actually played with.")
+        _gap = real_budget[-1] - flat_baseline[-1]
+        takeaway(f"Your performance left your final budget <b>${abs(_gap):.1f}M "
+                 f"{'above' if _gap >= 0 else 'below'}</b> a flat 3% path. Strong margins earn you more to "
+                 f"spend next year; weak ones shrink it, so early discipline compounds.")
 
         st.divider()
 
@@ -1584,7 +1618,7 @@ def _complete(ss, shows, net_info, team, net):
                     f'Your <b>first submission</b> is the official score — retries are practice only.</div>',
                     unsafe_allow_html=True)
             st.markdown('<div class="submit-btn">', unsafe_allow_html=True)
-            btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Retry  ({score_d['total']:.0f} pts)"
+            btn_lbl = "🎯 Submit Official Score" if attempts == 0 else f"🔄 Save as Practice Attempt ({score_d['total']:.0f} pts)"
             if ss.get("submitted"):
                 st.caption("This playthrough is already saved to the Leaderboard.")
             elif st.button(f"{btn_lbl}", use_container_width=True):
@@ -1615,7 +1649,7 @@ def _complete(ss, shows, net_info, team, net):
                 next_info = NETWORK_INFO[next_net]
                 if e["passed"] or can_advance(team, net, ss.school, ss.class_section):
                     if st.button(f"→ Advance to {next_info['display_name']}",
-                                 use_container_width=True):
+                                 type="primary", use_container_width=True):
                         ss.active_network       = next_net
                         ss.submitted            = False
                         ss.sim_phase            = "decisions"

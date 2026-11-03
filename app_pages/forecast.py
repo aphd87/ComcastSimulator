@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from utils.models import ten_year_sim, annual_budget, cable_subs, phase_label
 from utils.charts import (
-    base_layout, SUCCESS, DANGER, WARN, ACCENT, ACCENT2,
+    base_layout, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2,
     TEXT2, BRAVO_C, OXY_C, SVOD_C
 )
 
@@ -138,6 +138,14 @@ def render():
     fig.update_xaxes(tickvals=list(range(1,11)),
                      ticktext=[f"Y{y}\n({2011+y})" for y in range(1,11)])
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+    _first, _last = df.iloc[0], df.iloc[-1]
+    _neg_years = df.loc[df["OCF"] < 0, "Year"].tolist()
+    takeaway(f"Over ten years, distribution falls from ${_first['Distribution']:.0f}M to ${_last['Distribution']:.0f}M "
+             f"as cable subscribers leave, while content cost goes from ${_first['Content Cost']:.0f}M to "
+             f"${_last['Content Cost']:.0f}M. OCF peaks in <b>Year {peak_year - 2011}</b>"
+             + (f" and is negative in Year{'s' if len(_neg_years) > 1 else ''} {', '.join(map(str, _neg_years))}."
+                if _neg_years else " and stays positive every year.")
+             + " Streaming revenue has to grow fast enough to replace what cable loses.")
 
     # ── Phase breakdown ───────────────────────────────────────────────────────
     st.divider()
@@ -171,6 +179,9 @@ def render():
         fig_ph.update_layout(**base_layout("Cumulative OCF by Phase ($M)", height=280))
         fig_ph.update_xaxes(tickfont=dict(size=12))
         st.plotly_chart(fig_ph, use_container_width=True, config={"displayModeBar":False})
+        _best_ph = phase_agg.loc[phase_agg["Cumulative OCF ($M)"].idxmax()]
+        takeaway(f"<b>{_best_ph['Phase']}</b> generates the most cash (${_best_ph['Cumulative OCF ($M)']:.0f}M). "
+                 f"Phases cover different numbers of years, so compare them per year, not just in total.")
 
     with c2:
         st.markdown('<div class="section-title">Subscriber Erosion vs. SVOD Growth</div>', unsafe_allow_html=True)
@@ -189,6 +200,9 @@ def render():
         fig_subs.update_xaxes(tickvals=list(range(1,11)),
                                ticktext=[f"Y{y}" for y in range(1,11)])
         st.plotly_chart(fig_subs, use_container_width=True, config={"displayModeBar":False})
+        takeaway(f"Cable loses <b>{sub_loss:.1f}M</b> subscribers over ten years, while Peacock reaches "
+                 f"{svod_subs[-1]:.1f}M by Year 10. Streaming doesn't replace cable one for one, which is "
+                 f"why each streaming subscriber has to be worth more.")
 
     st.divider()
 
@@ -211,7 +225,9 @@ def render():
         })
         .set_properties(**{"font-family":"DM Mono,monospace","font-size":"14px"})
     )
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    takeaway(f"Ten-year cumulative OCF is <b>${total_ocf:.0f}M</b> at an average {avg_margin:.1f}% margin. "
+             f"Change the sliders above to see which assumption (cord-cutting, launch years) moves it most.")
 
     st.download_button(
         "⬇️ Download 10-Year Model CSV",
