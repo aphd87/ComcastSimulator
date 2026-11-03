@@ -27,7 +27,7 @@ from utils.models import (
     draw_emergency_budget_shock,
     draw_emmy_reception, EMMY_ELIGIBLE_GENRES, EMMY_NOMINATION_THRESHOLD, EMMY_WIN_THRESHOLD,
 )
-from utils.game_state import (
+from utils.game_state import (level_shows, 
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
@@ -286,11 +286,7 @@ def render():
     team     = ss.team_name
     year     = ss.year
 
-    shows = ss.oxygen_shows[:]
-    if net in ("bravo", "peacock"):
-        shows += ss.bravo_shows
-    if net == "peacock":
-        shows += ss.get("peacock_shows", [])
+    shows = level_shows(ss, net)
 
     phase = ss.sim_phase
 

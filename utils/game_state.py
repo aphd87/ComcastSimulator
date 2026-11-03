@@ -119,6 +119,23 @@ SCORE_WEIGHTS = {
 
 NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
+
+def level_shows(ss, net: str) -> list:
+    """The shows a team manages at this level (shallow copy; the Show
+    objects themselves are shared with session state, so edits persist).
+
+    2026-11-03, per user ("let's just run Bravo shows... too much with true
+    crime as well"): Level 2 is Bravo's own 20-show slate. It used to stack
+    Oxygen + Bravo (40 shows), which put Oxygen's True Crime roster on every
+    Bravo screen. Level 3 still runs the full linear + streaming portfolio,
+    because its core decision is which linear shows to wind down as Peacock
+    grows."""
+    if net == "bravo":
+        return ss.bravo_shows[:]
+    if net == "peacock":
+        return ss.oxygen_shows[:] + ss.bravo_shows[:] + list(ss.get("peacock_shows", []))
+    return ss.oxygen_shows[:]
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 def compute_score(
     ocf_margin: float,

@@ -3,6 +3,7 @@ Tab 2 — Schedule & Amortization
 Premiere-day cash trough, monthly amortization grid, scheduling optimizer.
 """
 import streamlit as st
+from utils.game_state import level_shows
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -23,11 +24,14 @@ def render():
     mkt  = ss.get("mkt_budget", 5.0)
 
     net = ss.get("active_network", "oxygen")
-    shows = ss.oxygen_shows[:]
-    if net in ("bravo", "peacock"):
-        shows += ss.bravo_shows
-    if net == "peacock":
-        shows += ss.get("peacock_shows", [])
+    shows = level_shows(ss, net)
+    # Explanations name only the amortization windows this level's slate
+    # actually uses (2026-11-03: Bravo is Bravo-only now, so True Crime /
+    # Peacock wording there would describe shows the student doesn't have).
+    has_tc = any(s.genre == "True Crime" and s.network != "Peacock" for s in shows)
+    has_pk = any(s.network == "Peacock" for s in shows)
+    _win = ["12 for linear shows"] + (["24 for True Crime"] if has_tc else []) + (["36 for Peacock"] if has_pk else [])
+    _long = " / ".join((["True Crime"] if has_tc else []) + (["Peacock"] if has_pk else []))
 
     # ── Section 1: Premiere Day Risk ─────────────────────────────────────────
     st.markdown('<div class="section-title">Premiere Day Cash Trough — The March Problem</div>', unsafe_allow_html=True)
@@ -40,11 +44,11 @@ def render():
         "premiere month is bundled together with your actual renew/cancel/schedule decisions.</div>",
         unsafe_allow_html=True)
 
-    st.markdown("""
+    st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
          border-radius:6px;padding:12px 16px;margin-bottom:12px;font-size:15px;color:#ffffff;">
     💡 <b style="color:#ffffff;">Key insight:</b> From its premiere month on, a show charges its season cost ÷ its
-    amortization months (12 for most linear shows, 24 for True Crime, 36 for Peacock) on the 1st of every month,
+    amortization months ({", ".join(_win)}) on the 1st of every month,
     whatever day it premieres. A March 30 launch absorbs a full monthly charge with only 2 days of ad revenue.
     Your cash cows must fund this gap.
     </div>
@@ -192,9 +196,9 @@ def render():
          margin-bottom:12px;font-size:15px;color:#ffffff;line-height:1.7;">
     <b>How amortization works here.</b> A season is paid for up front (episodes × cost per episode), but the
     P&amp;L doesn't take the whole hit at once. It spreads the season cost evenly over a set number of months:
-    <br>• <b>{AMORT_MONTHS_LINEAR} months</b> for most linear (cable) shows, so the full cost lands this year
-    <br>• <b>{TRUE_CRIME_AMORT_MONTHS} months</b> for True Crime, which keeps earning in reruns, so half lands this year
-    <br>• <b>{AMORT_MONTHS_SVOD} months</b> for Peacock (streaming) shows, so a third lands this year
+    <br>• <b>{AMORT_MONTHS_LINEAR} months</b> for {"most " if (has_tc or has_pk) else ""}linear (cable) shows, so the full cost lands this year
+    {f"<br>• <b>{TRUE_CRIME_AMORT_MONTHS} months</b> for True Crime, which keeps earning in reruns, so half lands this year" if has_tc else ""}
+    {f"<br>• <b>{AMORT_MONTHS_SVOD} months</b> for Peacock (streaming) shows, so a third lands this year" if has_pk else ""}
     <br><b>Monthly charge</b> = season cost ÷ months. <b>Charged this year</b> = monthly charge × 12. The rest is
     pushed into later years. A show you cancel this year costs 25% of its normal charge (work already done).
     Premiere month does <b>not</b> change the yearly charge; it only changes <i>when</i> ad revenue arrives (chart below).
@@ -247,8 +251,8 @@ def render():
         top = max(active, key=lambda s: s.annual_amort_expense(year) * (0.25 if renew.get(s.id) == "Cancel" else 1))
         top_charge = top.annual_amort_expense(year) * (0.25 if renew.get(top.id) == "Cancel" else 1)
         share = top_charge / totals["charged"] * 100 if totals["charged"] else 0
-        deferred = (f" <b>${totals['later']:.1f}M</b> is pushed into later years by the longer True Crime / "
-                    f"Peacock windows, which flatters this year's margin but is a bill you still owe."
+        deferred = (f" <b>${totals['later']:.1f}M</b> is pushed into later years by the longer {_long} "
+                    f"window{'s' if has_tc and has_pk else ''}, which flatters this year's margin but is a bill you still owe."
                     if totals["later"] > 0.05 else
                     " Nothing is pushed into later years: every show here is a 12-month linear show.")
         takeaway(
@@ -268,12 +272,16 @@ def render():
     # the "This Year" column equals the table's "Charged This Year".
     st.markdown('<div class="section-title">Payoff Schedule — How This Season Gets Paid Off Over Time</div>',
                 unsafe_allow_html=True)
-    st.markdown("""
+    _longer = ("A True Crime show takes two years and a Peacock show three" if has_tc and has_pk else
+               "A True Crime show takes two years" if has_tc else
+               "A Peacock show takes three years" if has_pk else "")
+    st.markdown(f"""
     <div style="font-size:15px;color:#ffffff;margin-bottom:10px;">
     Each bar is one year of P&amp;L charges for the seasons you're making <b>now</b>. A 12-month linear show is
-    paid off within this year. A True Crime show takes two years and a Peacock show three, so part of this
-    year's spending keeps showing up in your future P&amp;Ls. Renewing a show adds <i>next</i> season's cost on
-    top of these bars.
+    paid off within this year. {(_longer + ", so part of this year's spending keeps showing up in your future "
+    "P&amp;Ls.") if _longer else "Every show on this slate is a 12-month linear show, so the whole cost lands "
+    "this year and nothing carries into future P&amp;Ls (that's why Bravo's costs hit harder)."} Renewing a
+    show adds <i>next</i> season's cost on top of these bars.
     </div>
     """, unsafe_allow_html=True)
 

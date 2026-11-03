@@ -3,6 +3,7 @@ Tab 3 — P&L / OCF
 Full income statement, revenue decomposition, distribution model.
 """
 import streamlit as st
+from utils.game_state import level_shows
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
@@ -24,11 +25,7 @@ def render():
     mkt  = ss.get("mkt_budget", 5.0)
 
     net = ss.get("active_network", "oxygen")
-    shows = ss.oxygen_shows[:]
-    if net in ("bravo", "peacock"):
-        shows += ss.bravo_shows
-    if net == "peacock":
-        shows += ss.get("peacock_shows", [])
+    shows = level_shows(ss, net)
     # Filter out already-cancelled shows (2026-08-24 fix, same QA-pass
     # finding as app_pages/renewal.py) -- portfolio_cost/portfolio_ad_rev
     # don't filter internally, so the not-yet-simulated preview branch below

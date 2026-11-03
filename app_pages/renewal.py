@@ -13,7 +13,7 @@ from utils.models import (
     slot_rating_multiplier, day_mult_table_for_genre, WEEKEND_LEANING_GENRES, MONTHS,
     REV_PER_RATING_POINT,
 )
-from utils.game_state import NETWORK_INFO
+from utils.game_state import level_shows, NETWORK_INFO
 from utils.charts import base_layout, queue_supplement, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
 
 
@@ -23,11 +23,7 @@ def render():
     mkt  = ss.get("mkt_budget", 5.0)
 
     net = ss.get("active_network", "oxygen")
-    shows = ss.oxygen_shows[:]
-    if net in ("bravo", "peacock"):
-        shows += ss.bravo_shows
-    if net == "peacock":
-        shows += ss.get("peacock_shows", [])
+    shows = level_shows(ss, net)
     # Filter out already-cancelled shows right at the source (2026-08-24 fix,
     # found in a QA pass) -- this page previously built its whole working set
     # (the per-show decision cards, the IP-Value-vs-OCF scatter, the Full
@@ -40,6 +36,9 @@ def render():
     # Since the roster is deliberately cumulative across networks, this was
     # worst by Peacock (up to ~50 shows/year, many long dead).
     shows = [s for s in shows if s.id not in ss.get("cancelled_shows", set())]
+    if not shows:
+        st.info("No active shows on this network's roster to renew this year. Greenlight a show below to build one.")
+        return
 
     next_year   = year + 1
     threshold   = NETWORK_INFO[net]["pass_threshold"]
@@ -617,7 +616,7 @@ def render():
     Most genres peak Tue/Wed/8PM, when linear TV viewership has historically been strongest. But
     unscripted <b>Reality</b> and prestige <b>Drama</b> skew the other way — weekend nights (Fri–Sun),
     when they face less competition from weeknight appointment programming (Sunday-night Drama is a real
-    industry tentpole slot: Game of Thrones, Mad Men). So the "death slot" for a True Crime show may be a
+    industry tentpole slot: Game of Thrones, Mad Men). So the "death slot" for a Competition show may be a
     genuinely strong slot for a Reality show — see the Slot Value Map below for exact numbers by profile,
     and don't assume the same placement logic works for your whole roster.
     <br><br>

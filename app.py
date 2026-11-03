@@ -36,7 +36,7 @@ from dataclasses import asdict
 
 from utils.styles     import GLOBAL_CSS, TAILWIND_INJECT
 from utils.charts     import readable_text
-from utils.game_state import (
+from utils.game_state import (level_shows, 
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
     get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS,
@@ -298,11 +298,7 @@ def _render_follow_along_summary(ss, net_info, net):
     mcol3.metric("Level Budget", f"${ss.level_budget:.1f}M" if ss.level_budget else "—")
     mcol4.metric("Marketing Spend", f"${ss.mkt_budget:.1f}M")
 
-    shows = ss.oxygen_shows[:]
-    if net in ("bravo", "peacock"):
-        shows += ss.bravo_shows
-    if net == "peacock":
-        shows += ss.get("peacock_shows", [])
+    shows = level_shows(ss, net)
 
     if not shows:
         st.caption("No shows in this network's slate yet.")
@@ -921,13 +917,14 @@ else:
             "color": "#1a6bb5",
             "objective": f"Level 2 — {LEVEL_START_YEAR['bravo']}–{_end_year['bravo']}. You've earned Bravo.",
             "mission": (
-                f"It's {LEVEL_START_YEAR['bravo']}. You now run both Oxygen and Bravo: 40 shows, "
-                "~$315M combined budget. Bravo uses a <b style='color:#ffffff;'>12-month amortization</b> — "
-                "costs hit harder each year. Real Housewives and Top Chef are your cash cows. "
+                f"It's {LEVEL_START_YEAR['bravo']}. You now run Bravo: 20 reality, competition and talk shows "
+                f"and a ~${NETWORK_INFO['bravo']['budget_base']:.0f}M budget. Bravo uses a "
+                "<b style='color:#ffffff;'>12-month amortization</b>, so each season's full cost hits this year's P&L. "
+                "Real Housewives and Top Chef are your cash cows. "
                 "Hit a <b style='color:#ffffff;'>15% OCF margin</b> to pass."
             ),
             "steps": [
-                "💰 <b>Financing</b> — separate Oxygen shows from Bravo, watch the combined budget",
+                "💰 <b>Financing</b> — see your revenue streams, set marketing spend",
                 "🔄 <b>Renewal</b> — be aggressive cancelling Bravo dogs; costs escalate 5%/yr",
                 "🎬 <b>Greenlighting</b> <i>(optional)</i> — acquire a pitched show or pitch your own, up to 3 a year",
                 "📊 <b>Why? boxes</b> <i>(optional)</i> — collapsed charts under each decision explain the mechanics",

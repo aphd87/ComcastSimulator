@@ -486,7 +486,12 @@ def _complete_sim_app_submitted() -> AppTest:
                 Show(id=51, name="New Show", genre="Reality", episodes=10, ep_cost_k=300,
                      rating=1.0, ip_score=40, air_month=1, network="Oxygen"),
             ],
-            "bravo_shows": [],
+            # Bravo is its own roster since 2026-11-03 (level_shows), so the
+            # level being advanced into needs at least one show to render.
+            "bravo_shows": [
+                Show(id=21, name="Bravo Show", genre="Reality", episodes=10, ep_cost_k=600,
+                     rating=1.2, ip_score=50, air_month=1, network="Bravo"),
+            ],
             "peacock_shows": [],
             "cancelled_shows": set(),
             "total_shows_greenlit": 1,
