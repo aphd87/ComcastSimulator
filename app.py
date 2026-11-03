@@ -800,12 +800,30 @@ elif ss.active_section == "movies":
     tabs = st.tabs(["🎬 Movies", "📖 Theory"])
 
     from app_pages.movies import render as render_movies
+    from app_pages import movies_follow
+    from utils.game_state import save_movie_live_state, load_movie_live_state
+
+    # Movies Follow Along (2026-11-03): viewers auto-refresh and pull the
+    # Driver's Movies snapshot (its own key, separate from TV's), then see a
+    # read-only view; the Driver's state is saved at the end of each run.
+    if ss.team_role == "viewer":
+        st_autorefresh(interval=5000, key="movie_viewer_live_refresh")
+        _msnap = load_movie_live_state(ss.team_name, ss.school, ss.class_section)
+        ss.movie_follow_has_state = bool(_msnap)
+        if _msnap:
+            movies_follow.apply_snapshot(ss, _msnap)
 
     with tabs[0]:
-        render_movies()
+        if ss.team_role == "viewer":
+            movies_follow.render_viewer(ss)
+        else:
+            render_movies()
     with tabs[1]:
         st.markdown('<div class="section-title">Business Theory — Key Concepts</div>', unsafe_allow_html=True)
         _render_theory_grid(category="movies")
+
+    if ss.team_role == "driver" and ss.get("team_name"):
+        save_movie_live_state(ss.team_name, ss.school, ss.class_section, movies_follow.build_snapshot(ss))
 
 else:
     # ── Registered — show active TV network dashboard ───────────────────────────

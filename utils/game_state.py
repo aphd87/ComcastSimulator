@@ -762,6 +762,16 @@ def load_live_state(team_name: str, school: str, class_section: str) -> Optional
     return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section))
 
 
+def save_movie_live_state(team_name: str, school: str, class_section: str, snapshot: dict) -> None:
+    """Movies Follow Along (2026-11-03): the Driver's Movies state, under its
+    own key so it never overwrites the team's TV live state."""
+    _storage.save_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section) + "||movies", snapshot)
+
+
+def load_movie_live_state(team_name: str, school: str, class_section: str) -> Optional[dict]:
+    return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section) + "||movies")
+
+
 # ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────────
 # Replaces AI pitch feedback: every pitch a team commits (a TV show it
 # greenlights, a movie it simulates) is posted to a board other teams in the
