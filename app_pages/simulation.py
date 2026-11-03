@@ -40,7 +40,7 @@ from utils.sports_models import (
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
     resolve_auction, SportsContract, held_this_year, sports_year_pnl,
 )
-from utils.charts import base_layout, takeaway, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
+from utils.charts import base_layout, takeaway, html_table, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -637,13 +637,27 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
     st.markdown(f'<div class="section-title decision">{sec_num} · 🏈 Sports Rights</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
-        'Real multi-year rights deals (5-7 years), auctioned sealed-bid against seeded '
+        'Real multi-year rights deals (4-7 years), auctioned sealed-bid against seeded '
         'tech/media rivals — highest bid wins and pays <i>its own</i> bid, so overpaying is a '
         'real risk. Sports rights are a deliberate <b>loss leader</b>: the rights fee usually '
         'exceeds the direct revenue a package generates on its own. The subscriber spike a '
         'season creates only becomes lasting value if your Peacock originals slate is strong '
         'enough to retain it — otherwise it churns back out once the season ends.</div>',
         unsafe_allow_html=True)
+
+    # Tier menu (2026-11-03): premium tentpoles down to cheap niche packages,
+    # so a team can get into sports without betting the whole budget.
+    _tier_rows = [{"Package": lg, "Tier": i["tier"], "Market price": f"~${i['base_rights_cost_m']:.0f}M/yr",
+                   "Revenue on its own": (f"${i['direct_revenue_m']:.0f}M every 4th yr (Games)"
+                                          if i["games_every_n_years"] else f"~${i['direct_revenue_m']:.1f}M/yr"
+                                          + (f", +{i['growth_rate']:.0%}/yr" if i.get("growth_rate") else "")),
+                   "Fans who stick around": f"{i['retention_floor']:.0%}+",
+                   "Season": f"{i['season_months']} mo"} for lg, i in SPORTS_LEAGUES.items()]
+    html_table(pd.DataFrame(_tier_rows))
+    takeaway("Premium rights (NFL) bring the biggest subscriber spike but lose the most money and churn fastest. "
+             "Value and niche packages cost a fraction, lose little, and keep more of their fans. Women's Pro "
+             "Soccer loses a little at first but its revenue grows 20% a year you hold it, so buying early is "
+             "the bet. Sports plus originals is the strategy: originals spending is what keeps sports fans subscribed.")
 
     # 2026-08-24 fix -- found while testing the live-bid-feedback addition
     # below: every call in this function was passing `year` (the in-level

@@ -75,6 +75,42 @@ SPORTS_LEAGUES = {
         "retention_floor":    0.15,   # sharpest spike-then-churn of the three
         "games_every_n_years": 4,
     },
+    # Lower tiers (2026-11-03, per user: "are there mid tier and lower tier
+    # sports to bid on... taking a page from what Versant has been doing"):
+    # cheaper, niche live rights. Close to break-even on their own, smaller
+    # spikes, but loyal fans (high retention floors), so they're a way into
+    # sports without betting the budget. Generic packages, not real leagues.
+    "College Football Conference": {
+        "tier":               "Value",
+        "base_rights_cost_m": 14.0,
+        "term_range":         (4, 6),
+        "season_months":      4,
+        "direct_revenue_m":   11.0,
+        "retention_floor":    0.45,
+        "games_every_n_years": None,
+        "blurb":              "Saturday games with regional die-hards. Cheap, short season, steady fans.",
+    },
+    "Pro Golf Tour": {
+        "tier":               "Niche",
+        "base_rights_cost_m": 8.0,
+        "term_range":         (4, 6),
+        "season_months":      9,
+        "direct_revenue_m":   6.5,
+        "retention_floor":    0.65,
+        "games_every_n_years": None,
+        "blurb":              "Small, older, affluent audience that rarely cancels. Premium advertisers.",
+    },
+    "Women's Pro Soccer": {
+        "tier":               "Emerging",
+        "base_rights_cost_m": 5.0,
+        "term_range":         (4, 5),
+        "season_months":      8,
+        "direct_revenue_m":   3.5,
+        "retention_floor":    0.60,
+        "games_every_n_years": None,
+        "growth_rate":        0.20,   # direct revenue grows 20%/yr held: buy early, before it's expensive
+        "blurb":              "Fast-growing league. Loses a little at first; worth more every year you hold it.",
+    },
 }
 
 # Originals content-spend "enough to retain the spike" calibration — see
@@ -221,7 +257,8 @@ def sports_year_pnl(held: list[SportsContract], year: int, originals_spend_m: fl
         games = is_games_year(c.league, c.start_year, year)
         if games:
             frac = retained_fraction(c.league, originals_spend_m)
-            rev  = SPORTS_LEAGUES[c.league]["direct_revenue_m"] * frac
+            growth = (1 + SPORTS_LEAGUES[c.league].get("growth_rate", 0.0)) ** (year - c.start_year)
+            rev  = SPORTS_LEAGUES[c.league]["direct_revenue_m"] * growth * frac
         else:
             frac, rev = 0.0, 0.0
         revenue_m += rev

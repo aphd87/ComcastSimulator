@@ -77,9 +77,12 @@ class TestCycles:
         years = range(ANCHOR, ANCHOR + 40)
         counts = [len(leagues_up_for_bid(y, ANCHOR)) for y in years]
         assert counts[0] == len(SPORTS_LEAGUES)          # anchor year is the exception
-        non_anchor_years = counts[1:]
-        quiet_years = sum(1 for c in non_anchor_years if c == 0)
-        assert quiet_years > len(non_anchor_years) * 0.5
+        # 2026-11-03: with six packages (lower tiers added) some auction runs
+        # most years, so check the real invariant per league: each one is
+        # only re-auctioned on its multi-year contract boundaries.
+        for league in SPORTS_LEAGUES:
+            up_years = sum(1 for y in list(years)[1:] if league in leagues_up_for_bid(y, ANCHOR))
+            assert up_years < 39 * 0.5, league
 
 
 # ── Rival bidding & auction resolution ──────────────────────────────────────
@@ -182,3 +185,15 @@ class TestSportsPnL:
         pnl = sports_year_pnl([c1, c2], 2020, originals_spend_m=50.0)
         assert len(pnl["rows"]) == 2
         assert pnl["cost_m"] == pytest.approx(100.0)
+
+
+def test_lower_tiers_are_cheaper_and_women_soccer_grows():
+    """2026-11-03: value/niche/emerging packages cost far less than NFL, and
+    the emerging league's revenue grows each year it's held."""
+    nfl = SPORTS_LEAGUES["NFL Sunday Night Football"]["base_rights_cost_m"]
+    for lg in ("College Football Conference", "Pro Golf Tour", "Women's Pro Soccer"):
+        assert SPORTS_LEAGUES[lg]["base_rights_cost_m"] < nfl / 4
+    c = SportsContract(league="Women's Pro Soccer", start_year=2020, end_year=2024, annual_cost_m=5.0)
+    y1 = sports_year_pnl([c], 2020, 1000.0)["revenue_m"]
+    y3 = sports_year_pnl([c], 2022, 1000.0)["revenue_m"]
+    assert y3 == pytest.approx(y1 * 1.2 ** 2, rel=1e-3)
