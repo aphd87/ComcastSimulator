@@ -998,9 +998,9 @@ else:
       are optional supplements. They don't change your score, but they help you understand it:
       <b style="color:#ffffff;">💹 P&amp;L / OCF</b> breaks the current year into line items and a monthly
       cash view, so you can see exactly where margin is won or lost.
-      <b style="color:#ffffff;">📈 10-Yr Forecast</b> projects your current slate and marketing spend
-      over a longer horizon, using its own simplified model. It's a planning lens, not a prediction of
-      your score. <b style="color:#ffffff;">📖 Theory</b> explains the frameworks behind the game
+      <b style="color:#ffffff;">🏢 Company What-If</b> zooms out to NBCUniversal as one company that
+      owns all three networks over 10 years (each level of the game is just one network), using its own
+      simplified model. It's a planning lens, not a prediction of your score. <b style="color:#ffffff;">📖 Theory</b> explains the frameworks behind the game
       (portfolio strategy, amortization, diversification) so you can explain <i>why</i> a decision works.
     </div>
     """, unsafe_allow_html=True)
@@ -1014,7 +1014,7 @@ else:
     tabs = st.tabs([
         "📊 Simulation",
         "💹 P&L / OCF",
-        "📈 10-Yr Forecast",
+        "🏢 Company What-If (10 yrs)",
         "📖 Theory",
     ])
 

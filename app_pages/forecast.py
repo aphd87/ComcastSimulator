@@ -1,6 +1,8 @@
 """
-Tab 6 — 10-Year Forecast
-Full portfolio simulation: Oxygen → Bravo → Peacock SVOD+
+Tab 6 — Company What-If (10 years), relabeled 2026-11-03 from "10-Yr Forecast".
+Corporate view: one company owning Oxygen → Bravo → Peacock over 10 years. Since
+2026-11-03 each game level runs only its own network, so this page is framed
+explicitly as the bigger-picture what-if, not a forecast of the level you play.
 """
 import streamlit as st
 import pandas as pd
@@ -23,19 +25,21 @@ def render():
     ss   = st.session_state
     mkt  = ss.get("mkt_budget", 5.0)
 
-    st.markdown("""
+    from utils.game_state import LEVEL_START_YEAR, YEARS_PER_LEVEL
+    _era = lambda n: f"{LEVEL_START_YEAR[n]}–{LEVEL_START_YEAR[n] + YEARS_PER_LEVEL - 1}"
+    st.markdown('<div class="section-title">🏢 Company What-If — NBCUniversal&rsquo;s Networks Over 10 Years</div>',
+                unsafe_allow_html=True)
+    st.markdown(f"""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #4fc3f7;
          border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:15px;color:#ffffff;">
-    💡 <b style="color:#ffffff;">10-Year Strategy:</b> Prove OCF on Oxygen (Years 1–3) →
-    earn the right to add Bravo (Years 4–7) → launch Peacock SVOD+ (Years 8–10).
-    Each phase is a performance threshold. Cord-cutting accelerates after Year 4.
-    Peacock becomes the hedge against linear erosion.
+    ⚠️ <b style="color:#ffb74d;">This is not the level you're playing.</b> In the game, each level is one
+    network on its own (Oxygen {_era("oxygen")}, Bravo {_era("bravo")}, Peacock {_era("peacock")}). This page
+    zooms out to the <b>company</b>: what if one owner ran Oxygen first, added Bravo, then launched Peacock,
+    all as one combined P&amp;L over a continuous 10-year timeline? Nothing you set here changes your score.
     <br><br>
-    ⚠️ <b style="color:#ffb74d;">This is a separate what-if model, not the real game you're playing.</b>
-    It uses its own continuous Year 1–10 timeline to explore long-run strategy in one view — it
-    doesn't match the actual calendar eras you play through elsewhere (Oxygen 2012–2016, Bravo
-    2017–2021, Peacock 2022–2026, each starting its own fresh Year 1). Nothing you set here
-    changes your real score.
+    💡 <b style="color:#ffffff;">The strategic story:</b> prove cash flow on Oxygen (Years 1–3) → add Bravo
+    (Years 4–7) → launch Peacock (Years 8–10). Cord-cutting speeds up after Year 4, so Peacock becomes the
+    company's hedge against shrinking cable TV. Use the sliders to test when to add each network.
     </div>
     """, unsafe_allow_html=True)
 

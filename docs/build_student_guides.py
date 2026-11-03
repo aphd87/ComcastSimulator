@@ -268,7 +268,7 @@ def build_tv():
         "**Choose Your Network**: the first time you open TV / Streaming, pick Oxygen, Bravo, or Peacock (whichever your instructor assigned). Later, switch any time with the network row at the top of the page. Switching starts that network fresh at Year 1.",
         "**📊 Simulation tab**: where you play. You'll spend almost all of your time here.",
         "**💹 P&L / OCF tab**: your profit-and-loss statement for the current year.",
-        "**📈 10-Yr Forecast tab**: an illustrative long-run view. It is not scored.",
+        "**🏢 Company What-If (10 yrs) tab**: zooms out to NBCUniversal as one company running all three networks over 10 years. Each level of the game is only one network; this tab is the bigger-picture what-if. It is not scored.",
         "**📖 Theory tab**: short explainers on the business concepts behind the game (portfolio matrix, amortization, and so on).",
         "**Jump links** at the top of each year's page take you straight to any section.",
     ])
