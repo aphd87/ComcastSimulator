@@ -45,7 +45,7 @@ from utils.game_state import (level_shows,
 from utils.models import annual_budget, cable_subs, distribution_revenue, Show
 from utils.sports_models import SportsContract
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
-from utils.bravo_deals import reset_state as reset_bravo_state, STATE_KEYS as BRAVO_STATE_KEYS
+from utils.level_extras import reset_state as reset_bravo_state, STATE_KEYS as BRAVO_STATE_KEYS
 
 # st.iframe (added in a newer Streamlit release than st.components.v1.html)
 # auto-detects that TAILWIND_INJECT doesn't match a URL/file-path pattern and

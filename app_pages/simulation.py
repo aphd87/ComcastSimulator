@@ -27,8 +27,9 @@ from utils.models import (
     draw_emergency_budget_shock,
     draw_emmy_reception, EMMY_ELIGIBLE_GENRES, EMMY_NOMINATION_THRESHOLD, EMMY_WIN_THRESHOLD,
 )
-from utils.bravo_deals import (cast_multiplier, year_extras as bravo_year_extras,
-                               reset_state as reset_bravo_state)
+from utils.bravo_deals import cast_multiplier, year_extras as bravo_year_extras
+from utils.level_extras import reset_state as reset_bravo_state
+from utils.film_licensing import year_film_pnl
 from utils.game_state import (level_shows, 
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
@@ -190,9 +191,10 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
 
     dist_rev   = distribution_revenue(year)
     extras     = bravo_year_extras(ss, shows, year, {r["id"] for r in show_rows if r["status"] == "active"})
-    total_rev  = adj_ad_rev + dist_rev + sports_rev_m + extras["brand_rev"]
+    films      = year_film_pnl(ss, year) if net == "peacock" else {"film_rev": 0.0, "film_cost": 0.0, "film_rows": []}
+    total_rev  = adj_ad_rev + dist_rev + sports_rev_m + extras["brand_rev"] + films["film_rev"]
     total_cost = (sum(r["cost"] for r in show_rows) + sports_cost_m
-                  + extras["brand_cost"] + extras["cast_cost"])
+                  + extras["brand_cost"] + extras["cast_cost"] + films["film_cost"])
     ga         = total_rev * 0.06
     ocf        = total_rev - total_cost - mkt - ga
     margin     = (ocf / total_rev * 100) if total_rev > 0 else 0.0
@@ -211,6 +213,9 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
         "brand_cost":  extras["brand_cost"],
         "brand_rows":  extras["brand_rows"],
         "cast_cost":   extras["cast_cost"],
+        "film_rev":    films["film_rev"],
+        "film_cost":   films["film_cost"],
+        "film_rows":   films["film_rows"],
         "cost":    round(total_cost, 2),
         "mkt":     round(mkt, 2),
         "ga":      round(ga, 2),
@@ -793,6 +798,9 @@ def _sports_pnl_recap(ss, shows, year, net, new_cancel) -> dict:
     held = held_this_year(ss.sports_contracts, calendar_year)
     peacock_shows_now = [s for s in shows if s.network == "Peacock"]
     originals_spend_m = _annual_cost(peacock_shows_now, year, ss.cancelled_shows, new_cancel)
+    # Licensed films keep sports fans watching too, at half the effect of
+    # originals (utils/film_licensing.py, 2026-11-03).
+    originals_spend_m += year_film_pnl(ss, year)["retention_credit_m"]
     year_pnl = sports_year_pnl(held, calendar_year, originals_spend_m)
 
     if held:
@@ -841,6 +849,7 @@ def _decisions(ss, shows, net_info, year, net):
     ]
     if net == "peacock":
         nav_links.append('<a href="#sports-rights" style="color:#e8c547;">Sports Rights</a>')
+        nav_links.append('<a href="#film-licensing" style="color:#e8c547;">Film Licensing</a>')
     nav_links += [
         '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
     ] + (['<a href="#brand-casting" style="color:#e8c547;">Brands &amp; Casting</a>'] if net == "bravo" else []) + [
@@ -888,6 +897,11 @@ def _decisions(ss, shows, net_info, year, net):
         st.markdown('<a id="sports-rights"></a>', unsafe_allow_html=True)
         _section_sports_rights_bidding(ss, year, net, next_sec)
         next_sec += 1
+        st.divider()
+        st.markdown('<a id="film-licensing"></a>', unsafe_allow_html=True)
+        from app_pages.film_licensing import render as render_film_licensing
+        render_film_licensing(ss, year, next_sec)
+        next_sec += 1
 
     st.divider()
     st.markdown('<a id="greenlighting"></a>', unsafe_allow_html=True)
@@ -932,6 +946,13 @@ def _decisions(ss, shows, net_info, year, net):
     # Casting fees already paid this year are a known cost (Bravo). Brand
     # deal outcomes are uncertain, so they stay out of the preview.
     cast_fee = float(ss.get("cast_fees", {}).get(str(year), 0.0))
+    _films = year_film_pnl(ss, year) if net == "peacock" else {"film_rev": 0.0, "film_cost": 0.0}
+    if _films["film_rev"] or _films["film_cost"]:
+        p["rev"]  += _films["film_rev"]
+        p["cost"] += _films["film_cost"]
+        p["ga"]    = p["rev"] * 0.06
+        p["ocf"]   = p["rev"] - p["cost"] - mkt - p["ga"]
+        p["margin"] = (p["ocf"] / p["rev"] * 100) if p["rev"] > 0 else 0.0
     if cast_fee:
         p["cost"] += cast_fee
         p["ocf"]  -= cast_fee
@@ -944,8 +965,11 @@ def _decisions(ss, shows, net_info, year, net):
     items = [
         ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
         ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
-        ("Content Cost",  f"-${p['cost'] - p['sports_cost'] - cast_fee:.2f}M", WARN),
+        ("Content Cost",  f"-${p['cost'] - p['sports_cost'] - cast_fee - _films['film_cost']:.2f}M", WARN),
     ]
+    if _films["film_rev"] or _films["film_cost"]:
+        items += [("Film License Revenue", f"${_films['film_rev']:.2f}M", ACCENT2),
+                  ("Film License Fees", f"-${_films['film_cost']:.2f}M", WARN)]
     if cast_fee:
         items.append(("Casting Fees", f"-${cast_fee:.2f}M", WARN))
     if p["sports_rev"] or p["sports_cost"]:
@@ -1232,6 +1256,20 @@ def _results(ss, shows, net_info, year, team, net):
                         + ". Lower-fit brands pay more because they fail more often." if _flops else
                         "Every integration landed this year. That won't always happen, even with high fit."))
 
+    # ── Film licenses (Peacock, 2026-11-03) ───────────────────────────────────
+    if result.get("film_rows"):
+        _fl = "".join(
+            f'<div style="padding:3px 0;">🎞️ <b>{r["title"]}</b>: earned '
+            f'<span style="font-family:DM Mono,monospace;color:{SUCCESS};">${r["revenue_m"]:.2f}M</span> '
+            f'vs. <span style="font-family:DM Mono,monospace;color:{WARN};">${r["cost_m"]:.2f}M</span> license fee '
+            f'(<span style="color:{SUCCESS if r["revenue_m"] >= r["cost_m"] else DANGER};">'
+            f'{"+" if r["revenue_m"] >= r["cost_m"] else "−"}${abs(r["revenue_m"] - r["cost_m"]):.2f}M</span>)</div>'
+            for r in result["film_rows"])
+        st.markdown(f'''
+        <div style="background:#12141a;border:1px solid #252836;border-radius:6px;padding:10px 14px;
+             margin:-8px 0 16px;font-size:14px;color:#ffffff;"><b>🎞️ Licensed films</b>{_fl}</div>''',
+                    unsafe_allow_html=True)
+
     # ── Sports rights contribution (Peacock only, held contracts only) ────────
     if result.get("sports_rev") or result.get("sports_cost"):
         sp_net_c = SUCCESS if (result["sports_rev"] - result["sports_cost"]) >= 0 else DANGER
@@ -1395,6 +1433,9 @@ def _results(ss, shows, net_info, year, team, net):
             for _sid in this_year_ids:
                 ss.get("cast_signings", {}).pop(str(_sid), None)
             ss.get("cast_fees", {}).pop(str(year), None)
+            # Film licenses signed in the redone year are undone with it.
+            ss["film_licenses"] = [l for l in ss.get("film_licenses", []) if l["start"] != year]
+            ss.get("film_bid_log", {}).pop(str(year), None)
             ss.greenlit_ids_this_level = ss.get("greenlit_ids_this_level", set()) - this_year_ids
             ss.total_shows_greenlit    = max(0, ss.get("total_shows_greenlit", 0) - len(this_year_ids))
             ss.greenlit_ids_this_year  = set()
