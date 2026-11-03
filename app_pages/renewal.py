@@ -267,26 +267,45 @@ def render():
         key="ip_ocf_highlight_show",
     )
 
-    dec_colors = {"Renew": SUCCESS, "Cancel": DANGER}
+    # Restyled 2026-11-03 (per user: "sleeker look... translucent dots", no
+    # yellow highlight): translucent fills with a crisp same-color outline,
+    # blue = Renew (the app's secondary accent) and red = Cancel. A
+    # highlighted show "pops" by dimming everything else and redrawing it
+    # solid with a white ring and white label, instead of a yellow circle.
+    dec_colors = {"Renew": ACCENT2, "Cancel": DANGER}
+
+    def _rgba(hex_c, a):
+        h = hex_c.lstrip("#")
+        return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
+
+    hl_on = highlight_show != "— none —"
     fig_ip = px.scatter(scatter_data, x="IP Score", y="Projected OCF",
                          size="Cost $M", color="Decision", hover_name="Show",
                          color_discrete_map=dec_colors, size_max=28)
+    for tr in fig_ip.data:
+        c = dec_colors.get(tr.name, ACCENT2)
+        tr.marker.color = _rgba(c, 0.12 if hl_on else 0.35)
+        tr.marker.line = dict(width=1.5, color=_rgba(c, 0.35 if hl_on else 0.95))
     fig_ip.add_hline(y=0, line_dash="dash", line_color=DANGER, opacity=0.4)
     fig_ip.add_vline(x=60, line_dash="dash", line_color=TEXT2, opacity=0.3,
                      annotation_text="IP threshold", annotation_font_color=TEXT2)
     fig_ip.update_layout(**base_layout("IP Score vs. Projected OCF — Bubble = Cost", height=360))
-    fig_ip.update_traces(marker=dict(line=dict(width=1, color="#12141a")))
 
-    if highlight_show != "— none —":
+    if hl_on:
         hl = scatter_data.loc[scatter_data["Show"] == highlight_show].iloc[0]
+        ref = fig_ip.data[0].marker
+        c = dec_colors.get(hl["Decision"], ACCENT2)
         fig_ip.add_trace(go.Scatter(
             x=[hl["IP Score"]], y=[hl["Projected OCF"]],
             mode="markers+text",
-            marker=dict(size=max(hl["Cost $M"], 10) * 1.6, symbol="circle-open",
-                        line=dict(width=3, color=ACCENT)),
-            text=[hl["Show"]], textposition="top center",
-            textfont=dict(color=ACCENT, size=13),
-            hoverinfo="skip", showlegend=False,
+            marker=dict(size=[hl["Cost $M"]], sizemode=ref.sizemode, sizeref=ref.sizeref,
+                        sizemin=ref.sizemin, color=_rgba(c, 0.9),
+                        line=dict(width=2.5, color="#ffffff")),
+            text=[f"<b>{hl['Show']}</b>"], textposition="top center",
+            textfont=dict(color="#ffffff", size=13),
+            hovertemplate=(f"<b>{hl['Show']}</b><br>IP Score %{{x}}<br>Projected OCF $%{{y:.1f}}M"
+                           f"<br>{hl['Decision']}<extra></extra>"),
+            showlegend=False,
         ))
 
     st.plotly_chart(fig_ip, use_container_width=True, config={"displayModeBar":False})
@@ -421,21 +440,33 @@ def render():
         for s in active_this_year:
             month_map[s.air_month].append(s.name)
 
+        # Show names listed under each month (2026-11-03, per user: "build off
+        # of the Jan Feb March and just list each show beneath them") instead
+        # of a count with names hidden in a hover tooltip.
         sched_cols = st.columns(12)
         for i, col in enumerate(sched_cols):
             m = i + 1
-            names = month_map[m]
+            names = sorted(month_map[m])
             count = len(names)
             bg = "rgba(232,197,71,.18)" if count >= 3 else ("rgba(232,197,71,.07)" if count >= 1 else "#12141a")
-            title_attr = ", ".join(names) if names else "No premieres"
+            name_list = "".join(
+                f'<div style="font-size:11px;line-height:1.3;color:#ffffff;padding:3px 2px;'
+                f'border-top:1px solid #252836;word-wrap:break-word;">{n}</div>' for n in names
+            ) or '<div style="font-size:11px;color:#ffffff;opacity:.5;padding-top:3px;">—</div>'
             col.markdown(f"""
-            <div title="{title_attr}" style="background:{bg};border:1px solid #252836;border-radius:6px;
-                 padding:6px 2px;text-align:center;min-height:56px;">
-              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;">{MONTHS[i]}</div>
-              <div style="font-size:16px;font-family:DM Serif Display,serif;color:#ffffff;margin-top:4px;">{count}</div>
+            <div style="background:{bg};border:1px solid #252836;border-radius:6px;
+                 padding:6px 3px;text-align:center;min-height:90px;">
+              <div style="font-size:14px;color:#ffffff;font-family:DM Mono,monospace;font-weight:600;">{MONTHS[i]}</div>
+              <div style="font-size:12px;color:#e8c547;margin:2px 0 4px;">{count} show{'s' if count != 1 else ''}</div>
+              {name_list}
             </div>
             """, unsafe_allow_html=True)
-        st.caption("Number = shows premiering that month. Hover a column for names.")
+        busiest = max(range(1, 13), key=lambda m: len(month_map[m]))
+        empty = [MONTHS[m - 1] for m in range(1, 13) if not month_map[m]]
+        takeaway(f"<b>{MONTHS[busiest - 1]}</b> is your busiest premiere month ({len(month_map[busiest])} shows)"
+                 + (f"; {', '.join(empty)} {'has' if len(empty) == 1 else 'have'} no premieres. Spreading premieres "
+                    f"out evens your monthly cash flow." if empty else
+                    ". Every month has at least one premiere, so revenue is spread across the year."))
 
     queue_supplement("This Year's Schedule — Premiere Calendar", _render_premiere_calendar,
                      when_to_use="you've set premiere months and want to see if too many shows land in the same month.")
@@ -652,8 +683,16 @@ def render():
     # genres use it, so the conflict is visible instead of hidden in the math.
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin:14px 0 6px;">'
-        '🗺️ <b>Slot Value Map</b> — rating bonus/penalty per cell, same layout as the grid below. '
-        'Two profiles now, because best slot depends on genre.</div>',
+        '🗺️ <b>Slot Value Map: how much each time slot raises or lowers a show\'s rating.</b><br>'
+        'Each cell is one primetime slot (day across the top, start time down the side), laid out exactly '
+        'like the scheduling grid below. The number is the change to a show\'s rating if you put it there: '
+        '<b style="color:#66bb6a;">+10%</b> means a 1.0-rated show plays like a 1.1, '
+        '<b style="color:#ef5350;">−10%</b> means it plays like a 0.9. Rating drives ad revenue, so green '
+        'cells earn more money and red cells earn less.<br>'
+        'There are <b>two maps</b> because audiences behave differently by genre. The <b>Weeknight profile</b> '
+        'is for genres that peak Tuesday–Wednesday at 8 PM, when the most people watch live TV. The '
+        '<b>Weekend profile</b> is for genres like Reality and Drama that do best Friday–Sunday, when they face less '
+        'competition. Check the map that matches each show\'s genre (the "Day Profile" column above).</div>',
         unsafe_allow_html=True)
 
     def _style_slot_pct(val):
@@ -673,7 +712,10 @@ def render():
         sample_genre = profile_genres[0] if profile_name == "Weekend" else None
         st.markdown(
             f'<div style="font-size:14px;color:#ffffff;margin:8px 0 4px;">'
-            f'<b>{profile_name}</b> profile — {", ".join(profile_genres)}</div>',
+            f'<b>{profile_name} profile</b> — use this map for your {", ".join(profile_genres)} '
+            f'shows. '
+            + ("Best nights: Tuesday–Wednesday." if profile_name == "Weeknight" else "Best nights: Friday–Sunday.")
+            + '</div>',
             unsafe_allow_html=True)
         value_rows = []
         for h in PRIMETIME_HOURS:

@@ -80,6 +80,12 @@ def base_layout(title: str = "", height: int = 320) -> dict:
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Mono, monospace", color=TEXT2, size=12),
         margin=dict(l=40, r=20, t=36, b=36),
+        # Readable hover callouts on every chart (2026-11-03, per user: hover
+        # text was hard to read). Plotly's default fills the box with the
+        # trace color (gold/blue/green) and picks its own text color; a
+        # fixed dark box + white text + gold border reads on every trace.
+        hoverlabel=dict(bgcolor=SURFACE2, bordercolor=ACCENT,
+                        font=dict(color="#ffffff", size=13, family="DM Mono, monospace")),
         legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0,
                     font=dict(size=12)),
         xaxis=dict(gridcolor=BORDER, zeroline=False,
@@ -177,6 +183,30 @@ def scatter_chart(df: pd.DataFrame, x: str, y: str, size: str,
     fig.update_layout(**base_layout(title, height))
     fig.update_traces(marker=dict(line=dict(width=1, color=SURFACE)))
     return fig
+
+
+def html_table(df: pd.DataFrame, total_row: dict | None = None, max_height: int = 420) -> None:
+    """Dark-theme HTML table with bold WHITE column headers (2026-11-03, per
+    user: st.dataframe draws its headers in a faded gray that can't be
+    restyled). Use for read-only tables where header legibility matters.
+    Optional total_row is drawn bold with a gold top rule."""
+    import html as _h
+    th = ("position:sticky;top:0;background:#1a1d26;color:#ffffff;font-weight:700;text-align:left;"
+          "padding:8px 10px;border-bottom:2px solid #e8c547;white-space:nowrap;font-size:13px;")
+    td = "padding:6px 10px;border-bottom:1px solid #252836;color:#ffffff;font-size:13px;white-space:nowrap;"
+    head = "".join(f'<th style="{th}">{_h.escape(str(c))}</th>' for c in df.columns)
+    body = "".join(
+        "<tr>" + "".join(f'<td style="{td}">{_h.escape(str(v))}</td>' for v in row) + "</tr>"
+        for row in df.itertuples(index=False))
+    if total_row:
+        tt = td + "font-weight:700;border-top:2px solid #e8c547;background:#12141a;"
+        body += "<tr>" + "".join(f'<td style="{tt}">{_h.escape(str(total_row.get(c, "")))}</td>'
+                                 for c in df.columns) + "</tr>"
+    st.markdown(
+        f'<div style="overflow:auto;max-height:{max_height}px;border:1px solid #252836;border-radius:6px;'
+        f'margin-bottom:8px;"><table style="border-collapse:collapse;width:100%;background:#12141a;">'
+        f'<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>',
+        unsafe_allow_html=True)
 
 
 def takeaway(text: str) -> None:

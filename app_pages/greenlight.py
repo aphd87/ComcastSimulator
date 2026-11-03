@@ -452,7 +452,11 @@ def render():
     fig_cmp.add_trace(go.Bar(name="📱 SVOD+",  x=categories,
                               y=[round(v,2) for v in svod_vals],
                               marker_color=ACCENT2, opacity=0.7))
-    fig_cmp.update_layout(**base_layout("Linear vs. SVOD — Revenue, Cost, OCF ($M)", height=300))
+    # Wider gaps between bar groups + hover callouts kept clear of the bars
+    # (2026-11-03, per user: scroll-overs hard to read and touching bars).
+    fig_cmp.update_traces(hovertemplate="<b>%{fullData.name}</b><br>%{x}: $%{y:.2f}M<extra></extra>")
+    fig_cmp.update_layout(**base_layout("Linear vs. SVOD — Revenue, Cost, OCF ($M)", height=320),
+                          bargap=0.35, bargroupgap=0.12, hoverdistance=10)
     st.plotly_chart(fig_cmp, use_container_width=True, config={"displayModeBar":False})
     takeaway(f"On linear, \"{show_name}\" makes <b>${linear['ocf']:+.1f}M</b> in Year 1; on streaming, "
              f"<b>${svod['ocf']:+.1f}M</b>. Over three years streaming brings in ${svod['ltv_3yr']:.1f}M vs. "
@@ -503,7 +507,26 @@ def render():
 
     # ── Sensitivity Table ──────────────────────────────────────────────────────
     st.markdown('<div class="section-title">Sensitivity Analysis — Rating vs. Episode Cost</div>', unsafe_allow_html=True)
-    st.markdown('<span style="font-size:14px;color:#ffffff;">Linear OCF ($M) at different rating × cost combinations. Green = profitable, Red = cancel.</span>', unsafe_allow_html=True)
+    # Introduction added 2026-11-03 (per user: "needs an introduction... not
+    # sure what this is stating").
+    st.markdown(f"""
+    <div style="background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:12px 16px;
+         margin-bottom:10px;font-size:15px;color:#ffffff;line-height:1.7;">
+    <b>What this table answers:</b> "How good does this show need to be to make money, given what it costs?"
+    You know a show's cost when you greenlight it, but its rating is only a guess. This table tries every
+    combination so you can see how much room for error you have.
+    <br>• <b>Each row</b> is a cost per episode (cheap at the top, expensive at the bottom).
+    <br>• <b>Each column</b> is a possible 18-49 rating (low on the left, hit on the right).
+    <br>• <b>Each cell</b> is the show's Year-1 operating cash flow (OCF) on linear, in $M, for a
+    {eps}-episode season with your current marketing budget.
+    <br><b style="color:#81c784;">Green</b> = clearly profitable (over $5M).
+    <b style="color:#ffb74d;">Orange</b> = barely profitable.
+    <b style="color:#ef9a9a;">Red</b> = loses money: a show that lands here is a cancel candidate.
+    <br><b>How to read it:</b> find the row closest to your concept's cost (${ep_cost:,.0f}K/ep), then move
+    left until the cells turn red. That's the rating where this show stops paying for itself. If it's close
+    to your projected rating ({rating:.1f}), the show is a risky bet.
+    </div>
+    """, unsafe_allow_html=True)
 
     rating_range = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0]
     cost_range   = [300, 500, 750, 1000, 1500, 2000]

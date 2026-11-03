@@ -12,7 +12,7 @@ from utils.models import (
     MONTHS, HOUR_LABELS, HOURLY_INDEX,
 )
 from utils.charts import (
-    base_layout, bar_chart, line_chart, takeaway,
+    base_layout, bar_chart, line_chart, takeaway, html_table,
     ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2, BORDER, SURFACE, SURFACE2
 )
 
@@ -32,12 +32,13 @@ def render():
     # ── Section 1: Premiere Day Risk ─────────────────────────────────────────
     st.markdown('<div class="section-title">Premiere Day Cash Trough — The March Problem</div>', unsafe_allow_html=True)
 
-    st.caption(
+    st.markdown(
+        '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
         "This is a practice sandbox, not part of your score — it isolates just this one mechanic "
         "(launch day vs. monthly amortization billing, freely adjustable below) so you can see the "
         "cash-timing effect on its own, before applying the intuition for real in Renewal, where "
-        "premiere month is bundled together with your actual renew/cancel/schedule decisions."
-    )
+        "premiere month is bundled together with your actual renew/cancel/schedule decisions.</div>",
+        unsafe_allow_html=True)
 
     st.markdown("""
     <div style="background:#1a1d26;border:1px solid #252836;border-left:3px solid #e8c547;
@@ -239,7 +240,10 @@ def render():
             "Status":            "Cancel (25% charge)" if cancel else ("New this year" if s.id in new_ids else "Returning"),
         })
     if amort_rows:
-        st.dataframe(pd.DataFrame(amort_rows), use_container_width=True, hide_index=True)
+        html_table(pd.DataFrame(amort_rows), total_row={
+            "Show": "TOTAL", "Season Cost": f"${totals['season']:.2f}M",
+            "Charged This Year": f"${totals['charged']:.2f}M",
+            "Pushed to Later Years": f"${totals['later']:.2f}M" if totals["later"] else "—"})
         top = max(active, key=lambda s: s.annual_amort_expense(year) * (0.25 if renew.get(s.id) == "Cancel" else 1))
         top_charge = top.annual_amort_expense(year) * (0.25 if renew.get(top.id) == "Cancel" else 1)
         share = top_charge / totals["charged"] * 100 if totals["charged"] else 0
