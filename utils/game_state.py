@@ -263,6 +263,24 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
     # predating this feature may lack "revenue" on some rows.
     total_revenue = round(sum(r.get("revenue") or 0 for r in sorted_log), 1)
 
+    # Extra metrics for the instructor export (2026-11-03, per user: "are
+    # there other metrics that can be included?"). All .get()-guarded so
+    # older yearly_log rows without these fields just count as 0.
+    total_ocf   = round(sum(r.get("ocf") or 0 for r in sorted_log), 1)
+    avg_margin  = round(total_ocf / total_revenue * 100, 1) if total_revenue else None
+    brand_rows  = [b for r in sorted_log for b in (r.get("brand_rows") or [])]
+    extras = {
+        "total_ocf":       total_ocf,
+        "avg_margin":      avg_margin,
+        "cancellations":   sum(len(r.get("new_cancellations") or []) for r in sorted_log),
+        "brand_deals":     len(brand_rows),
+        "brand_landed":    sum(1 for b in brand_rows if b.get("landed")),
+        "brand_net":       round(sum((r.get("brand_rev") or 0) - (r.get("brand_cost") or 0) for r in sorted_log), 2),
+        "casting_spend":   round(sum(r.get("cast_cost") or 0 for r in sorted_log), 2),
+        "sports_net":      round(sum((r.get("sports_rev") or 0) - (r.get("sports_cost") or 0) for r in sorted_log), 2),
+        "film_net":        round(sum((r.get("film_rev") or 0) - (r.get("film_cost") or 0) for r in sorted_log), 2),
+    }
+
     return {
         "best_year":         best_year,
         "most_improved":     most_improved,
@@ -272,6 +290,7 @@ def compute_level_notables(yearly_log: list[dict], shows_greenlit: int = 0) -> d
         "emmy_nominations":  emmy_nominations,
         "emmy_wins":         emmy_wins,
         "total_revenue":     total_revenue,
+        **extras,
     }
 
 

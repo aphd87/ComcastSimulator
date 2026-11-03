@@ -102,6 +102,34 @@ def _format_notables_badges(notables: dict) -> str:
             '</div>')
 
 
+def _export_metrics(e: dict) -> dict:
+    """Extra per-submission columns for the instructor CSV (2026-11-03).
+    Blank when a metric doesn't apply (Movies entries, older submissions,
+    a network without that feature)."""
+    n, d = e.get("notables") or {}, e.get("details") or {}
+    def v(x):
+        return "" if x in (None, "") else x
+    return {
+        "OCF Margin %":     v(n.get("avg_margin")),
+        "Total Revenue $M": v(n.get("total_revenue")),
+        "Total OCF $M":     v(n.get("total_ocf")),
+        "Score: Margin":    v(d.get("ocf_margin")),
+        "Score: ROI":       v(d.get("roi")),
+        "Score: Diversity": v(d.get("diversity")),
+        "Score: Renewal":   v(d.get("renewal")),
+        "Score: Marketing": v(d.get("marketing")),
+        "Shows Greenlit":   v(n.get("shows_greenlit")),
+        "Cancellations":    v(n.get("cancellations")),
+        "Emmy Noms":        v(n.get("emmy_nominations")),
+        "Emmy Wins":        v(n.get("emmy_wins")),
+        "Brand Deals Landed": (f"{n['brand_landed']}/{n['brand_deals']}" if n.get("brand_deals") else ""),
+        "Brand Net $M":     v(n.get("brand_net")) if n.get("brand_deals") else "",
+        "Casting Spend $M": v(n.get("casting_spend")) if n.get("casting_spend") else "",
+        "Sports Net $M":    v(n.get("sports_net")) if n.get("sports_net") else "",
+        "Film Net $M":      v(n.get("film_net")) if n.get("film_net") else "",
+    }
+
+
 def _render_overall_tab(team: str, scope_school, scope_class, show_school_col: bool):
     """Combined TV/Streaming ranking — sum of official scores across
     Oxygen/Bravo/Peacock (get_overall_leaderboard). A team that's only
@@ -646,6 +674,7 @@ def render():
             "Passed":    "✅" if e["passed"] else "❌",
             "Official":  "✅" if e["is_official"] else "—",
             "Time":      datetime.fromtimestamp(e["timestamp"]).strftime("%Y-%m-%d %H:%M"),
+            **_export_metrics(e),
         } for e in all_entries])
         st.dataframe(raw_df.style.set_properties(**{"font-family":"DM Mono,monospace","font-size":"14px"}),
                      use_container_width=True, height=300, hide_index=True)

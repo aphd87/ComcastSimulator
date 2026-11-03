@@ -533,3 +533,17 @@ class TestComputeMovieNotables:
             school="Kellogg", class_section="Sec A", notables=notables,
         )
         assert entry["notables"] == notables
+
+
+def test_level_notables_include_instructor_metrics():
+    """2026-11-03: brand deals, casting, sports and film nets roll up."""
+    from utils.game_state import compute_level_notables
+    log = [{"year": 1, "label": "Y1", "revenue": 100.0, "ocf": 20.0, "margin": 20.0, "shows": [],
+            "new_cancellations": [3], "brand_rows": [{"landed": True}, {"landed": False}],
+            "brand_rev": 2.0, "brand_cost": 0.5, "cast_cost": 0.4, "sports_rev": 10.0, "sports_cost": 14.0,
+            "film_rev": 5.0, "film_cost": 4.0},
+           {"year": 2, "label": "Y2", "revenue": 100.0, "ocf": 30.0, "margin": 30.0, "shows": []}]
+    n = compute_level_notables(log, 2)
+    assert n["total_ocf"] == 50.0 and n["avg_margin"] == 25.0 and n["cancellations"] == 1
+    assert (n["brand_deals"], n["brand_landed"], n["brand_net"]) == (2, 1, 1.5)
+    assert n["casting_spend"] == 0.4 and n["sports_net"] == -4.0 and n["film_net"] == 1.0
