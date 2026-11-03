@@ -45,6 +45,7 @@ from utils.game_state import (level_shows,
 from utils.models import annual_budget, cable_subs, distribution_revenue, Show
 from utils.sports_models import SportsContract
 from utils.data   import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
+from utils.bravo_deals import reset_state as reset_bravo_state, STATE_KEYS as BRAVO_STATE_KEYS
 
 # st.iframe (added in a newer Streamlit release than st.components.v1.html)
 # auto-detects that TAILWIND_INJECT doesn't match a URL/file-path pattern and
@@ -182,6 +183,7 @@ def _switch_network(ss, net: str) -> None:
     ss.greenlit_ids_this_year  = set()
     ss.greenlit_ids_this_level = set()
     ss.total_shows_greenlit    = 0
+    reset_bravo_state(ss)
     ss.year                    = 1
     ss.level_budget            = None   # re-derived from the new network's budget_base
 
@@ -201,6 +203,8 @@ def _build_live_snapshot(ss) -> dict:
     snap["sports_bid_log"]          = {str(y): v for y, v in ss.get("sports_bid_log", {}).items()}
     snap["sports_contracts"]        = [asdict(c) for c in ss.get("sports_contracts", [])]
     snap["yearly_log"]              = ss.get("yearly_log", [])
+    for _k in BRAVO_STATE_KEYS:      # Bravo brand deals / casting (JSON-safe dicts)
+        snap[_k] = ss.get(_k, {})
     snap["oxygen_shows"]            = [asdict(s) for s in ss.oxygen_shows]
     snap["bravo_shows"]             = [asdict(s) for s in ss.bravo_shows]
     snap["peacock_shows"]           = [asdict(s) for s in ss.get("peacock_shows", [])]
@@ -223,6 +227,8 @@ def _apply_live_snapshot(ss, snap: dict) -> None:
     ss.sports_bid_log   = {int(y): v for y, v in snap.get("sports_bid_log", {}).items()}
     ss.sports_contracts = [SportsContract(**c) for c in snap.get("sports_contracts", [])]
     ss.yearly_log       = snap.get("yearly_log", [])
+    for _k in BRAVO_STATE_KEYS:
+        ss[_k] = snap.get(_k, {})
     ss.oxygen_shows      = [Show(**s) for s in snap.get("oxygen_shows", [])]
     ss.bravo_shows        = [Show(**s) for s in snap.get("bravo_shows", [])]
     ss.peacock_shows       = [Show(**s) for s in snap.get("peacock_shows", [])]

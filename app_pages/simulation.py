@@ -27,6 +27,8 @@ from utils.models import (
     draw_emergency_budget_shock,
     draw_emmy_reception, EMMY_ELIGIBLE_GENRES, EMMY_NOMINATION_THRESHOLD, EMMY_WIN_THRESHOLD,
 )
+from utils.bravo_deals import (cast_multiplier, year_extras as bravo_year_extras,
+                               reset_state as reset_bravo_state)
 from utils.game_state import (level_shows, 
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
@@ -163,7 +165,11 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
                                "variance": round(v, 3), "revenue": 0.0,
                                "cost": round(s.annual_amort_expense(year) * 0.25, 2)})
         else:
-            rev = s.ad_revenue(year, per) * v
+            # Signed cast (Bravo casting unknowns, utils/bravo_deals.py) scales
+            # the show's ad revenue like a rating change. 1.0 when uncast.
+            cast_mult = cast_multiplier(ss.get("team_name", ""), s.id,
+                                        ss.get("cast_signings", {}).get(str(s.id), []))
+            rev = s.ad_revenue(year, per) * v * cast_mult
             adj_ad_rev += rev
             # Emmy Tracking (Phase 6, 2026-08-05) -- only rolled for shows
             # that actually aired at full value this year, own independent
@@ -183,8 +189,10 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
                                "emmy_win": emmy_score is not None and emmy_score >= EMMY_WIN_THRESHOLD})
 
     dist_rev   = distribution_revenue(year)
-    total_rev  = adj_ad_rev + dist_rev + sports_rev_m
-    total_cost = sum(r["cost"] for r in show_rows) + sports_cost_m
+    extras     = bravo_year_extras(ss, shows, year, {r["id"] for r in show_rows if r["status"] == "active"})
+    total_rev  = adj_ad_rev + dist_rev + sports_rev_m + extras["brand_rev"]
+    total_cost = (sum(r["cost"] for r in show_rows) + sports_cost_m
+                  + extras["brand_cost"] + extras["cast_cost"])
     ga         = total_rev * 0.06
     ocf        = total_rev - total_cost - mkt - ga
     margin     = (ocf / total_rev * 100) if total_rev > 0 else 0.0
@@ -199,6 +207,10 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
         "dist_rev":round(dist_rev, 2),
         "sports_rev":  round(sports_rev_m, 2),
         "sports_cost": round(sports_cost_m, 2),
+        "brand_rev":   extras["brand_rev"],
+        "brand_cost":  extras["brand_cost"],
+        "brand_rows":  extras["brand_rows"],
+        "cast_cost":   extras["cast_cost"],
         "cost":    round(total_cost, 2),
         "mkt":     round(mkt, 2),
         "ga":      round(ga, 2),
@@ -817,6 +829,7 @@ def _decisions(ss, shows, net_info, year, net):
         nav_links.append('<a href="#sports-rights" style="color:#e8c547;">Sports Rights</a>')
     nav_links += [
         '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
+    ] + (['<a href="#brand-casting" style="color:#e8c547;">Brands &amp; Casting</a>'] if net == "bravo" else []) + [
         '<a href="#scheduling" style="color:#e8c547;">Scheduling</a>',
         '<a href="#simulate" style="color:#e8c547;">Simulate</a>',
     ]
@@ -875,6 +888,16 @@ def _decisions(ss, shows, net_info, year, net):
     # deducts real production cost from ss.level_budget immediately.
     level_budget = ss.level_budget
 
+    # Bravo only (2026-11-03): brand partnerships + casting unknowns for the
+    # new shows just added above. Casting bids also deduct from the budget.
+    if net == "bravo":
+        st.divider()
+        st.markdown('<a id="brand-casting"></a>', unsafe_allow_html=True)
+        from app_pages.bravo_deals import render as render_bravo_deals
+        render_bravo_deals(ss, shows, year, next_sec, ss.cancelled_shows)
+        next_sec += 1
+        level_budget = ss.level_budget
+
     # Read once, now that Renewal/Greenlighting have both rendered and
     # written their widgets to session state.
     mkt = ss.get("mkt_budget", 5.0)
@@ -892,6 +915,13 @@ def _decisions(ss, shows, net_info, year, net):
     st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
     p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel,
                      sports_rev_m=sports_pnl["revenue_m"], sports_cost_m=sports_pnl["cost_m"])
+    # Casting fees already paid this year are a known cost (Bravo). Brand
+    # deal outcomes are uncertain, so they stay out of the preview.
+    cast_fee = float(ss.get("cast_fees", {}).get(str(year), 0.0))
+    if cast_fee:
+        p["cost"] += cast_fee
+        p["ocf"]  -= cast_fee
+        p["margin"] = (p["ocf"] / p["rev"] * 100) if p["rev"] > 0 else 0.0
 
     ocf_c    = SUCCESS if p["ocf"] >= 0 else DANGER
     margin_c = SUCCESS if p["margin"] >= threshold else (WARN if p["margin"] >= 0 else DANGER)
@@ -900,8 +930,10 @@ def _decisions(ss, shows, net_info, year, net):
     items = [
         ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
         ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
-        ("Content Cost",  f"-${p['cost'] - p['sports_cost']:.2f}M", WARN),
+        ("Content Cost",  f"-${p['cost'] - p['sports_cost'] - cast_fee:.2f}M", WARN),
     ]
+    if cast_fee:
+        items.append(("Casting Fees", f"-${cast_fee:.2f}M", WARN))
     if p["sports_rev"] or p["sports_cost"]:
         items += [
             ("Sports Rights Revenue", f"${p['sports_rev']:.2f}M", ACCENT2),
@@ -935,6 +967,7 @@ def _decisions(ss, shows, net_info, year, net):
     already_paid = sum(s.annual_amort_expense(year) for s in shows
                        if s.id in ss.get("greenlit_ids_this_year", set())
                        and s.id not in new_cancel and s.id not in ss.cancelled_shows)
+    already_paid += cast_fee   # casting bids were deducted from level_budget when won
     spend_this_year = p["cost"] - already_paid + mkt
     if spend_this_year > level_budget:
         over = spend_this_year - level_budget
@@ -1158,6 +1191,33 @@ def _results(ss, shows, net_info, year, team, net):
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Bravo brand deals + casting (2026-11-03) ──────────────────────────────
+    if result.get("brand_rows") or result.get("cast_cost"):
+        _brand_html = "".join(
+            f'<div style="padding:3px 0;">{"✅" if r["landed"] else "❌"} <b>{r["brand"]}</b> on {r["show"]} '
+            f'({r["fit"]:.0%} fit): <span style="font-family:DM Mono,monospace;color:'
+            f'{SUCCESS if r["landed"] else DANGER};">{"+" if r["net_m"] >= 0 else "−"}${abs(r["net_m"]):.2f}M</span> '
+            f'{"sponsor money" if r["landed"] else "make-good cost (audience rejected the integration)"}</div>'
+            for r in result.get("brand_rows", []))
+        _cast_line = (f'<div style="padding:3px 0;">🎤 Casting fees this year: '
+                      f'<span style="font-family:DM Mono,monospace;color:{WARN};">−${result["cast_cost"]:.2f}M</span>. '
+                      "Each cast member's rating effect is already in that show's ad revenue below.</div>"
+                      if result.get("cast_cost") else "")
+        st.markdown(f'''
+        <div style="background:#12141a;border:1px solid #252836;border-radius:6px;padding:10px 14px;
+             margin:-8px 0 16px;font-size:14px;color:#ffffff;">
+          <b>🤝 Brand partnerships &amp; casting</b>{_brand_html}{_cast_line}
+        </div>''', unsafe_allow_html=True)
+        _landed = [r for r in result.get("brand_rows", []) if r["landed"]]
+        _flops = [r for r in result.get("brand_rows", []) if not r["landed"]]
+        if result.get("brand_rows"):
+            takeaway(f"{len(_landed)} of {len(result['brand_rows'])} brand deals landed, netting "
+                     f"<b>{'+' if result['brand_rev'] - result['brand_cost'] >= 0 else '−'}"
+                     f"${abs(result['brand_rev'] - result['brand_cost']):.2f}M</b>. "
+                     + ("Flops cost you make-goods: " + ", ".join(r['brand'] for r in _flops)
+                        + ". Lower-fit brands pay more because they fail more often." if _flops else
+                        "Every integration landed this year. That won't always happen, even with high fit."))
+
     # ── Sports rights contribution (Peacock only, held contracts only) ────────
     if result.get("sports_rev") or result.get("sports_cost"):
         sp_net_c = SUCCESS if (result["sports_rev"] - result["sports_cost"]) >= 0 else DANGER
@@ -1316,6 +1376,11 @@ def _results(ss, shows, net_info, year, team, net):
             # docstring), matching how Research fees already behave.
             this_year_ids = ss.get("greenlit_ids_this_year", set())
             _remove_greenlit_shows(ss, this_year_ids)
+            # Casting on shows being removed goes with them (fees stay spent,
+            # like production cost, but no longer hit the redone year's P&L).
+            for _sid in this_year_ids:
+                ss.get("cast_signings", {}).pop(str(_sid), None)
+            ss.get("cast_fees", {}).pop(str(year), None)
             ss.greenlit_ids_this_level = ss.get("greenlit_ids_this_level", set()) - this_year_ids
             ss.total_shows_greenlit    = max(0, ss.get("total_shows_greenlit", 0) - len(this_year_ids))
             ss.greenlit_ids_this_year  = set()
@@ -1660,6 +1725,7 @@ def _complete(ss, shows, net_info, team, net):
                         ss.greenlit_ids_this_year  = set()
                         ss.greenlit_ids_this_level = set()
                         ss.total_shows_greenlit    = 0
+                        reset_bravo_state(ss)
                         ss.year                 = 1
                         ss.level_budget         = None   # re-derived from next_net's budget_base
                         st.rerun()
@@ -1679,6 +1745,7 @@ def _complete(ss, shows, net_info, team, net):
             ss.greenlit_ids_this_year  = set()
             ss.greenlit_ids_this_level = set()
             ss.total_shows_greenlit    = 0
+            reset_bravo_state(ss)
             ss.submitted            = False
             ss.last_score           = None
             ss.year                 = 1
