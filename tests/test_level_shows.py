@@ -27,7 +27,7 @@ def test_bravo_level_is_bravo_only_with_no_true_crime():
 def test_oxygen_and_peacock_rosters():
     ss = _ss()
     assert {s.network for s in level_shows(ss, "oxygen")} == {"Oxygen"}
-    assert {s.network for s in level_shows(ss, "peacock")} == {"Oxygen", "Bravo", "Peacock"}
+    assert {s.network for s in level_shows(ss, "peacock")} == {"Peacock"}
 
 
 def test_level_shows_shares_show_objects_with_session_state():

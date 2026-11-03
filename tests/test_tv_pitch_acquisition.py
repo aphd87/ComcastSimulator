@@ -9,7 +9,7 @@ International Format) and an optional Brand Partnership subsidy.
 from streamlit.testing.v1 import AppTest
 
 from utils.game_state import MAX_NEW_SHOWS_PER_YEAR
-from utils.models import TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m
+from utils.models import TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m, pitches_for_network
 
 
 def _greenlight_app(greenlit_count: int = 0, budget: float = 500.0) -> AppTest:
@@ -46,10 +46,10 @@ def _greenlight_app(greenlit_count: int = 0, budget: float = 500.0) -> AppTest:
 def test_every_catalog_pitch_has_a_card_and_acquire_button():
     at = _greenlight_app()
     text = "\n".join(md.value for md in at.markdown)
-    for pitch in TV_PITCH_CATALOG.values():
+    for pitch in (TV_PITCH_CATALOG[k] for k in pitches_for_network("oxygen")):
         assert pitch["name"] in text
     labels = [b.label for b in at.button]
-    assert sum(1 for l in labels if l.startswith("Acquire ")) == len(TV_PITCH_CATALOG)
+    assert sum(1 for l in labels if l.startswith("Acquire ")) == len(pitches_for_network("oxygen"))
 
 
 def test_acquiring_a_pitch_adds_it_to_the_roster_and_deducts_budget():
@@ -101,7 +101,7 @@ def test_an_acquired_pitch_is_no_longer_offered_again():
 
     labels = [b.label for b in at.button]
     assert f"Acquire \"{TV_PITCH_CATALOG[key]['name']}\"" not in labels
-    assert sum(1 for l in labels if l.startswith("Acquire ")) == len(TV_PITCH_CATALOG) - 1
+    assert sum(1 for l in labels if l.startswith("Acquire ")) == len(pitches_for_network("oxygen")) - 1
 
 
 def test_acquire_buttons_disabled_once_greenlight_slots_are_full():
@@ -110,3 +110,12 @@ def test_acquire_buttons_disabled_once_greenlight_slots_are_full():
     assert not any(l.startswith("Acquire ") for l in labels)
     text = "\n".join(c.value for c in at.caption)
     assert "No greenlight slots left this year." in text
+
+
+def test_each_network_has_its_own_pitch_slate():
+    """2026-11-03: Bravo's marketplace feels like Bravo (no True Crime), and
+    every network's slate is distinct."""
+    ox, br, pk = (set(pitches_for_network(n)) for n in ("oxygen", "bravo", "peacock"))
+    assert ox and br and pk
+    assert not (ox & br or ox & pk or br & pk)
+    assert all(TV_PITCH_CATALOG[k]["genre"] != "True Crime" for k in br | pk)

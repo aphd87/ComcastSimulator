@@ -403,6 +403,108 @@ TV_PITCH_CATALOG = {
     },
 }
 
+# Network-specific pitch slates (2026-11-03, per user: "under acquire a
+# pitched show... it should be shows that feel like bravo"). The six
+# original pitches above stay Oxygen's marketplace; Bravo and Peacock get
+# their own. All titles, people and brands are fictional.
+TV_PITCH_CATALOG.update({
+    "uptown_listings": {
+        "name": "Uptown Listings", "genre": "Reality", "networks": ("bravo",),
+        "episodes": 12, "ep_cost_k": 720, "rating": 1.4, "ip_score": 66, "svod_appeal": 64,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "Rival luxury real estate brokers sell $20M penthouses and feud over the same "
+               "billionaire clients. A ready-made franchise if one broker breaks out.",
+    },
+    "wives_of_scottsdale": {
+        "name": "The Wives of Scottsdale", "genre": "Reality", "networks": ("bravo",),
+        "episodes": 16, "ep_cost_k": 820, "rating": 1.6, "ip_score": 72, "svod_appeal": 70,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "A new desert-city ensemble of wealthy friends, frenemies and charity-gala rivalries. "
+               "Proven Bravo formula, premium cost.",
+    },
+    "supper_club": {
+        "name": "Supper Club", "genre": "Reality", "networks": ("bravo",),
+        "episodes": 10, "ep_cost_k": 560, "rating": 1.1, "ip_score": 52, "svod_appeal": 58,
+        "origin": "Domestic Original",
+        "brand_partner": {"name": "Maison Verre Rosé", "rating_bonus": 0.1},
+        "bio": "Six restaurant-industry friends host rotating dinner parties where every course "
+               "comes with a confrontation. Cheap, social-media friendly.",
+    },
+    "last_call_kitchen": {
+        "name": "Last Call Kitchen", "genre": "Competition", "networks": ("bravo",),
+        "episodes": 14, "ep_cost_k": 780, "rating": 1.5, "ip_score": 64, "svod_appeal": 72,
+        "origin": "International Format", "format_source": "Australia", "brand_partner": None,
+        "bio": "Chefs run a pop-up restaurant overnight and the lowest-earning table goes home. "
+               "Adapted from an Australian hit with three renewals.",
+    },
+    "below_the_waterline": {
+        "name": "Below the Waterline", "genre": "Reality", "networks": ("bravo",),
+        "episodes": 12, "ep_cost_k": 680, "rating": 1.3, "ip_score": 60, "svod_appeal": 66,
+        "origin": "International Format", "format_source": "United Kingdom",
+        "brand_partner": {"name": "Atlas Luxury Resorts", "rating_bonus": 0.1},
+        "bio": "The crew of a charter superyacht serves impossible guests in the Mediterranean. "
+               "Tested overseas; a resort sponsor is already attached.",
+    },
+    "after_the_reunion": {
+        "name": "After the Reunion", "genre": "Talk", "networks": ("bravo",),
+        "episodes": 24, "ep_cost_k": 260, "rating": 0.9, "ip_score": 46, "svod_appeal": 50,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "A late-night aftershow where cast members from your other series settle scores "
+               "live. Cheap to make; lives off your bigger shows' fans.",
+    },
+    "the_fourth_estate": {
+        "name": "The Fourth Estate", "genre": "Drama", "networks": ("peacock",),
+        "episodes": 8, "ep_cost_k": 2600, "rating": 1.5, "ip_score": 74, "svod_appeal": 86,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "A newsroom thriller about a digital outlet breaking a story that could topple a "
+               "senator. Prestige bait with an expensive cast.",
+    },
+    "night_shift_comedy": {
+        "name": "Graveyard Shift", "genre": "Comedy", "networks": ("peacock",),
+        "episodes": 10, "ep_cost_k": 1300, "rating": 1.2, "ip_score": 60, "svod_appeal": 78,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "A workplace comedy set in a 24-hour hospital pharmacy. Bingeable and cheap for "
+               "scripted; the kind of show subscribers rewatch.",
+    },
+    "borderline_nordic": {
+        "name": "Borderline", "genre": "Drama", "networks": ("peacock",),
+        "episodes": 8, "ep_cost_k": 1900, "rating": 1.3, "ip_score": 68, "svod_appeal": 82,
+        "origin": "International Format", "format_source": "Denmark", "brand_partner": None,
+        "bio": "A cross-border murder investigation adapted from a Danish crime drama that "
+               "already sold to 40 countries. De-risked, at a licensing premium.",
+    },
+    "matchday": {
+        "name": "Matchday", "genre": "Drama", "networks": ("peacock",),
+        "episodes": 10, "ep_cost_k": 1700, "rating": 1.2, "ip_score": 62, "svod_appeal": 80,
+        "origin": "Domestic Original",
+        "brand_partner": {"name": "TitanFuel Energy", "rating_bonus": 0.1},
+        "bio": "A scripted drama inside a struggling pro soccer club. Pairs naturally with a sports "
+               "package to keep sports subscribers watching between seasons.",
+    },
+    "the_reboot": {
+        "name": "Saved by the Reboot", "genre": "Comedy", "networks": ("peacock",),
+        "episodes": 10, "ep_cost_k": 1500, "rating": 1.4, "ip_score": 70, "svod_appeal": 84,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "The cast of a fictional 90s sitcom reunites for a reboot nobody asked for. "
+               "Nostalgia sells subscriptions; the cast's fees are high.",
+    },
+    "cold_open_docs": {
+        "name": "Inside the Locker Room", "genre": "Reality", "networks": ("peacock",),
+        "episodes": 6, "ep_cost_k": 900, "rating": 1.0, "ip_score": 56, "svod_appeal": 74,
+        "origin": "Domestic Original", "brand_partner": None,
+        "bio": "An all-access sports docuseries following one team through a season. Cheap "
+               "companion content for sports subscribers.",
+    },
+})
+for _p in TV_PITCH_CATALOG.values():
+    _p.setdefault("networks", ("oxygen",))
+
+
+def pitches_for_network(net: str) -> list[str]:
+    """Pitch keys offered in this network's marketplace."""
+    return [k for k, p in TV_PITCH_CATALOG.items() if net in p["networks"]]
+
+
 def tv_pitch_acquisition_fee_m(pitch: dict) -> float:
     """Upfront acquisition fee, on top of the show's own season production
     cost -- what the student pays for the rights/format itself. International

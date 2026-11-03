@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from utils.models import (
     greenlight_linear, greenlight_svod, ltv_curve, HOURLY_INDEX, HOUR_LABELS, Show, MONTHS,
-    TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m, genre_demo,
+    TV_PITCH_CATALOG, tv_pitch_acquisition_fee_m, genre_demo, pitches_for_network,
 )
 from utils.charts import base_layout, queue_supplement, takeaway, ACCENT, ACCENT2, SUCCESS, DANGER, WARN, TEXT2
 from utils.data import BRAVO_SLATE, OXYGEN_SLATE, PEACOCK_SLATE
@@ -114,7 +114,7 @@ def render():
     # Competitor interest (2026-10-01, utils/pitch_market.py): contested pitches
     # a team passed on may be signed by the rival at the start of a new year.
     team_key = f"{ss.get('school', '')}||{ss.get('class_section', '')}||{ss.get('team_name', '')}"
-    still_open = [k for k in TV_PITCH_CATALOG if k not in ss.tv_pitches_acquired]
+    still_open = [k for k in pitches_for_network(ss.active_network) if k not in ss.tv_pitches_acquired]
     resolve_rival_signings(ss, team_key, ss.active_network, year, still_open)
     lost = ss.get("tv_pitches_lost", {})
     if lost:

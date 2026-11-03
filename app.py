@@ -936,14 +936,16 @@ else:
             "color": "#8e44ad",
             "objective": f"Level 3 — {LEVEL_START_YEAR['peacock']}–{_end_year['peacock']}. Launch Peacock.",
             "mission": (
-                f"It's {LEVEL_START_YEAR['peacock']}. Add SVOD to your portfolio. Peacock content uses "
-                "<b style='color:#ffffff;'>36-month amortization</b> and earns subscription LTV instead of ad revenue. "
-                "Linear revenue will keep eroding — Peacock is your hedge. "
-                "Hit a <b style='color:#ffffff;'>10% OCF margin</b> across all three networks to pass."
+                f"It's {LEVEL_START_YEAR['peacock']}. You now run Peacock: "
+                f"{len(PEACOCK_SLATE)} streaming originals and a ~${NETWORK_INFO['peacock']['budget_base']:.0f}M budget. "
+                "Peacock content uses <b style='color:#ffffff;'>36-month amortization</b>, so only a third of each "
+                "season's cost hits this year. Your big call is the mix: sports rights bring a spike of subscribers, "
+                "but they cost more than they earn unless your originals keep those subscribers around. "
+                "Hit a <b style='color:#ffffff;'>10% OCF margin</b> to pass."
             ),
             "steps": [
                 "💰 <b>Financing</b> — check the linear-vs-streaming economics chart",
-                "🔄 <b>Renewal</b> — decide which linear shows to wind down",
+                "🔄 <b>Renewal</b> — decide which originals earn another season",
                 "🏈 <b>Sports Rights</b> — bid on NFL, Premier League, or Olympics packages (multi-year contracts)",
                 "🎬 <b>Greenlighting</b> <i>(optional)</i> — originals that keep sports-driven subscribers from churning",
                 "📊 <b>Why? boxes</b> <i>(optional)</i> — collapsed charts under each decision explain the mechanics",
