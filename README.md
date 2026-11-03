@@ -20,7 +20,7 @@ The Word files are generated: edit `docs/build_student_guides.py` or `docs/build
 
 This tool ships as a business case used by many schools. Every school's scores, Pitch Board posts, and leaderboards are kept separate by **school + class section**, so one hosted copy can serve many schools, or each school can run its own.
 
-- **AI is optional (off by default).** The only AI feature is an optional **AI Grade** on a team's own TV show concept (Greenlighting → Show Concept Inputs), added 2026-11-03. It appears only if this deployment's Streamlit Secrets contain `ANTHROPIC_API_KEY = "..."`; without it the app needs no API key. Feedback only, never scored; 5 grades per team per simulated year; uses Claude Opus 5.5 at low effort, roughly a few cents per grade. The **Peer Pitch Board** (below) works either way.
+- **No AI features and no API keys.** The Peer Pitch Board (below) is how teams see each other's pitches. (An opt-in AI concept grade was tried on 2026-11-03 and removed the same day.)
 - **Settings live in the deployment's Streamlit Secrets** (Settings → Secrets on Streamlit Cloud, or `.streamlit/secrets.toml` locally — **never commit that file**).
 
 ## Saving scores — the database (`DATABASE_URL`)
@@ -84,7 +84,6 @@ Official scores are each team's **first submission**. Views by class, school, or
 INSTRUCTOR_PASSWORD = "choose-something-long"
 ```
 
-**`ANTHROPIC_API_KEY`** — optional; turns on the AI Grade for teams' own TV show concepts (see above). Leave it out for no AI.
 
 **`YEARS_PER_LEVEL`** — how many in-game years each TV network level runs. Defaults to **4**; any whole number from 2–8 is accepted (out-of-range values are clamped). Every network's era shifts together, e.g. at 4 years: Oxygen 2012–2015, Bravo 2016–2019, Peacock 2020–2023.
 

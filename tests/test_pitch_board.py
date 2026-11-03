@@ -109,11 +109,11 @@ def test_simulating_a_film_posts_its_logline_and_result():
     assert isinstance(post["details"]["npv"], float)
 
 
-def test_ai_is_opt_in_only():
-    """2026-10-01 removed all AI; 2026-11-03 brought back ONE opt-in feature
-    (TV concept grade). AI stays out of Movies, and the TV grade must be gated
-    on a configured API key so a deployment without one has no AI at all."""
+def test_no_ai_features_remain():
+    """No AI anywhere (2026-10-01; the opt-in TV concept grade tried on
+    2026-11-03 was removed the same day at the user's request)."""
     import pathlib
-    assert "ai_grading" not in pathlib.Path("app_pages/movies.py").read_text(encoding="utf-8")
-    gl = pathlib.Path("app_pages/greenlight.py").read_text(encoding="utf-8")
-    assert "if not ai.is_enabled():" in gl
+    for f in ["app_pages/greenlight.py", "app_pages/movies.py"]:
+        src = pathlib.Path(f).read_text(encoding="utf-8")
+        assert "ai_grading" not in src and "AI Grade" not in src
+    assert not pathlib.Path("utils/ai_grading.py").exists()

@@ -287,8 +287,6 @@ def render():
         """, unsafe_allow_html=True)
         return
 
-    _render_ai_grade(ss, year, show_name, genre, eps, ep_cost, rating, mkt_spend, air_month, pitch)
-
     # ── Calculate ─────────────────────────────────────────────────────────────
     linear = greenlight_linear(eps, ep_cost, rating, mkt_spend, year)
     svod   = greenlight_svod(eps, ep_cost, rating, appeal, mkt_spend, year)
@@ -620,72 +618,3 @@ def render():
 
     queue_supplement(f"Marketing ROI: Linear vs. SVOD — \"{show_name}\"", _render_marketing_roi,
                      when_to_use="setting this concept's Marketing Budget; it shows where extra marketing stops paying off.")
-
-
-def _render_ai_grade(ss, year, show_name, genre, eps, ep_cost, rating, mkt_spend, air_month, pitch) -> None:
-    """Optional AI grade on the concept above (2026-11-03). Only shown when the
-    deployment has an Anthropic API key in Secrets (see utils/ai_grading.py).
-    Feedback only: never feeds the score."""
-    from utils import ai_grading as ai
-    if not ai.is_enabled():
-        return
-    net = ss.get("active_network", "oxygen")
-    st.markdown('<div class="section-title">🤖 AI Grade (optional)</div>', unsafe_allow_html=True)
-    used = ss.setdefault("ai_grades_used", {}).get(f"{net}_{year}", 0)
-    left = ai.MAX_GRADES_PER_YEAR - used
-    st.markdown(
-        '<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
-        'Get a letter grade and feedback on your concept from an AI acting as a network programming '
-        'executive. It reads your pitch and checks it against this network\'s brand, the hook, the audience, '
-        'and whether your cost per episode is believable for the rating you claim. '
-        f'<b>Feedback only: it does not affect your score.</b> {max(left, 0)} of '
-        f'{ai.MAX_GRADES_PER_YEAR} grades left this year.</div>', unsafe_allow_html=True)
-
-    concept = {"name": show_name.strip(), "genre": genre, "episodes": int(eps), "ep_cost_k": int(ep_cost),
-               "rating": float(rating), "mkt_m": float(mkt_spend), "air_month": int(air_month),
-               "pitch": (pitch or "").strip()}
-    key = ai.concept_key(net, concept)
-    cache = ss.setdefault("ai_grade_cache", {})
-    if len(concept["pitch"]) < 20:
-        st.caption("Write at least a sentence in your pitch above to get a grade.")
-    elif key not in cache:
-        if left <= 0:
-            st.caption("You've used this year's AI grades. You get more next year.")
-        elif st.button("🤖 Grade My Concept", key="gl_ai_grade"):
-            with st.spinner("Grading your pitch..."):
-                result = ai.grade_concept(net, concept)
-            if "error" not in result:
-                cache[key] = result
-                ss.ai_grades_used[f"{net}_{year}"] = used + 1
-            else:
-                st.error(result["error"])
-    g = cache.get(key)
-    if not g:
-        return
-    color = "#66bb6a" if g["score"] >= 80 else ("#ffa726" if g["score"] >= 65 else "#ef5350")
-    parts = "".join(
-        f'<div style="text-align:center;"><div style="font-size:12px;">{lbl}</div>'
-        f'<div style="font-size:18px;font-family:DM Mono,monospace;">{g[k]}/25</div></div>'
-        for lbl, k in (("Network fit", "network_fit"), ("Hook", "hook"),
-                       ("Audience", "audience"), ("Economics", "economics")))
-    lis = lambda items: "".join(f"<li>{st_escape(x)}</li>" for x in items)
-    st.markdown(f"""
-    <div style="background:#1a1d26;border:1px solid #252836;border-left:4px solid {color};border-radius:8px;
-         padding:14px 18px;margin-bottom:12px;color:#ffffff;font-size:14px;">
-      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
-        <div style="font-size:40px;font-family:DM Serif Display,serif;color:{color};">{st_escape(g['letter_grade'])}</div>
-        <div style="font-size:16px;">{g['score']}/100</div>
-        <div style="display:flex;gap:18px;">{parts}</div>
-      </div>
-      <div style="margin-top:8px;"><b>Strengths</b><ul style="margin:2px 0 6px 18px;">{lis(g['strengths'])}</ul>
-      <b>Risks</b><ul style="margin:2px 0 6px 18px;">{lis(g['risks'])}</ul>
-      <b>One fix:</b> {st_escape(g['one_fix'])}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.caption("Change your inputs or pitch and grade again to see if the fix helps. The grade is feedback "
-               "only; your real result comes from the simulation.")
-
-
-def st_escape(text) -> str:
-    import html
-    return html.escape(str(text))

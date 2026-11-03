@@ -8,6 +8,8 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+**AI Grade removed (2026-11-03, end of day, per user: "scrap the AI Grade pitch shows thing across all levels").** `utils/ai_grading.py`, the Greenlighting panel, its tests, the `anthropic` dependency and the README/Secrets docs are gone; `test_no_ai_features_remain` is back. No AI anywhere, no API keys.
+
 ## 2026-11-03 (latest) — Lower-tier sports, film licensing, instructor metrics + archive/clear
 
 - **Sports tiers**: College Football Conference (Value, ~$14M), Pro Golf Tour (Niche, ~$8M), Women's Pro Soccer (Emerging, ~$5M, direct revenue +20%/yr held via `growth_rate`). Generic packages. Tier table + takeaway in the Sports Rights section. Term text now 4-7 yrs. The sparsity test now checks each league is re-auctioned < half of years (six leagues mean some auction most years).
