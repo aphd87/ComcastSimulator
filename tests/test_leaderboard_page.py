@@ -145,3 +145,39 @@ def test_leaderboard_renders_class_awards_with_no_exceptions(monkeypatch, tmp_pa
     assert "Highest Revenue" in text
     assert "$800M" in text
     assert "Most Emmy Recognition" in text
+
+
+# ── Instructor tools (2026-11-03) ────────────────────────────────────────────
+def test_instructor_clear_archives_one_class(monkeypatch, tmp_path):
+    for name, attr in (("leaderboard.json", "LEADERBOARD_FILE"), ("progress.json", "PROGRESS_FILE"),
+                       ("pitch_board.json", "PITCH_BOARD_FILE")):
+        monkeypatch.setattr(gs, attr, tmp_path / name)
+    import utils.storage as storage
+    for cls in ("A", "A", "B"):
+        storage.append_entry(gs.LEADERBOARD_FILE, {"team_name": "t", "school": "UVA", "class_section": cls,
+                                                   "network": "oxygen", "attempt": 1, "score": 50, "passed": True,
+                                                   "is_official": True, "timestamp": 0})
+    assert [s[:2] for s in gs.class_scopes()] == [("UVA", "A"), ("UVA", "B")]
+    assert len(gs.class_records("UVA", "A")["leaderboard"]) == 2
+    moved = gs.archive_and_clear_class("UVA", "A")
+    assert moved == {"leaderboard": 2, "progress": 0, "pitches": 0}
+    assert [e["class_section"] for e in gs.load_leaderboard()] == ["B"]
+    assert (tmp_path / "leaderboard_archive.json").exists()
+
+
+def test_instructor_tools_locked_without_correct_password(monkeypatch):
+    monkeypatch.setattr(gs, "instructor_password", lambda: "secret123")
+    def script():
+        import sys
+        import streamlit as st
+        sys.path.insert(0, ".")
+        for k, v in {"team_name": "", "registered": False, "school": "", "class_section": ""}.items():
+            st.session_state.setdefault(k, v)
+        from app_pages.leaderboard import _render_instructor_tools
+        _render_instructor_tools()
+    at = AppTest.from_function(script, default_timeout=30)
+    at.run()
+    assert not at.exception, list(at.exception)
+    at.text_input(key="instructor_pw").set_value("wrong").run()
+    assert any("Wrong password" in e.value for e in at.error)
+    assert not any(b.key == "instructor_clear" for b in at.button)

@@ -78,6 +78,14 @@ Official scores are each team's **first submission**. Views by class, school, or
 
 ## Instructor settings — per-deployment Secrets
 
+**`INSTRUCTOR_PASSWORD`** — unlocks **🔒 Instructor tools** at the bottom of the Leaderboard page: download one class's full records (scores with every metric, progress, Pitch Board posts) as JSON, and **Archive & clear** a class between semesters. Clearing moves that class's rows into an archive (the `slate_archive` database table, or `*_archive.json` files without a database); nothing is destroyed, and other classes are untouched. Without this secret the tools stay hidden.
+
+```toml
+INSTRUCTOR_PASSWORD = "choose-something-long"
+```
+
+**`ANTHROPIC_API_KEY`** — optional; turns on the AI Grade for teams' own TV show concepts (see above). Leave it out for no AI.
+
 **`YEARS_PER_LEVEL`** — how many in-game years each TV network level runs. Defaults to **4**; any whole number from 2–8 is accepted (out-of-range values are clamped). Every network's era shifts together, e.g. at 4 years: Oxygen 2012–2015, Bravo 2016–2019, Peacock 2020–2023.
 
 ```toml

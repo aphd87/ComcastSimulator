@@ -147,6 +147,21 @@ def _ensure_schema(eng) -> None:
         ))
         # Peer Pitch Board (2026-10-01) and in-progress leaderboard
         # (2026-10-14): one row per post / progress update, append-only.
+        # Instructor archive (2026-11-03): rows moved out by "Archive & clear
+        # a class" land here first, so clearing never destroys data.
+        c.execute(text(
+            "CREATE TABLE IF NOT EXISTS slate_archive ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " archived_at DOUBLE PRECISION NOT NULL,"
+            " source_table TEXT NOT NULL,"
+            " payload TEXT NOT NULL)"
+            if eng.dialect.name == "sqlite" else
+            "CREATE TABLE IF NOT EXISTS slate_archive ("
+            " id BIGSERIAL PRIMARY KEY,"
+            " archived_at DOUBLE PRECISION NOT NULL,"
+            " source_table TEXT NOT NULL,"
+            " payload TEXT NOT NULL)"
+        ))
         for table in ("slate_pitches", "slate_progress"):
             c.execute(text(
                 f"CREATE TABLE IF NOT EXISTS {table} ("
@@ -295,3 +310,43 @@ def append_progress(file_path: Path, entry: dict) -> None:
 def load_progress(file_path: Path) -> list[dict]:
     """All progress updates, oldest first."""
     return _load_rows("slate_progress", file_path)
+
+
+# ── Instructor: archive & clear a class (2026-11-03) ─────────────────────────
+ARCHIVABLE = {"slate_leaderboard", "slate_pitches", "slate_progress"}
+
+
+def archive_and_remove(table: str, file_path: Path, predicate) -> list[dict]:
+    """Move every row for which predicate(row) is True out of `table` into
+    the archive (slate_archive on the database backend; <name>_archive.json
+    next to the file otherwise), in one transaction / one locked write.
+    Returns the moved rows. Nothing is destroyed: the archive keeps them."""
+    if table not in ARCHIVABLE:
+        raise ValueError(table)
+    now = time.time()
+    eng = _db()
+    if eng is not None:
+        from sqlalchemy import text
+        with eng.begin() as c:
+            rows = c.execute(text(f"SELECT id, payload FROM {table} ORDER BY id")).all()
+            moved = [(rid, json.loads(pl)) for rid, pl in rows if predicate(json.loads(pl))]
+            for rid, entry in moved:
+                c.execute(text("INSERT INTO slate_archive (archived_at, source_table, payload) "
+                               "VALUES (:t, :s, :p)"), {"t": now, "s": table, "p": json.dumps(entry)})
+                c.execute(text(f"DELETE FROM {table} WHERE id = :i"), {"i": rid})
+        return [e for _, e in moved]
+    archive_path = file_path.with_name(f"{file_path.stem}_archive.json")
+    with _LOCK:
+        rows = _read_json(file_path, [], strict=True)
+        if not isinstance(rows, list):
+            raise StorageError(f"{file_path.name} does not hold a list; nothing was changed.")
+        moved = [r for r in rows if predicate(r)]
+        if not moved:
+            return []
+        archive = _read_json(archive_path, [], strict=True)
+        if not isinstance(archive, list):
+            raise StorageError(f"{archive_path.name} does not hold a list; nothing was changed.")
+        archive.extend({"archived_at": now, "entry": r} for r in moved)
+        _write_json_atomic(archive_path, archive, indent=2)   # archive first, then remove
+        _write_json_atomic(file_path, [r for r in rows if not predicate(r)], indent=2)
+    return moved

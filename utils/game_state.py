@@ -1074,3 +1074,41 @@ THEORY_CONTENT = {
         ),
     },
 }
+
+
+
+# ── Instructor tools (2026-11-03) ────────────────────────────────────────────
+def instructor_password() -> str:
+    try:
+        return str(st.secrets.get("INSTRUCTOR_PASSWORD", "") or "")
+    except Exception:
+        return ""
+
+
+def class_scopes() -> list[tuple[str, str, int]]:
+    """(school, class_section, leaderboard rows) for every class with data."""
+    counts: dict[tuple[str, str], int] = {}
+    for e in load_leaderboard():
+        k = (e.get("school", ""), e.get("class_section", ""))
+        counts[k] = counts.get(k, 0) + 1
+    for e in _storage.load_progress(PROGRESS_FILE) + _storage.load_pitches(PITCH_BOARD_FILE):
+        counts.setdefault((e.get("school", ""), e.get("class_section", "")), 0)
+    return sorted((s, c, n) for (s, c), n in counts.items())
+
+
+def class_records(school: str, class_section: str) -> dict:
+    match = lambda e: e.get("school", "") == school and e.get("class_section", "") == class_section
+    return {"leaderboard": [e for e in load_leaderboard() if match(e)],
+            "progress":    [e for e in _storage.load_progress(PROGRESS_FILE) if match(e)],
+            "pitches":     [e for e in _storage.load_pitches(PITCH_BOARD_FILE) if match(e)]}
+
+
+def archive_and_clear_class(school: str, class_section: str) -> dict:
+    """Archive, then remove, one class's scores, progress and pitch posts.
+    Exact school + class match only; other classes are untouched."""
+    match = lambda e: e.get("school", "") == school and e.get("class_section", "") == class_section
+    return {
+        "leaderboard": len(_storage.archive_and_remove("slate_leaderboard", LEADERBOARD_FILE, match)),
+        "progress":    len(_storage.archive_and_remove("slate_progress", PROGRESS_FILE, match)),
+        "pitches":     len(_storage.archive_and_remove("slate_pitches", PITCH_BOARD_FILE, match)),
+    }

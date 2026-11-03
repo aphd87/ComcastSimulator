@@ -8,6 +8,14 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## 2026-11-03 (latest) — Lower-tier sports, film licensing, instructor metrics + archive/clear
+
+- **Sports tiers**: College Football Conference (Value, ~$14M), Pro Golf Tour (Niche, ~$8M), Women's Pro Soccer (Emerging, ~$5M, direct revenue +20%/yr held via `growth_rate`). Generic packages. Tier table + takeaway in the Sports Rights section. Term text now 4-7 yrs. The sparsity test now checks each league is re-auctioned < half of years (six leagues mean some auction most years).
+- **Film licensing** (`utils/film_licensing.py`, UI `app_pages/film_licensing.py`, Peacock): 3 fictional films offered per level year, sealed first-price bid vs. one rival streamer; true annual value hidden until signed (critics + box office + seeded noise); fee and revenue every year of the term; 50% of license fees count toward sports retention spend (content-mix lever). Per-level state reset via `utils/level_extras.py` (also covers Bravo deals); Redo drops licenses signed that year.
+- **Leaderboard metrics**: `compute_level_notables` adds total_ocf, avg_margin, cancellations, brand deals/landed/net, casting spend, sports net, film net; the CSV export adds those plus the five score parts.
+- **Instructor tools** (Leaderboard page, `INSTRUCTOR_PASSWORD` secret): per-class JSON download and Archive & clear (`utils/storage.py::archive_and_remove` → `slate_archive` table or `*_archive.json`; archive written before removal). Live team state (`slate_team_state`) isn't cleared; it's keyed per team and harmless.
+- 589 tests passing. No browser verification.
+
 ## 2026-11-03 (later) — One network per level, Bravo deals & casting, network pitches, optional AI grade
 
 - **Each level is its own network** (`utils/game_state.py::level_shows`). Bravo = Bravo's 20 shows (no Oxygen True Crime); Peacock = Peacock originals only, so its tension is sports rights vs. originals in one ~$150M budget. Previously levels stacked (Bravo 40 shows, Peacock 50). Baseline margins: Bravo 44%→36% (was 46%→37% stacked); Peacock-only ~67% before sports (was 39% stacked) — consistent with Oxygen's ~80% vs. 12% target; pass thresholds were never the binding constraint, scoring is. Mission Briefs rewritten; schedule/amortization text names only the windows the slate uses. Forecast page (10-year corporate what-if) intentionally still models the Oxygen→Bravo→Peacock phases.

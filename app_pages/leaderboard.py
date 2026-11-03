@@ -638,6 +638,8 @@ def render():
         unsafe_allow_html=True)
     _render_school_comparison(all_nets, all_infos)
 
+    _render_instructor_tools()
+
     st.divider()
 
     # ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────
@@ -689,3 +691,59 @@ def render():
         )
     else:
         st.markdown('<div style="color:#ffffff;font-family:DM Mono,monospace;font-size:15px;">No submissions recorded yet.</div>', unsafe_allow_html=True)
+
+
+def _render_instructor_tools() -> None:
+    """Instructor-only: download a class's records and archive & clear them
+    (2026-11-03, per user: "how are these cleared?"). Locked behind the
+    INSTRUCTOR_PASSWORD secret; clearing moves rows to an archive, it never
+    destroys them."""
+    import hmac
+    import json
+    from utils.game_state import (archive_and_clear_class, class_records, class_scopes,
+                                  instructor_password)
+    st.divider()
+    with st.expander("🔒 Instructor tools", expanded=False):
+        pw = instructor_password()
+        if not pw:
+            st.markdown(
+                '<div style="font-size:14px;color:#ffffff;">To turn these tools on, add '
+                '<code>INSTRUCTOR_PASSWORD = "..."</code> to this app\'s Streamlit Secrets '
+                '(Manage app → Settings → Secrets). They let you download a class\'s scores and '
+                'archive & clear a class between semesters.</div>', unsafe_allow_html=True)
+            return
+        entered = st.text_input("Instructor password", type="password", key="instructor_pw")
+        if not entered:
+            return
+        if not hmac.compare_digest(entered, pw):
+            st.error("Wrong password.")
+            return
+        scopes = class_scopes()
+        if not scopes:
+            st.caption("No class data recorded yet.")
+            return
+        labels = {f"{s or '(no school)'} · {c or '(no class)'} — {n} score row{'s' if n != 1 else ''}": (s, c)
+                  for s, c, n in scopes}
+        school, cls = labels[st.selectbox("Class", list(labels), key="instructor_class")]
+        recs = class_records(school, cls)
+        st.markdown(
+            f'<div style="font-size:14px;color:#ffffff;margin:6px 0;">This class has '
+            f'<b>{len(recs["leaderboard"])}</b> score submissions (TV and Movies), '
+            f'<b>{len(recs["progress"])}</b> progress updates and <b>{len(recs["pitches"])}</b> '
+            f'Pitch Board posts.</div>', unsafe_allow_html=True)
+        st.download_button("⬇️ Download this class's full records (JSON)",
+                           json.dumps({"school": school, "class_section": cls, **recs}, indent=2),
+                           file_name=f"slate_{(school + '_' + cls).replace(' ', '_')[:60]}.json",
+                           mime="application/json", key="instructor_download")
+        st.markdown(
+            '<div style="font-size:14px;color:#ffffff;margin:10px 0 4px;"><b>Archive &amp; clear this class.</b> '
+            'Removes its scores, progress and pitches from every board, so the next semester starts clean. '
+            'Rows are moved to an archive (the <code>slate_archive</code> database table, or '
+            '<code>*_archive.json</code> files without a database), not deleted. Download the records '
+            'above first. Other classes are not affected.</div>', unsafe_allow_html=True)
+        ok = st.checkbox(f"I've downloaded the records and want to clear {school} · {cls}",
+                         key="instructor_confirm")
+        if st.button("🗄️ Archive & clear this class", disabled=not ok, key="instructor_clear"):
+            moved = archive_and_clear_class(school, cls)
+            st.success(f"Archived and cleared {moved['leaderboard']} scores, {moved['progress']} progress "
+                       f"updates and {moved['pitches']} pitches for {school} · {cls}.")

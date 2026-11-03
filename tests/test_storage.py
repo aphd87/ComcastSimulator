@@ -101,3 +101,40 @@ def test_postgres_urls_are_pinned_to_the_installed_psycopg2_driver():
     assert storage.normalize_url("postgres://u:p@h/db").startswith("postgresql+psycopg2://")
     assert storage.normalize_url("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
     assert storage.normalize_url("sqlite:///x.db") == "sqlite:///x.db"
+
+
+# ── Instructor archive & clear (2026-11-03) ──────────────────────────────────
+def _seed(path):
+    for school, cls in (("UVA", "A"), ("UVA", "A"), ("UVA", "B"), ("Other", "A")):
+        storage.append_entry(path, {"school": school, "class_section": cls, "team_name": "t"})
+
+
+def _is_uva_a(e):
+    return e.get("school") == "UVA" and e.get("class_section") == "A"
+
+
+def test_archive_and_remove_file_backend_keeps_archive(tmp_path):
+    path = tmp_path / "leaderboard.json"
+    _seed(path)
+    moved = storage.archive_and_remove("slate_leaderboard", path, _is_uva_a)
+    assert len(moved) == 2
+    left = storage.load_entries(path)
+    assert len(left) == 2 and not any(_is_uva_a(e) for e in left)
+    archive = json.loads((tmp_path / "leaderboard_archive.json").read_text())
+    assert [a["entry"]["class_section"] for a in archive] == ["A", "A"]
+
+
+def test_archive_and_remove_database_backend_keeps_archive(sqlite_db, tmp_path):
+    path = tmp_path / "unused.json"
+    _seed(path)
+    assert len(storage.archive_and_remove("slate_leaderboard", path, _is_uva_a)) == 2
+    assert len(storage.load_entries(path)) == 2
+    from sqlalchemy import text
+    with storage._db().connect() as c:
+        n = c.execute(text("SELECT COUNT(*) FROM slate_archive WHERE source_table = 'slate_leaderboard'")).scalar()
+    assert n == 2
+
+
+def test_archive_rejects_unknown_tables(tmp_path):
+    with pytest.raises(ValueError):
+        storage.archive_and_remove("slate_team_state", tmp_path / "x.json", lambda e: True)
