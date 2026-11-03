@@ -75,7 +75,7 @@ def test_simulate_books_a_held_film_license():
     next(b for b in at.button if "Simulate Year" in b.label).click().run()
     assert not at.exception, list(at.exception)
     r = at.session_state["yearly_log"][-1]
-    assert r["film_cost"] == 12.0 and r["film_rev"] == true_value_m("starfall")
+    assert r["film_cost"] == 12.0 and r["film_rev"] == true_value_m("starfall", "Film Team")
 
 
 def test_hidden_values_differ_by_team():
