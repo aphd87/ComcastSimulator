@@ -14,6 +14,7 @@ _BOX = ('background:#1a1d26;border:1px solid #252836;border-radius:6px;padding:1
 
 def render(ss, year: int, sec_num: int) -> None:
     ensure_state(ss)
+    _team = ss.get("team_name", "")
     st.markdown(f'<div class="section-title decision">{sec_num} · 🎞️ Film Licensing '
                 '<span style="font-size:14px;color:#ffffff;">(optional)</span></div>', unsafe_allow_html=True)
     st.markdown(f"""
@@ -34,9 +35,9 @@ def render(ss, year: int, sec_num: int) -> None:
     holding = held(ss, year)
     if holding:
         rows = [{"Film": FILM_CATALOG[l["film"]]["title"], "Years": f"{l['start']}–{l['end']}",
-                 "Fee / yr": f"${l['annual_cost_m']:.2f}M", "Earns / yr": f"${true_value_m(l['film']):.2f}M",
-                 "Net / yr": f"{'+' if true_value_m(l['film']) >= l['annual_cost_m'] else '−'}"
-                             f"${abs(true_value_m(l['film']) - l['annual_cost_m']):.2f}M"} for l in holding]
+                 "Fee / yr": f"${l['annual_cost_m']:.2f}M", "Earns / yr": f"${true_value_m(l['film'], _team):.2f}M",
+                 "Net / yr": f"{'+' if true_value_m(l['film'], _team) >= l['annual_cost_m'] else '−'}"
+                             f"${abs(true_value_m(l['film'], _team) - l['annual_cost_m']):.2f}M"} for l in holding]
         st.markdown('<div style="font-size:14px;color:#ffffff;margin-bottom:6px;"><b>Your film library '
                     'this year</b> (level years)</div>', unsafe_allow_html=True)
         html_table(pd.DataFrame(rows))
@@ -65,7 +66,7 @@ def render(ss, year: int, sec_num: int) -> None:
             results = {}
             for key in offers:
                 bid = float(ss.get(f"film_bid_{year}_{key}", 0.0))
-                r = resolve_film_bid(key, bid)
+                r = resolve_film_bid(key, bid, _team)
                 results[key] = r
                 if r["won"]:
                     term = FILM_CATALOG[key]["term"]
@@ -81,11 +82,11 @@ def render(ss, year: int, sec_num: int) -> None:
         rows.append({"Film": f["title"], "Your bid": f"${r['bid_m']:.2f}M" if r["bid_m"] else "passed",
                      "Rival": f"{r['rival']} ${r['rival_bid_m']:.2f}M",
                      "Result": ("✅ Licensed" if r["won"] else ("❌ Outbid" if r["bid_m"] else "—")),
-                     "Actually earns / yr": f"${true_value_m(key):.2f}M" if r["won"] else "hidden"})
+                     "Actually earns / yr": f"${true_value_m(key, _team):.2f}M" if r["won"] else "hidden"})
     html_table(pd.DataFrame(rows))
     won = [k for k, r in log.items() if r["won"]]
     if won:
-        net = sum(true_value_m(k) - log[k]["bid_m"] for k in won)
+        net = sum(true_value_m(k, _team) - log[k]["bid_m"] for k in won)
         takeaway(f"You licensed {len(won)} film{'s' if len(won) != 1 else ''}, netting "
                  f"<b>{'+' if net >= 0 else '−'}${abs(net):.2f}M a year</b> before the sports-retention boost. "
                  + ("Paying more than a film earns is the winner's curse: bid what it's worth, not what wins."

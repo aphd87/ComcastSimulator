@@ -746,7 +746,7 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
             for lg in pending:
                 bid = float(ss.get(f"sports_bid_{year}_{lg}", 0.0))
                 idx, start, end = cycle_for_year(lg, calendar_year, anchor)
-                rivals = draw_rival_bids(lg, idx)
+                rivals = draw_rival_bids(lg, idx, ss.get("team_name", ""))
                 result = resolve_auction(bid, rivals)
                 ss.sports_bid_log[year][lg] = result
                 if result["won_by_team"]:

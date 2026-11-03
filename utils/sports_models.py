@@ -172,12 +172,14 @@ def leagues_up_for_bid(year: int, anchor_year: int) -> list[str]:
 
 
 # ── Rival bidding & auction resolution ──────────────────────────────────────
-def draw_rival_bids(league_key: str, cycle_index: int) -> list[dict]:
-    """Seeded, team-independent rival bids for one auction cycle — every
-    team in a deployment sees the same rivals bidding the same amounts for
-    the same cycle, same reasoning as _seeded_term. Not every rival
+def draw_rival_bids(league_key: str, cycle_index: int, team: str = "") -> list[dict]:
+    """Seeded rival bids for one auction cycle (per team since 2026-11-03; with
+    team="" every team would see the same rivals bidding the same amounts for
+    the same cycle). Not every rival
     participates every cycle."""
-    seed = (stable_seed(league_key) + cycle_index * 104729 + 11) % (2 ** 31)
+    # Per-team since 2026-11-03: one team's auction results can't be shared
+    # with the class as the answer key (team="" keeps the old world).
+    seed = (stable_seed(league_key + ("|" + team if team else "")) + cycle_index * 104729 + 11) % (2 ** 31)
     rng  = np.random.default_rng(seed)
     base = SPORTS_LEAGUES[league_key]["base_rights_cost_m"]
     lo, hi = RIVAL_BID_MULT_RANGE

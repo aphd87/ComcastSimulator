@@ -76,3 +76,12 @@ def test_simulate_books_a_held_film_license():
     assert not at.exception, list(at.exception)
     r = at.session_state["yearly_log"][-1]
     assert r["film_cost"] == 12.0 and r["film_rev"] == true_value_m("starfall")
+
+
+def test_hidden_values_differ_by_team():
+    """2026-11-03: one team's results aren't the answer key for another."""
+    from utils.sports_models import draw_rival_bids
+    assert any(true_value_m(k, "Team A") != true_value_m(k, "Team B") for k in FILM_CATALOG)
+    assert any(rival_bid_m(k, "Team A") != rival_bid_m(k, "Team B") for k in FILM_CATALOG)
+    assert draw_rival_bids("Premier League", 0, "Team A") != draw_rival_bids("Premier League", 0, "Team B")
+    assert true_value_m("starfall", "Team A") == true_value_m("starfall", "Team A")

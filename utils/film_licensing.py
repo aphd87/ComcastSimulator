@@ -18,8 +18,9 @@ Economics:
   originals spend that sports retention needs), at half the effect of
   originals.
 
-Team-independent draws (same world for every team, like sports auctions).
-All films are fictional.
+Draws are seeded PER TEAM (2026-11-03): a film's true value and the rival's
+bid differ by team, so one team can't learn them (or scout with a throwaway
+team name) and hand the answers to the class. All films are fictional.
 """
 from __future__ import annotations
 
@@ -68,23 +69,23 @@ def films_offered(year: int) -> list[str]:
     return [keys[(start + i) % len(keys)] for i in range(OFFERS_PER_YEAR)]
 
 
-def true_value_m(film_key: str) -> float:
+def true_value_m(film_key: str, team: str = "") -> float:
     """Annual subscription revenue the film actually earns (hidden until signed)."""
     f = FILM_CATALOG[film_key]
     quality = 0.55 + f["critics"] / 100 * 0.6 + min(f["box_office_m"], 600) / 600 * 0.25
-    noise = 0.8 + 0.4 * _unit("filmvalue", film_key)
+    noise = 0.8 + 0.4 * _unit("filmvalue", team, film_key)
     return round(f["ask_m"] * quality * noise, 2)
 
 
-def rival_bid_m(film_key: str) -> tuple[float, str]:
+def rival_bid_m(film_key: str, team: str = "") -> tuple[float, str]:
     f = FILM_CATALOG[film_key]
-    bid = f["ask_m"] * (0.8 + 0.55 * _unit("filmrival", film_key))
-    rival = ["Netflix", "Max", "Prime Video", "Paramount+"][int(_unit("filmrivalname", film_key) * 4)]
+    bid = f["ask_m"] * (0.8 + 0.55 * _unit("filmrival", team, film_key))
+    rival = ["Netflix", "Max", "Prime Video", "Paramount+"][int(_unit("filmrivalname", team, film_key) * 4)]
     return round(bid, 2), rival
 
 
-def resolve_film_bid(film_key: str, bid_m: float) -> dict:
-    rb, rival = rival_bid_m(film_key)
+def resolve_film_bid(film_key: str, bid_m: float, team: str = "") -> dict:
+    rb, rival = rival_bid_m(film_key, team)
     won = bid_m > 0 and bid_m >= rb
     return {"film": film_key, "bid_m": round(bid_m, 2), "rival": rival, "rival_bid_m": rb, "won": won}
 
@@ -109,7 +110,7 @@ def held(ss, year: int) -> list[dict]:
 
 def year_film_pnl(ss, year: int) -> dict:
     rows = [{"title": FILM_CATALOG[l["film"]]["title"], "cost_m": l["annual_cost_m"],
-             "revenue_m": true_value_m(l["film"])} for l in held(ss, year)]
+             "revenue_m": true_value_m(l["film"], ss.get("team_name", ""))} for l in held(ss, year)]
     cost = round(sum(r["cost_m"] for r in rows), 2)
     rev = round(sum(r["revenue_m"] for r in rows), 2)
     return {"film_rev": rev, "film_cost": cost, "film_rows": rows,
