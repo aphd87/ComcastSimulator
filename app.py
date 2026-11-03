@@ -40,7 +40,7 @@ from utils.game_state import (level_shows,
     NETWORK_INFO, NETWORK_ORDER, get_team_network_status,
     get_official_score, get_attempt_count, can_advance,
     get_network_leaderboard, THEORY_CONTENT, MAX_ATTEMPTS,
-    YEARS_PER_LEVEL, LEVEL_START_YEAR, save_live_state, load_live_state,
+    YEARS_PER_LEVEL, LEVEL_START_YEAR, save_live_state, load_live_state, is_official_run,
 )
 from utils.models import annual_budget, cable_subs, distribution_revenue, Show
 from utils.sports_models import SportsContract
@@ -156,7 +156,7 @@ ss = st.session_state
 # to TV/Streaming only for now; Movies isn't wired into this yet.
 LIVE_STATE_SCALAR_KEYS = (
     "active_network", "year", "sim_phase", "level_budget", "mkt_budget",
-    "total_shows_greenlit",
+    "total_shows_greenlit", "submitted", "last_score", "tv_network_chosen",
 )
 
 def _switch_network(ss, net: str) -> None:
@@ -450,7 +450,14 @@ if ss.registered:
                     is_active_net = ss.active_network == net
                     if st.button(label, key=f"net_{net}", use_container_width=True,
                                  type="primary" if is_active_net else "secondary"):
-                        _switch_network(ss, net)
+                        # An official run with a simulated year can't be abandoned:
+                        # coming back would replay the same luck with hindsight.
+                        if (ss.get("yearly_log") and is_official_run(
+                                ss.team_name, ss.active_network, ss.school, ss.class_section,
+                                ss.get("submitted", False))):
+                            ss.switch_blocked = ss.active_network
+                        else:
+                            _switch_network(ss, net)
                         st.rerun()
                 else:
                     st.markdown(
@@ -459,6 +466,14 @@ if ss.registered:
                         f'text-align:center;">{lock_icon} {info["display_name"]} — Locked</div>',
                         unsafe_allow_html=True
                     )
+
+        if ss.get("switch_blocked"):
+            _bn = NETWORK_INFO[ss.pop("switch_blocked")]["display_name"]
+            st.warning(f"🔒 Finish your official {_bn} run first. Once you've simulated a year, an official run "
+                       f"can't be restarted or switched away from, because coming back would replay the same luck "
+                       f"with hindsight. After it's recorded, you can switch freely.")
+        if ss.pop("resumed_notice", False):
+            st.info("↩️ Welcome back: we picked up your team's saved game where you left off.")
 
     st.divider()
 
@@ -550,6 +565,24 @@ if not ss.registered and ss.active_section != "leaderboard":
                 ss.team_role     = "driver" if role_label.startswith("🎮") else "viewer"
                 ss.registered    = True
                 ss.tv_network_chosen = False
+                # Resume (2026-11-03): a Driver who refreshes the tab or signs in
+                # again picks up their saved TV and Movies runs instead of starting
+                # over. Closes the "refresh = free restart with the same luck" hole
+                # and the "don't refresh mid-level" fragility.
+                if ss.team_role == "driver":
+                    _snap = load_live_state(ss.team_name, ss.school, ss.class_section)
+                    if _snap and (_snap.get("yearly_log") or _snap.get("year", 1) > 1
+                                  or _snap.get("tv_network_chosen")):
+                        _apply_live_snapshot(ss, _snap)
+                        ss.tv_network_chosen = True
+                        ss.resumed_notice = True
+                    from utils.game_state import load_movie_live_state
+                    from app_pages import movies_follow
+                    _msnap = load_movie_live_state(ss.team_name, ss.school, ss.class_section)
+                    if _msnap and (_msnap.get("movie_log") or _msnap.get("movie_cycle", 1) > 1
+                                   or _msnap.get("movie_draft")):
+                        movies_follow.apply_snapshot(ss, _msnap)
+                        ss.resumed_notice = True
                 st.rerun()
 
     st.divider()

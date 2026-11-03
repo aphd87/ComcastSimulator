@@ -436,6 +436,17 @@ def get_official_score(team_name: str, network: str, school: str = "", class_sec
 def get_attempt_count(team_name: str, network: str, school: str = "", class_section: str = "") -> int:
     return len(get_team_attempts(team_name, network, school, class_section))
 
+def is_official_run(team_name: str, network: str, school: str, class_section: str, submitted: bool) -> bool:
+    """True while a team is playing the run that will become its OFFICIAL
+    score (nothing recorded yet for this network/slate). On an official run
+    the outcome-revealing undo paths (Redo, Restart, switching away and back,
+    re-rolling a film's concept) are locked, 2026-11-03: every draw is
+    seeded per team, so undoing a revealed year let a team see the future
+    and dodge every bad outcome on the run that counts. Practice attempts
+    keep them."""
+    return not submitted and get_attempt_count(team_name, network, school, class_section) == 0
+
+
 def can_advance(team_name: str, current_network: str, school: str = "", class_section: str = "") -> bool:
     """
     Can advance if:

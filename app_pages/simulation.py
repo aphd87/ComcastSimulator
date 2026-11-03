@@ -30,7 +30,7 @@ from utils.models import (
 from utils.bravo_deals import cast_multiplier, year_extras as bravo_year_extras
 from utils.level_extras import reset_state as reset_bravo_state
 from utils.film_licensing import year_film_pnl
-from utils.game_state import (level_shows, 
+from utils.game_state import (level_shows, is_official_run, 
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
@@ -1413,8 +1413,13 @@ def _results(ss, shows, net_info, year, team, net):
 
     # ── Navigation ────────────────────────────────────────────────────────────
     nav1, nav2 = st.columns([1, 1])
+    _official = is_official_run(team, net, ss.school, ss.class_section, ss.get("submitted", False))
     with nav1:
-        if st.button("← Redo This Year", use_container_width=True):
+        if _official:
+            st.button("← Redo This Year", use_container_width=True, disabled=True, key="redo_locked")
+            st.caption("🔒 Redo is off on your official run: results stand, like a real season. "
+                       "It's available on practice attempts after you finish this level.")
+        elif st.button("← Redo This Year", use_container_width=True):
             new_cancel_ids = set(result.get("new_cancellations", []))
             ss.yearly_log      = [r for r in ss.yearly_log if r["year"] != year]
             ss.cancelled_shows = ss.cancelled_shows - new_cancel_ids

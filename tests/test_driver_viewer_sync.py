@@ -130,3 +130,44 @@ class TestLiveStateSync:
         saved = gs.load_live_state("Team Sync", "Test School of Business, Test University",
                                     "Fall 2026 — Media Strategy Sec A")
         assert saved["year"] == driver_year
+
+
+class TestOfficialRunIntegrity:
+    """2026-11-03: a Driver who refreshes / re-registers resumes the saved
+    run (no free restart with the same luck), and an official run with a
+    simulated year can't be abandoned by switching networks."""
+
+    def test_driver_resumes_saved_run_after_reregistering(self):
+        a = AppTest.from_file("app.py", default_timeout=30)
+        a.run()
+        _register(a)
+        # Pretend the Driver had simulated Year 1 and saved.
+        snap = gs.load_live_state("Team Sync", "Test School of Business, Test University",
+                                  "Fall 2026 — Media Strategy Sec A")
+        snap.update({"year": 2, "yearly_log": [{"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0, "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0, "ocf": 6.0, "margin": 30.0, "new_cancellations": [], "shows": [], "budget": 95.0}], "sim_phase": "decisions"})
+        gs.save_live_state("Team Sync", "Test School of Business, Test University",
+                           "Fall 2026 — Media Strategy Sec A", snap)
+
+        b = AppTest.from_file("app.py", default_timeout=30)   # a fresh tab after a refresh
+        b.run()
+        b.text_input(key="university_input_field").set_value("Test University")
+        b.text_input(key="college_input_field").set_value("Test School of Business")
+        b.text_input(key="class_title_input_field").set_value("Media Strategy Sec A")
+        b.text_input(key="semester_input_field").set_value("Fall 2026")
+        b.text_input(key="team_input_field").set_value("Team Sync")
+        b.button(key="register_team_button").click()
+        b.run()
+        assert not b.exception, list(b.exception)
+        assert b.session_state["year"] == 2 and len(b.session_state["yearly_log"]) == 1
+        assert b.session_state["tv_network_chosen"] is True
+
+    def test_switching_away_from_an_official_run_with_a_simulated_year_is_blocked(self):
+        a = AppTest.from_file("app.py", default_timeout=30)
+        a.run()
+        _register(a)
+        a.session_state["yearly_log"] = [{"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0, "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0, "ocf": 6.0, "margin": 30.0, "new_cancellations": [], "shows": [], "budget": 95.0}]
+        a.session_state["year"] = 2
+        a.button(key="net_bravo").click().run()
+        assert not a.exception, list(a.exception)
+        assert a.session_state["active_network"] == "oxygen"
+        assert any("Finish your official Oxygen run first" in w.value for w in a.warning)

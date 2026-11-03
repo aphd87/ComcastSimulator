@@ -114,3 +114,17 @@ def test_viewer_renders_results_of_a_real_film(tmp_path):
     assert not v.exception, list(v.exception)
     text = " ".join(m.value for m in v.markdown)
     assert "Last Period's Actuals" in text and "looking at the results" in text
+
+
+def test_official_slate_locks_concept_after_theatrical_sim():
+    """2026-11-03: on the official slate, once the theatrical sim has run,
+    genre/concept/source/AI are locked so a flop can't be re-rolled."""
+    from tests.test_movies_page import _movies_app
+    at = _movies_app()
+    genre = next(s for s in at.selectbox if s.label == "Genre")
+    assert not genre.disabled
+    at.button(key="run_theatrical_1").click().run()
+    assert not at.exception, list(at.exception)
+    genre = next(s for s in at.selectbox if s.label == "Genre")
+    assert genre.disabled
+    assert any("locked" in c.value for c in at.caption)

@@ -193,6 +193,14 @@ def _init(ss):
 
 
 # ── Small helpers ────────────────────────────────────────────────────────────
+def _movie_official(ss) -> bool:
+    """This slate becomes the official Movies score (see
+    utils/game_state.py::is_official_run)."""
+    from utils.game_state import is_official_run
+    return is_official_run(ss.get("team_name", ""), MOVIE_NETWORK_KEY, ss.get("school", ""),
+                           ss.get("class_section", ""), ss.get("movie_submitted", False))
+
+
 def _fmt_money(v: float) -> str:
     return f"−${abs(v):.1f}M" if v < 0 else f"${v:.1f}M"
 
@@ -1797,13 +1805,21 @@ def _decisions(ss):
 
     left, right = st.columns([3, 2])
     d = ss.movie_draft
+    # Official slate (2026-11-03): once this film's theatrical sim has run, the
+    # inputs that decide its luck are locked, so a flop can't be re-rolled by
+    # switching genre and re-running.
+    concept_locked = bool(_movie_official(ss) and ss.movie_theatrical_resolved.get(ss.movie_cycle))
 
     with left:
         st.markdown('<div class="section-title mt-2">🎬 Concept</div>', unsafe_allow_html=True)
+        if concept_locked:
+            st.caption("🔒 Genre, Concept Type, Source Material and AI tools are locked: this film's theatrical "
+                       "simulation has run on your official slate.")
         title = st.text_input("Working Title", d.get("title", f"Untitled {_cycle_years_label(ss.movie_cycle)} Release"))
         gc1, gc2 = st.columns(2)
         genre = gc1.selectbox("Genre", GENRES, index=GENRES.index(d.get("genre", GENRES[0])) if d.get("genre") in GENRES else 0,
-                               help="Drives international box-office reach and Peacock streaming appeal.")
+                               help="Drives international box-office reach and Peacock streaming appeal.",
+                               disabled=concept_locked)
         active_bonus = _active_talent_bonus(ss, genre, d.get("source_material", SOURCE_MATERIALS[0]))
         if active_bonus:
             bonus_txt = (f"+{active_bonus['star_power_bonus']:.0f} Star Power" if "star_power_bonus" in active_bonus
@@ -1817,6 +1833,7 @@ def _decisions(ss):
                  "New IP: no bonus — earns awareness through P&A instead. Family/Kids: softer "
                  "opening, much stronger long-tail library value. Indie-Horror: budget capped, "
                  "wider variance — huge outperformers on tiny budgets are the whole case for it.",
+            disabled=concept_locked,
         )
 
         gc3, gc4 = st.columns(2)
@@ -1840,7 +1857,7 @@ def _decisions(ss):
                   if d.get("source_material") in SOURCE_MATERIALS else 0,
             help="Where the underlying story comes from — separate from Concept Type (a Sequel "
                  "can itself be an original-screenplay franchise OR a book-adaptation sequel).",
-            disabled=library_ip is not None,
+            disabled=library_ip is not None or concept_locked,
         )
         acq_cost = SOURCE_ACQUISITION_COST_M.get(source_material, 0.0)
         boost = SOURCE_OPENING_BOOST.get(source_material, 1.0)
@@ -2106,6 +2123,7 @@ def _decisions(ss):
         ai_production_tools = st.checkbox(
             "🤖 Use AI Production Tools (previz / scheduling / VFX-assist)",
             value=bool(d.get("ai_production_tools", False)),
+            disabled=concept_locked,
             help=f"Cuts the production-budget component of capital at risk ~{AI_TOOLS_BUDGET_SAVINGS_PCT:.0%} "
                  f"and pulls the whole revenue timeline forward {AI_TOOLS_TIMELINE_SHIFT_MO:.1f} months (faster "
                  f"post-production, less discounting) — but caps how high critical reception can land "
@@ -3452,7 +3470,12 @@ def _results(ss):
     st.divider()
     nav1, nav2 = st.columns(2)
     with nav1:
-        if st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True):
+        if _movie_official(ss):
+            st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True,
+                      disabled=True, key="movie_redo_locked")
+            st.caption("🔒 Redo is off on your official slate: results stand. It's available on practice "
+                       "attempts after you finish.")
+        elif st.button(f"← Redo {_cycle_years_label(ss.movie_cycle)}", use_container_width=True):
             ss.movie_log = [r for r in ss.movie_log if r["cycle"] != ss.movie_cycle]
             from utils.game_state import withdraw_pitch   # board matches the slate until re-simulated
             withdraw_pitch(ss.get("team_name", ""), ss.get("school", ""), ss.get("class_section", ""),

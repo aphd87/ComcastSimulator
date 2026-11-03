@@ -451,9 +451,25 @@ def _results_sim_app() -> AppTest:
     return at
 
 
+def _record_practice_prerequisite():
+    """An already-recorded Oxygen attempt makes the current run a PRACTICE
+    run, where Redo is allowed (2026-11-03: Redo is locked on official runs)."""
+    gs.record_attempt(team_name="AppTest Team", network="oxygen", attempt_num=1, score=50.0, passed=False,
+                      details={}, school="Test School", class_section="Sec A")
+
+
+def test_redo_is_locked_on_the_official_run():
+    at = _results_sim_app()
+    redo = next(b for b in at.button if "Redo This Year" in b.label)
+    assert redo.disabled
+    assert any("Redo is off on your official run" in c.value for c in at.caption)
+
+
 def test_clicking_redo_this_year_removes_the_greenlit_show_and_returns_to_decisions():
+    _record_practice_prerequisite()
     at = _results_sim_app()
     redo_button = next(b for b in at.button if "Redo This Year" in b.label)
+    assert not redo_button.disabled
     redo_button.click().run()
     assert not at.exception, f"Redo click raised: {list(at.exception)}"
     assert at.session_state["sim_phase"] == "decisions"
