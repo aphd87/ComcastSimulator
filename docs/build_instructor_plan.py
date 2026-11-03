@@ -51,7 +51,7 @@ def build_plan():
     table(doc, ["", ""], [
         ["**Where it sits**", "The day after the TV simulation class (Boards 0–4: sports as a loss leader, three hard choices, portfolio architecture). Today opens Movie Week."],
         ["**The turn**", "Yesterday students learned to **spread risk across a portfolio**. Today they can't: every film is one concentrated bet, paid up front. And unlike TV, **luck is real** here (25% of each film's grade)."],
-        ["**Format**", "Teams of ~4 on **one laptop** (Movies has no Follow Along view). Same team details as yesterday so both scores sit together on the Leaderboard."],
+        ["**Format**", "Teams of ~4: one Driver plays; teammates can register **Follow Along** on their own laptops to watch live (or crowd around one screen). Same team details as yesterday so both scores sit together on the Leaderboard."],
         ["**Timing**", "**0–12 boards → 12–72 play → 72–85 debrief boards.** Five films in 60 minutes ≈ 12 minutes per film."],
         ["**What counts**", "First submitted score is official. Pass = decisions-only (risk-adjusted) NPV averages above $0, so luck can't pass a slate. The score uses graded NPV = 75% decisions + 25% luck (what each film actually earned)."],
     ], [1.5, 5.0])
@@ -76,7 +76,7 @@ def build_plan():
         "",
         "  TV (YESTERDAY)                   │   MOVIES (TODAY)",
         "                                   │",
-        "  20-40 shows at once              │   ONE film per cycle",
+        "  10-20 shows at once              │   ONE film per cycle",
         "  Cost amortized 12-36 months      │   Cost paid IN FULL, up front",
         "  Scorecard: OCF margin            │   Scorecard: risk-adjusted NPV",
         "  A flop is one line in the P&L    │   A flop is the whole cycle",

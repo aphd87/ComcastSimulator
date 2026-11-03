@@ -189,11 +189,7 @@ def sign_in_section(doc, game_button: str, movies: bool):
             "That is how the app knows you are one team and puts you on the same leaderboard. "
             "\"Team Alpha\" and \"team alpha \" are two different teams.")
     callout(doc, "key", "Use a team name only. **Never enter student names or ID numbers.**")
-    if movies:
-        callout(doc, "tip",
-                "The Movies simulation does not support Follow Along yet. Have **one person drive on one "
-                "laptop** (project it or crowd around it), and have the others take notes and argue the numbers.")
-    else:
+    if True:   # Follow Along works in TV and (since 2026-11-03) Movies
         callout(doc, "tip",
                 "Playing on several laptops? Exactly **one** person registers as Driver. Everyone else registers "
                 "as Follow Along with the same details, and their screens update automatically every few seconds "
@@ -253,12 +249,13 @@ def build_tv():
 
     doc.add_heading("The three networks", level=2)
     table(doc, ["Network", "Years", "Starting budget", "Pass if margin ≥", "What makes it different"], [
-        ["🔍 **Oxygen**", "2012–2015", "~$95M", "**12%**", "Cheap true-crime shows, a small loyal audience. The easiest level, so learn the controls here."],
-        ["🍸 **Bravo**", "2016–2019", "~$220M", "**15%**", "Reality TV with affluent viewers who bring premium ad rates. A bigger budget, but the highest bar to clear."],
-        ["🦚 **Peacock**", "2020–2023", "~$150M", "**10%**", "Streaming: you spend now and get paid later through subscribers. Adds Sports Rights bidding."],
+        ["🔍 **Oxygen**", "2012–2015", "~$95M", "**12%**", "20 cheap true-crime and reality shows, a small loyal audience. True Crime costs are spread over 24 months. The easiest level, so learn the controls here."],
+        ["🍸 **Bravo**", "2016–2019", "~$220M", "**15%**", "Bravo's own 20 reality, competition and talk shows, with affluent viewers who bring premium ad rates. Adds **Brand Partnerships** and **Casting Unknowns**. The highest bar to clear."],
+        ["🦚 **Peacock**", "2020–2023", "~$150M", "**10%**", "Peacock's own streaming originals: you spend now and get paid later through subscribers. Adds **Sports Rights** and **Film Licensing**, all competing for one budget."],
     ], [0.95, 0.85, 1.0, 0.95, 2.75])
-    para(doc, "Years shown are for the default 4-year levels. You can usually open any network at any time "
-              "from the network selector, but your instructor decides the order you play in.", muted=True, size=10)
+    para(doc, "Each level is one network on its own: you run only that network's shows. Years shown are for the "
+              "default 4-year levels. You can usually open any network at any time from the network selector, but "
+              "your instructor decides the order you play in.", muted=True, size=10)
 
     page_break(doc)
     sign_in_section(doc, "→ Start TV / Streaming", movies=False)
@@ -309,23 +306,34 @@ def build_tv():
             "A show that loses money but has a high IP Score may be worth keeping for its franchise value. "
             "That is the real judgment call in this section.")
     bullets(doc, [
-        "**Scheduling:** the best slot can lift a show's rating by up to 15%, and the worst slot can cut it by up to 15%. Most genres do best Tue/Wed at 8 PM. **Reality and Drama** do better on weekend nights. An unscheduled show is neutral.",
+        "**Scheduling:** the best slot can lift a show's rating by up to 15%, and the worst slot can cut it by up to 15%. The **🗺️ Slot Value Map** shows the exact % for every slot: one map for weeknight genres (best Tue/Wed at 8 PM) and one for **Reality and Drama** (best on weekend nights). An unscheduled show is neutral.",
     ])
 
     doc.add_heading("3 · 🏈 Sports Rights  (Peacock only)", level=2)
     steps(doc, [
-        "See which leagues are up for auction this year (NFL, Premier League, Olympics).",
+        "See which packages are up for auction this year. There are six, from premium to cheap: **NFL**, **Premier League**, the **Summer Olympics**, a **College Football Conference**, a **Pro Golf Tour**, and **Women's Pro Soccer**. The table at the top compares their price, revenue, and how many fans stick around.",
         "Enter a bid for any league you want. The app shows how your bid compares to the market price.",
         "Click **📡 Submit Sports Bids**. You are bidding blind against six rival media and tech companies.",
     ])
     callout(doc, "key",
             "Sports bring in a burst of subscribers. Whether they **stay** afterward depends on how much you spend on original shows. "
-            "Sports is the hook, and your entertainment slate is what keeps people subscribed. A winning bid locks you into a contract of 5–7 years.")
+            "Sports is the hook, and your entertainment slate is what keeps people subscribed. A winning bid locks you into a contract of 4–7 years. "
+            "Premium rights lose the most money on their own; cheaper packages lose little and keep more fans. Women's Pro Soccer earns 20% more every year you hold it, so buying early is the bet.")
+
+    doc.add_heading("4 · 🎞️ Film Licensing  (Peacock only, optional)", level=2)
+    steps(doc, [
+        "Each year three finished movies come up for a streaming license. Read each card: genre, box office, critics score, license length, and asking price.",
+        "Enter an annual bid for any film you want (0 = pass), then click **🎞️ Submit Film Bids**. One rival streamer bids too, sealed; the higher bid wins and pays its own bid every year of the license.",
+    ])
+    callout(doc, "key",
+            "What a film really earns is hidden until you sign it. **Critics score and box office are your clues**: well-reviewed films "
+            "tend to keep subscribers longer than loud, poorly reviewed ones. Overpaying is the winner's curse. "
+            "Films also help keep sports fans subscribed: half of each license fee counts toward the originals spending your sports packages need.")
 
     doc.add_heading("🎬 Greenlighting — launch new shows  (optional, up to 3 per year)", level=2)
     para(doc, "There are two ways to add a show:")
     bullets(doc, [
-        "**Acquire a Pitched Show**: buy a ready-made concept from the marketplace. Each one lists its audience, whether it's an international format, and any brand sponsor (sponsors lower the price). "
+        "**Acquire a Pitched Show**: buy a ready-made concept from the marketplace. Each network has its own pitches that fit its brand. Each one lists its audience, whether it's an international format, and any brand sponsor (sponsors lower the price). "
         "Some show **🔥 Competitor interest**: a rival network is bidding, so winning it now costs **25% more**, and if you pass, there's a **50% chance** each year the rival signs it and it's gone for good.",
         "**Build your own**: name it, fill in the **Show Concept Inputs** (genre, episodes, cost per episode, expected rating), and **write a 2–4 sentence pitch** (the concept, the hook, and who it's for). "
         "You can't greenlight your own show without a pitch.",
@@ -346,10 +354,28 @@ def build_tv():
               "Open **👀 See what other teams in your class have pitched** above Show Concept Inputs, or the full "
               "**📋 Pitch Board** on the Leaderboard page. Use it like a development meeting: what is everyone betting on?")
 
+    doc.add_heading("🤝 Brand Partnerships & Casting  (Bravo only, optional)", level=2)
+    para(doc, "**Brand Partnerships (product placement).** Attach a brand to up to 3 shows a year. If the integration lands, "
+              "the brand pays part of that show's cost. If viewers reject it, the brand demands a **make-good** (extra "
+              "integrations and free ads), which adds cost. The **fit** % is the chance it lands. The biggest checks come from "
+              "brands that fit Bravo's audience worst. You see how each deal turned out after you simulate.")
+    para(doc, "**Casting Unknowns.** For a new Reality or Competition show you added this level, bid on up to 3 unknown cast "
+              "members. Each card shows a bio, hobbies, an **emotional type** (which sets the expected rating boost), and a "
+              "**weirdness** score (1–10: weirder means a wider range, from breakout star to turn-off). A rival network bids "
+              "too, sealed; outbid them and the person is yours, or lose them for good. Pairing a Volatile or Scheming cast "
+              "member with a Warm or Bubbly one adds a chemistry bonus.")
+    callout(doc, "tip",
+            "Expected value of a brand deal = fit × payment − (1 − fit) × make-good. A smaller check at high fit is often the better bet.")
+
     doc.add_heading("📊 Why? boxes  (optional, not scored)", level=2)
     para(doc, "Under several decisions you'll find a collapsed **📊 Why? (optional)** box: genre decay curves "
-              "under Renewal, scheduling and cash-flow tools right after it, and the LTV curve and marketing-ROI chart "
-              "in Greenlighting. Each one says when it's useful. Open them when you're unsure about that decision.")
+              "under Renewal; scheduling and cash-flow tools right after it, including the **Amortization Table** "
+              "(what each show costs you this year), the **Payoff Schedule** (how this season's cost is paid off over "
+              "the next years) and **Monthly Cash Flow**; and the LTV curve and marketing-ROI chart in Greenlighting. "
+              "Each one says when it's useful. Open them when you're unsure about that decision.")
+    callout(doc, "tip",
+            "Look for the **📌 Key takeaway** box under charts and tables. It says, in one or two sentences, what that chart "
+            "means for your numbers right now.")
 
     doc.add_heading("▶ Simulate the year", level=2)
     para(doc, "Check **Expected This Year** (your projected margin against the target), then click **▶ Simulate Year [N] → See Results**.")
@@ -361,6 +387,8 @@ def build_tv():
         "**Rating Movers**: which shows rose or fell, and what that was worth in dollars.",
         "**🏆 Emmy Buzz**: prestige for Drama, Scripted, and Comedy shows. Good for bragging rights, but it doesn't change your money or your score.",
         "**🎲 Production Risk**: surprises such as delays or cost overruns on renewed shows.",
+        "**Bravo**: how each brand deal turned out (sponsor money or make-good cost) and your casting fees.",
+        "**Peacock**: what each licensed film earned against its fee, and your sports rights P&L.",
     ])
     para(doc, "Then click **→ Start Year [next]**, or **← Redo This Year** to try that year again.")
 
@@ -399,6 +427,9 @@ def build_tv():
         ["**IP Score**", "A show's franchise or brand value (0–100). A high score helps a show age better."],
         ["**Distribution revenue**", "Fees cable and satellite companies pay to carry your network."],
         ["**HHI / genre mix**", "A measure of concentration. Lower means a more diversified slate."],
+        ["**Make-good**", "What a sponsor demands when a product placement flops: extra integrations or free ad spots, at your cost."],
+        ["**Film license**", "Renting the streaming rights to a finished movie for a set number of years, for an annual fee."],
+        ["**Winner's curse**", "Winning an auction by bidding more than the prize turns out to be worth."],
     ], [1.6, 4.9])
 
     out = OUT_DIR / "The_Slate_Student_Guide_TV_Streaming.docx"
@@ -455,7 +486,7 @@ def build_movies():
 
     doc.add_heading("1 · Studio Partnerships  (optional: sign, then renew or replace each cycle)", level=2)
     para(doc, "Sign a long-term deal with a production company. It gives every movie in that company's specialty genre either "
-              "**+Star Power** or **+Critical Reception**. Click **Sign** to commit. From the next cycle on, the company asks for a "
+              "**+Star Power** or **+Critical Reception**. Click **✍️ Sign [company] ($XM)** to commit. From the next cycle on, the company asks for a "
               "**renewal fee** each cycle, and more after a hit, since they know their worth. **Renew**, or **Let them go**: the bonus "
               "ends, and a rival studio will probably sign them on the spot. You can then sign a different company at its full price. "
               "Companies nobody signs can also be taken by a rival.")
@@ -468,14 +499,14 @@ def build_movies():
     doc.add_heading("2 · Scouted Concepts  (optional)", level=2)
     para(doc, "Your scouts bring you **6** ready-made movie ideas each cycle. Each card has a **scout's read**: an audience-demand "
               "estimate in stars (it can be off by one star; paid Research gives the real signal), how risky the genre is (Steady, "
-              "Moderate, Volatile), and what the concept earns as scouted on a weak and an expected run. Click **Option This Concept** "
+              "Moderate, Volatile), and what the concept earns as scouted on a weak and an expected run. Click **📝 Option This Concept for Film [N]** "
               "on one you like; it fills in your Greenlight form, and you can still change anything there. Ideas you skip may be made by "
               "a rival studio before the next cycle; one marked **🔥 [Studio] is circling** is very likely to be gone.")
 
     doc.add_heading("3 · Film Festival Acquisitions  (optional)", level=2)
     para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Each card shows your analysts' "
               "**break-even bid**: the most you can pay and still make money on a weak run, and on an expected run. It also shows how "
-              "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on at least one and click **Submit Bid**. Bids are "
+              "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on at least one and click **📨 Submit Sealed Bid of $XM**. Bids are "
               "sealed: the highest bid wins and pays what it bid. Hot films draw more bidders, so winning one often means overpaying "
               "(the **winner's curse**). You see the result, and what the film went on to earn, right away. A film you win joins your "
               "pipeline as an extra release; it does **not** use your greenlight slot.")
@@ -513,8 +544,8 @@ def build_movies():
             "release and no reviews yet. If even the Base case is negative, rethink the plan.")
 
     doc.add_heading("5 · Holding Deals  (optional)", level=2)
-    para(doc, "Optionally lock an actor for your **next** movie. Click **Place Hold** (cheap but risky: a rival may already have that actor "
-              "booked, and even a confirmed hold can fall through) or **Multi-Picture** (costs more, guaranteed for several cycles). "
+    para(doc, "Optionally lock an actor for your **next** movie. Click **🤝 Hold for Your Next Film ($XM)** (cheap but risky: a rival may already have that actor "
+              "booked, and even a confirmed hold can fall through) or **📜 Multi-Picture Deal ($XM)** (costs more, guaranteed for several cycles). "
               "Next cycle, any actor you hold or signed appears in Greenlight's **🎭 Lead Actor** list so you can cast them.")
 
     doc.add_heading("6 · Release Plan — Your Slate", level=2)
