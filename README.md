@@ -20,7 +20,7 @@ The Word files are generated: edit `docs/build_student_guides.py` or `docs/build
 
 This tool ships as a business case used by many schools. Every school's scores, Pitch Board posts, and leaderboards are kept separate by **school + class section**, so one hosted copy can serve many schools, or each school can run its own.
 
-- **No AI features and no API keys.** AI pitch feedback was removed on 2026-10-01 in favor of the **Peer Pitch Board** (below).
+- **AI is optional (off by default).** The only AI feature is an optional **AI Grade** on a team's own TV show concept (Greenlighting → Show Concept Inputs), added 2026-11-03. It appears only if this deployment's Streamlit Secrets contain `ANTHROPIC_API_KEY = "..."`; without it the app needs no API key. Feedback only, never scored; 5 grades per team per simulated year; uses Claude Opus 5.5 at low effort, roughly a few cents per grade. The **Peer Pitch Board** (below) works either way.
 - **Settings live in the deployment's Streamlit Secrets** (Settings → Secrets on Streamlit Cloud, or `.streamlit/secrets.toml` locally — **never commit that file**).
 
 ## Saving scores — the database (`DATABASE_URL`)
