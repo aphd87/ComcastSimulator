@@ -203,7 +203,7 @@ def render():
     if "renewal_decisions" not in ss:
         ss.renewal_decisions = {}
 
-    per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+    per = mkt / max(len(shows), 1)
     rows = []
     for s in shows:
         curr_cost  = s.total_cost(year)

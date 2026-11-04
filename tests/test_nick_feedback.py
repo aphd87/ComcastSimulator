@@ -8,22 +8,24 @@ from streamlit.testing.v1 import AppTest
 
 import utils.game_state as gs
 from utils.data import OXYGEN_SLATE
-from utils.models import marketing_lift, portfolio_ad_rev
+from utils.models import portfolio_ad_rev
 
 
-# ── #5 Marketing is network-wide, +1.5% per $1M, half that past $16M ─────────
-def test_marketing_lift_matches_the_financing_text():
-    assert marketing_lift(0) == pytest.approx(1.0)
-    assert marketing_lift(10) == pytest.approx(1.15)
-    assert marketing_lift(16) == pytest.approx(1.24)
-    assert marketing_lift(24) == pytest.approx(1.24 + 8 * 0.0075)
-
-
-def test_twenty_million_lifts_a_twenty_show_slate_far_more_than_one_and_a_half_percent():
+# ── #5 Marketing follows Zach's per-show model ────────────────────────────────
+# Nick found the Financing text (network-wide, tapering past $16M) contradicted
+# the code. Per Zach's brief ("$3M marketing minimum for show viability"), the
+# per-show split in the code is the design; the text was fixed instead.
+def test_marketing_is_split_evenly_across_shows():
     shows = copy.deepcopy(OXYGEN_SLATE)
-    base, lifted = portfolio_ad_rev(shows, 1, 0), portfolio_ad_rev(shows, 1, 20)
-    assert lifted / base == pytest.approx(marketing_lift(20))
-    assert lifted / base > 1.25   # Nick measured ~1.015 under the old per-show split
+    per_show = 20 / len(shows)
+    expected = sum(s.ad_revenue(1, per_show) for s in shows)
+    assert portfolio_ad_rev(shows, 1, 20) == pytest.approx(expected)
+
+
+def test_financing_text_describes_the_per_show_model():
+    src = open("app_pages/simulation.py", encoding="utf-8").read()
+    assert "split evenly across your active shows" in src
+    assert "Diminishing returns above $16M" not in src
 
 
 # ── #7 Capitalization and spacing don't split a team ─────────────────────────

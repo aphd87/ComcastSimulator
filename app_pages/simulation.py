@@ -101,7 +101,7 @@ def _preview_pnl(shows, year: int, mkt: float,
     OCF margin exactly like any other business decision."""
     cancelled = prev_cancelled | new_cancel
     active    = _active_shows(shows, cancelled)
-    per       = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+    per       = mkt / max(len(active), 1)
 
     ad_rev   = sum(s.ad_revenue(year, per) for s in active)
     dist_rev = platform_revenue(year, active)   # subscriptions on Peacock, cable fees elsewhere
@@ -128,7 +128,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
     prev_cancelled = ss.cancelled_shows
     cancelled_all  = prev_cancelled | new_cancel
     active         = _active_shows(shows, cancelled_all)
-    per            = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+    per            = mkt / max(len(active), 1)
 
     show_rows  = []
     adj_ad_rev = 0.0
@@ -602,8 +602,9 @@ def _section_financing(ss, shows, year, net_info, level_budget):
                 unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
-        'Marketing lifts every show\'s ad revenue: each $1M adds about 1.5%, up to $16M. Past $16M, each extra '
-        '$1M adds about half as much. It pays off when your ad revenue is big enough to earn back what you spend.</div>', unsafe_allow_html=True)
+        'Your marketing budget is split evenly across your active shows. Each $1M a show gets lifts that show\'s '
+        'ad revenue about 1.5%. A show needs about $3M of marketing to be viable, so with a big slate, '
+        'either raise marketing or cancel shows so it goes further.</div>', unsafe_allow_html=True)
 
     # The slider has its own widget key and writes ss.mkt_budget on every
     # run, so every other step (and the P&L preview) sees the live figure.
@@ -1063,7 +1064,7 @@ def _decisions(ss, shows, net_info, year, net):
 
     # ── Active slate summary ──────────────────────────────────────────────────
     with st.expander("📋 View Active Show Slate", expanded=False):
-        per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+        per = mkt / max(len(_active_shows(shows, ss.cancelled_shows | new_cancel)), 1)
         slate_rows = []
         for s in shows:
             if s.id in ss.cancelled_shows:
@@ -1148,7 +1149,7 @@ def _level_score(ss, shows, net, year):
     total_ocf  = sum(r["ocf"]     for r in log)
     avg_margin = (total_ocf / total_rev * 100) if total_rev > 0 else 0.0
     active = _active_shows(shows, ss.cancelled_shows)
-    per = total_mkt / YEARS_PER_LEVEL   # avg annual network marketing (lift applies to every show)
+    per = (total_mkt / YEARS_PER_LEVEL) / max(len(active), 1)   # avg annual mkt per show
     rois = [s.roi(year, per) for s in active]
     avg_roi = sum(rois) / len(rois) if rois else 0.0
     genre_costs = {}

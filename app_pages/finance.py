@@ -220,7 +220,7 @@ def render():
 
     # On-air timing (2026-11-03): each show's ad revenue lands in its on-air
     # months, scaled so the 12 months sum to this year's ad_rev exactly.
-    _per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+    _per = mkt / max(len(shows), 1)
     _shape = [0.0] * 12
     for _s in shows:
         _m = _s.cash_months(_s.air_month, _s.episodes)
@@ -384,7 +384,7 @@ def render():
     </div>
     """, unsafe_allow_html=True)
     rpp_rows = []
-    per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
+    per = mkt / max(len(shows),1)
     for s in sorted(shows, key=lambda x: -x.rating)[:10]:
         rev = s.ad_revenue(year, per)
         rpp_rows.append({

@@ -289,8 +289,8 @@ def build_tv():
         "Set the **Marketing ($M this year)** slider.",
     ])
     bullets(doc, [
-        "Marketing lifts every show's ad revenue: each $1M adds about 1.5%, up to $16M; past that, each extra $1M adds about half as much. "
-        "Whether it pays depends on your network: a big ad business (Bravo) earns it back easily, a small one (Peacock) may not.",
+        "Your marketing budget is **split evenly across your active shows**. Each $1M a show gets lifts that show's ad revenue about 1.5%. "
+        "A show needs about **$3M of marketing to be viable**, so a big slate spreads it thin.",
         "If you see a warning that spend is **below $3M per show**, your shows are under-marketed. Either raise the budget or cancel shows so the money goes further.",
     ])
     callout(doc, "warn",

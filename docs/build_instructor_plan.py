@@ -434,16 +434,17 @@ def build_tv_plan():
         "│           SPORTS IS A LOSS LEADER                            │",
         "└──────────────────────────────────────────────────────────────┘",
         "",
-        "  THE SEASON                        │   THE OFF-SEASON",
-        "  📈 Subscribers arrive             │   📉 Subscribers bleed out",
-        "  Churn = LOW (games every week)    │   Churn = HIGH",
+        "  NFL SEASON (5 months)             │   OFF-SEASON (9 months)",
+        "  📈 Millions of subs arrive        │   📉 Subs bleed out",
+        "  Churn = LOW (games every week)    │   Churn = HIGH (no football)",
         "  Revenue = GREAT...                │   Where's the content?",
         "  ...but the rights fee is bigger   │   Only originals & library hold them",
         "                                    │",
         "══════════════════════════════════════════════════════════════════",
-        "     THE GAP PROBLEM  (Case A: the NBA deal, $2.45B a year)",
-        "   A sports package loses money in its own season.",
-        "   It only pays back if your entertainment slate KEEPS the fans.",
+        "              THE 9-MONTH GAP PROBLEM",
+        "   Only originals can hold subs through the off-season.",
+        "   If originals fail, you lose the season's subscriber gains.",
+        "   (Case A: the NBA deal, $2.45B a year, is the same problem.)",
         "══════════════════════════════════════════════════════════════════",
         "",
         "  ⭕ KEY INSIGHT (circle in bright color):",
@@ -453,7 +454,8 @@ def build_tv_plan():
     teaches(doc, [
         "In the sim, sports revenue only sticks in proportion to what you spend on originals that year (licensed films count half).",
         "About 45% of a season's sports revenue returns the next year as retained subscribers, fading after that. The payoff is later.",
-        "Everything you greenlight or renew must answer: \"Does this hold subscribers after the season?\"",
+        "Everything you greenlight or renew must answer: \"Does this hold subscribers through the 9-month off-season?\"",
+        "This is Zach Schlessel's (NBCU) framing: sports brings a 5-month spike, and originals must carry the other 9 months.",
     ])
 
     doc.add_heading("BOARD 1: YOUR BUDGET — THREE HARD CHOICES", level=1)
@@ -556,8 +558,8 @@ def build_tv_plan():
         "  THE GAP = renewal rigor + sports sizing + bidding discipline",
     ])
     para(doc, "**Ask the bottom teams for their biggest decision, not their unluckiest show.** "
-              "Benchmarks if useful: renewing everything at the default $5M marketing lands just under 10% (fails narrowly); cutting losers and licensing value films clears it; "
-              "a niche sports package and disciplined marketing push it higher (on Peacock, marketing earns back less than it costs). The NFL is a slow-payback bet (deeply negative in Year 1, recovering by Year 4).")
+              "Benchmarks if useful: renewing everything lands around 5–8% (fails); cutting losers and licensing value films reaches ~10%; "
+              "adding a niche sports package and tight marketing reaches ~12–13%. The NFL is a slow-payback bet (deeply negative in Year 1, recovering by Year 4).")
 
     doc.add_heading("BOARD 3: SPORTS VS. ENTERTAINMENT REVISITED  (minutes 73–78)", level=1)
     para(doc, "(Read back the two answers you wrote in the corner at minute 2.)", muted=True)
@@ -667,8 +669,8 @@ def build_tv_plan():
         ["**Renewal**", "Every show defaults to Renew. Cancelling still charges 25% of that year's cost."],
         ["**Amortization**", "Peacock shows spread evenly over 36 months (Board 4 contrasts this with ASU 2019-02)."],
         ["**Greenlighting**", "Up to 3 new shows a year (acquire or build; building needs a pitch). Rival-interest pitches cost 25% more."],
-        ["**Benchmarks (4 years)**", "Renew everything at the default $5M marketing ≈ just under 10% (fails narrowly). Cutting losers and licensing value films clears it; niche sports and disciplined marketing add more. NFL deeply negative in Year 1, recovering by Year 4."],
-        ["**Marketing**", "Network-wide: each $1M lifts every show's ad revenue ~1.5% up to $16M, half that beyond. Pays off on Bravo's big ad business; on Peacock it earns back less than it costs."],
+        ["**Benchmarks (4 years)**", "Renew everything ≈ 5–8% (fails). Cut losers + value films ≈ 10%. + niche sports, tight marketing ≈ 12–13%. NFL deeply negative in Year 1, recovering by Year 4."],
+        ["**Marketing**", "Zach's model: the budget is split evenly across active shows; each $1M a show gets lifts its ad revenue ~1.5%; about $3M per show is the viability threshold. Cutting shows makes marketing go further."],
         ["**Official run**", "First finished run counts; Redo, Restart and network switching are locked once a year is simulated. Practice runs are only recorded if the official run didn't pass."],
     ], [1.7, 4.8])
     callout(doc, "tip", "After class, the Leaderboard's **All Submissions — Raw Data** table downloads a CSV of every team's scores, "
