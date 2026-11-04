@@ -3505,7 +3505,7 @@ def _results(ss):
                 ss.movie_phase = "decisions"
                 st.rerun()
         else:
-            if st.button("→ View Final Slate & Submit Score", type="primary", use_container_width=True):
+            if st.button("→ View Final Slate & Score", type="primary", use_container_width=True):
                 ss.movie_phase = "complete"
                 st.rerun()
 

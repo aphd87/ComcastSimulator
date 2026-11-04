@@ -246,18 +246,23 @@ def render():
                                         "Bravo avg: 1.0–1.5. Hit show: 2.0+. Mega-hit: 3.0+. Chasing a "
                                         "higher number here usually means paying for it — keep Cost per "
                                         "Episode realistic for the rating you're claiming.", key="gl_rating")
-            mkt_spend = st.slider("Marketing Budget ($M)", 0.0, 10.0, 2.0, step=0.5,
-                                   help="Each $1M adds ~1.5% rating lift on linear; also lifts SVOD sub acquisition.", key="gl_mkt_spend")
+            mkt_spend = st.slider("Marketing Budget ($M) · comparison only", 0.0, 10.0, 2.0, step=0.5,
+                                   help="Used only in this concept's Linear vs. SVOD comparison below. It isn't spent "
+                                        "or saved: your network's real marketing is the Financing slider.", key="gl_mkt_spend")
         with c3:
-            appeal    = st.slider("Genre Appeal Score (SVOD)", 20, 100, 72, step=1,
-                                   help="How well does this genre convert to streaming subscriptions? "
-                                        "True Crime: 85. Scripted drama: 90. Reality: 60.", key="gl_appeal")
+            appeal    = st.slider("Genre Appeal Score (SVOD) · comparison only", 20, 100, 72, step=1,
+                                   help="How well this genre converts to streaming subscriptions (True Crime 85, "
+                                        "scripted drama 90, Reality 60). Used only in the Linear vs. SVOD comparison "
+                                        "below; it isn't saved with the show. On Peacock, a greenlit show's real "
+                                        "subscription value comes from its rating.", key="gl_appeal")
             air_month_label = st.select_slider(
                 "Premiere Month", options=[f"{i} · {MONTHS[i-1]}" for i in range(1, 13)],
                 value="3 · Mar", help="Affects amortization cash trough (see Schedule tab).", key="gl_air_month")
             air_month = int(air_month_label.split(" · ")[0])
-            svod_prem = st.number_input("SVOD Monthly Premium ($/sub)", 5.0, 20.0, 8.0, step=0.5,
-                                         help="Price premium vs. baseline. Higher = more LTV per acquired sub.", key="gl_svod_prem")
+            svod_prem = st.number_input("SVOD Monthly Premium ($/sub) · comparison only", 5.0, 20.0, 8.0, step=0.5,
+                                         help="Price premium vs. baseline (higher = more lifetime value per subscriber). "
+                                              "Used only in the Linear vs. SVOD comparison below; it isn't saved with "
+                                              "the show.", key="gl_svod_prem")
 
         # One pitch box for the whole concept (2026-10-01): required to greenlight,
         # saved as the show's description (shown on Renewal cards), and posted

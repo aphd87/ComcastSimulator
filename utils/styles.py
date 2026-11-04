@@ -86,10 +86,14 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important
 
 [data-testid="stTabs"] button {
     color:#ffffff !important;font-family:'DM Mono',monospace !important;font-size:15px !important;
-    border-bottom:2px solid transparent !important;
+    border:1px solid #3a3f52 !important;border-bottom:2px solid transparent !important;
+    border-radius:6px 6px 0 0 !important;background:#1a1d26 !important;padding:6px 14px !important;
+    margin-right:4px !important;
 }
+[data-testid="stTabs"] button:hover { background:#252a38 !important; }
 [data-testid="stTabs"] button[aria-selected="true"] {
-    color:#e8c547 !important;border-bottom-color:#e8c547 !important;
+    color:#e8c547 !important;border-color:#e8c547 !important;border-bottom-color:#e8c547 !important;
+    background:#252a38 !important;
 }
 
 .stDataFrame { border:1px solid #252836 !important;border-radius:6px; }

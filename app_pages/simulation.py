@@ -101,7 +101,7 @@ def _preview_pnl(shows, year: int, mkt: float,
     OCF margin exactly like any other business decision."""
     cancelled = prev_cancelled | new_cancel
     active    = _active_shows(shows, cancelled)
-    per       = mkt / max(len(active), 1)
+    per       = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
 
     ad_rev   = sum(s.ad_revenue(year, per) for s in active)
     dist_rev = platform_revenue(year, active)   # subscriptions on Peacock, cable fees elsewhere
@@ -128,7 +128,7 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
     prev_cancelled = ss.cancelled_shows
     cancelled_all  = prev_cancelled | new_cancel
     active         = _active_shows(shows, cancelled_all)
-    per            = mkt / max(len(active), 1)
+    per            = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
 
     show_rows  = []
     adj_ad_rev = 0.0
@@ -530,7 +530,7 @@ def _section_financing(ss, shows, year, net_info, level_budget):
     # Revenue streams — where the money actually comes from, shown before
     # the marketing-spend decision so students see ad vs. distribution
     # (subscriber) revenue rather than just a budget number.
-    ann_ad_rev   = portfolio_ad_rev(shows, year, ss.get("mkt_budget", 5.0))
+    ann_ad_rev   = portfolio_ad_rev(_active_shows(shows, ss.cancelled_shows), year, ss.get("mkt_budget", 5.0))
     ann_dist_rev = platform_revenue(year, _active_shows(shows, ss.cancelled_shows))
     _plat = platform_revenue_label(shows)
     ann_total    = ann_ad_rev + ann_dist_rev
@@ -602,8 +602,8 @@ def _section_financing(ss, shows, year, net_info, level_budget):
                 unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
-        'Higher spend lifts ratings and ad revenue. Each $1M ≈ +1.5% ad rev lift. '
-        'Diminishing returns above $16M.</div>', unsafe_allow_html=True)
+        'Marketing lifts every show\'s ad revenue: each $1M adds about 1.5%, up to $16M. Past $16M, each extra '
+        '$1M adds about half as much. It pays off when your ad revenue is big enough to earn back what you spend.</div>', unsafe_allow_html=True)
 
     # The slider has its own widget key and writes ss.mkt_budget on every
     # run, so every other step (and the P&L preview) sees the live figure.
@@ -1063,7 +1063,7 @@ def _decisions(ss, shows, net_info, year, net):
 
     # ── Active slate summary ──────────────────────────────────────────────────
     with st.expander("📋 View Active Show Slate", expanded=False):
-        per = mkt / max(len(_active_shows(shows, ss.cancelled_shows | new_cancel)), 1)
+        per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
         slate_rows = []
         for s in shows:
             if s.id in ss.cancelled_shows:
@@ -1148,7 +1148,7 @@ def _level_score(ss, shows, net, year):
     total_ocf  = sum(r["ocf"]     for r in log)
     avg_margin = (total_ocf / total_rev * 100) if total_rev > 0 else 0.0
     active = _active_shows(shows, ss.cancelled_shows)
-    per = (total_mkt / YEARS_PER_LEVEL) / max(len(active), 1)   # avg annual mkt per show
+    per = total_mkt / YEARS_PER_LEVEL   # avg annual network marketing (lift applies to every show)
     rois = [s.roi(year, per) for s in active]
     avg_roi = sum(rois) / len(rois) if rois else 0.0
     genre_costs = {}
@@ -1437,7 +1437,9 @@ def _results(ss, shows, net_info, year, team, net):
             st.button("← Redo This Year", use_container_width=True, disabled=True, key="redo_locked")
             st.caption("🔒 Redo is off on your official run: results stand, like a real season. "
                        "It's available on practice attempts after you finish this level.")
-        elif st.button("← Redo This Year", use_container_width=True):
+        elif st.button("← Redo This Year", use_container_width=True,
+                       help="Replays this year's decisions. Shows greenlit this year are removed, but their "
+                            "production cost, research and bid fees stay spent (as in a real studio)."):
             new_cancel_ids = set(result.get("new_cancellations", []))
             ss.yearly_log      = [r for r in ss.yearly_log if r["year"] != year]
             ss.cancelled_shows = ss.cancelled_shows - new_cancel_ids
@@ -1486,7 +1488,7 @@ def _results(ss, shows, net_info, year, team, net):
                 ss.greenlit_ids_this_year = set()   # fresh greenlight cap for the new year
                 st.rerun()
         else:
-            if st.button("→ View Final Results & Submit Score",
+            if st.button("→ View Final Results & Score",
                          type="primary", use_container_width=True):
                 ss.sim_phase = "complete"
                 st.rerun()

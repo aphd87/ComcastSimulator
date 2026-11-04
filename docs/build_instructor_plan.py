@@ -556,8 +556,8 @@ def build_tv_plan():
         "  THE GAP = renewal rigor + sports sizing + bidding discipline",
     ])
     para(doc, "**Ask the bottom teams for their biggest decision, not their unluckiest show.** "
-              "Benchmarks if useful: renewing everything lands around 5–8% (fails); cutting losers and licensing value films reaches ~10%; "
-              "adding a niche sports package and tight marketing reaches ~12–13%. The NFL is a slow-payback bet (deeply negative in Year 1, recovering by Year 4).")
+              "Benchmarks if useful: renewing everything at the default $5M marketing lands just under 10% (fails narrowly); cutting losers and licensing value films clears it; "
+              "a niche sports package and disciplined marketing push it higher (on Peacock, marketing earns back less than it costs). The NFL is a slow-payback bet (deeply negative in Year 1, recovering by Year 4).")
 
     doc.add_heading("BOARD 3: SPORTS VS. ENTERTAINMENT REVISITED  (minutes 73–78)", level=1)
     para(doc, "(Read back the two answers you wrote in the corner at minute 2.)", muted=True)
@@ -667,7 +667,8 @@ def build_tv_plan():
         ["**Renewal**", "Every show defaults to Renew. Cancelling still charges 25% of that year's cost."],
         ["**Amortization**", "Peacock shows spread evenly over 36 months (Board 4 contrasts this with ASU 2019-02)."],
         ["**Greenlighting**", "Up to 3 new shows a year (acquire or build; building needs a pitch). Rival-interest pitches cost 25% more."],
-        ["**Benchmarks (4 years)**", "Renew everything ≈ 5–8% (fails). Cut losers + value films ≈ 10%. + niche sports, tight marketing ≈ 12–13%. NFL deeply negative in Year 1, recovering by Year 4."],
+        ["**Benchmarks (4 years)**", "Renew everything at the default $5M marketing ≈ just under 10% (fails narrowly). Cutting losers and licensing value films clears it; niche sports and disciplined marketing add more. NFL deeply negative in Year 1, recovering by Year 4."],
+        ["**Marketing**", "Network-wide: each $1M lifts every show's ad revenue ~1.5% up to $16M, half that beyond. Pays off on Bravo's big ad business; on Peacock it earns back less than it costs."],
         ["**Official run**", "First finished run counts; Redo, Restart and network switching are locked once a year is simulated. Practice runs are only recorded if the official run didn't pass."],
     ], [1.7, 4.8])
     callout(doc, "tip", "After class, the Leaderboard's **All Submissions — Raw Data** table downloads a CSV of every team's scores, "

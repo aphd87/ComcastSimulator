@@ -185,9 +185,10 @@ def sign_in_section(doc, game_button: str, movies: bool):
         f"On the next screen, click **{game_button}**.",
     ])
     callout(doc, "warn",
-            "Every teammate must type the University, School, Class, and Team Name **exactly the same way**. "
+            "Every teammate must spell the University, School, Class, and Team Name **the same way**. "
             "That is how the app knows you are one team and puts you on the same leaderboard. "
-            "\"Team Alpha\" and \"team alpha \" are two different teams.")
+            "Capitals and extra spaces don't matter (\"Team Alpha\" and \"team alpha \" are the same team), "
+            "but spelling does: \"Team Alpha\" and \"Team Alfa\" are two different teams.")
     callout(doc, "key", "Use a team name only. **Never enter student names or ID numbers.**")
     if True:   # Follow Along works in TV and (since 2026-11-03) Movies
         callout(doc, "tip",
@@ -230,7 +231,7 @@ def build_tv():
         ["**The goal**", "Hit your network's **operating cash flow (OCF) margin** target by the end of the level. Margin = OCF ÷ revenue."],
         ["**How it's played**", "3 levels (one per network). Each level lasts **4 in-game years** (your instructor may change this). Each year = one page of decisions, then one click to simulate."],
         ["**Time needed**", "About 15–25 min for Oxygen, 20–35 min for Bravo, 25–40 min for Peacock."],
-        ["**What counts**", "Only your **first submitted score** per network. Practice runs don't count."],
+        ["**What counts**", "Only your **first finished run** per network, saved automatically when you simulate the last year. Practice runs don't count."],
     ], [1.5, 5.0])
     t = doc.tables[-1]
     t.rows[0]._tr.getparent().remove(t.rows[0]._tr)  # quick-start table needs no header row
@@ -288,7 +289,8 @@ def build_tv():
         "Set the **Marketing ($M this year)** slider.",
     ])
     bullets(doc, [
-        "Each $1M of marketing adds about 1.5% to ad revenue, but the gains shrink above about $16M.",
+        "Marketing lifts every show's ad revenue: each $1M adds about 1.5%, up to $16M; past that, each extra $1M adds about half as much. "
+        "Whether it pays depends on your network: a big ad business (Bravo) earns it back easily, a small one (Peacock) may not.",
         "If you see a warning that spend is **below $3M per show**, your shows are under-marketed. Either raise the budget or cancel shows so the money goes further.",
     ])
     callout(doc, "warn",
@@ -394,14 +396,19 @@ def build_tv():
         "**Bravo**: how each brand deal turned out (sponsor money or make-good cost) and your casting fees.",
         "**Peacock**: what each licensed film earned against its fee, and your sports rights P&L.",
     ])
-    para(doc, "Then click **→ Start Year [next]**. (**← Redo This Year** works only on practice attempts.)")
+    para(doc, "Then click **→ Start Year [next]**. (**← Redo This Year** works only on practice attempts, and money "
+              "already committed that year, such as a greenlit show's production cost, stays spent.)")
 
-    submit_section(doc, "→ View Final Results & Submit Score")
+    submit_section(doc, "→ View Final Results & Score")
     para(doc, "After you submit, click **→ Advance to [next network]** to move on, with the shows you greenlit still on your roster.")
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)
     para(doc, "Your score is out of 100 points and has five parts. **Passing** depends only on margin: you pass if your level OCF margin is at or above the network's target.")
+    callout(doc, "key",
+            "**Luck is part of your run.** Ratings swings and surprises are drawn separately for each team, so two teams "
+            "making identical choices can end up with different results. Nobody can copy a winning playbook; compare "
+            "your decisions with other teams', not just your scores.")
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
         ["**OCF margin**", "35%", "40% margin", "Make money. This is the biggest piece."],
         ["**Average show ROI**", "25%", "+60% average ROI", "Your shows earn back more than they cost."],
@@ -453,7 +460,7 @@ def build_movies():
         ["**The goal**", "Build a slate with a **positive risk-adjusted NPV** (net present value). In short, your movies should be worth more than they cost, after accounting for risk."],
         ["**How it's played**", "**4 films, one per cycle.** Each cycle covers 2 years: the first year you greenlight and produce (your t = 0 investment), the second you release. That's 8 in-game years."],
         ["**Time needed**", "About 25–45 minutes."],
-        ["**What counts**", "Only your **first submitted score**. Practice runs don't count."],
+        ["**What counts**", "Only your **first finished slate**, saved automatically when you simulate the last film. Practice runs don't count."],
     ], [1.5, 5.0])
     t = doc.tables[-1]
     t.rows[0]._tr.getparent().remove(t.rows[0]._tr)
@@ -588,7 +595,7 @@ def build_movies():
     ])
     para(doc, "Then click **→ Start [next cycle]**. (**← Redo** works only on practice attempts. On your official slate, a film's genre and concept also lock once its theatrical simulation has run.)")
 
-    submit_section(doc, "→ View Final Slate & Submit Score", unit="cycle", whole="slate")
+    submit_section(doc, "→ View Final Slate & Score", unit="cycle", whole="slate")
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)

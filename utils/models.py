@@ -19,7 +19,9 @@ DISTRIB_ESC_RATE     = 0.05       # Annual affiliate fee escalation (caps Y5)
 CONTENT_COST_ESC     = 0.05       # Per-show renewal escalation
 BUDGET_GROWTH_RATE   = 0.03       # Annual total budget growth
 BASE_BUDGET          = 220.0      # $M year-1 budget (Bravo base; Oxygen uses network_info)
-MKT_ROI_PER_M        = 0.015      # Rating lift per $1M marketing
+MKT_ROI_PER_M        = 0.015      # Ad-revenue lift per $1M of network marketing (every show)
+MKT_FULL_EFFECT_M    = 16.0       # above this, each extra $1M buys only MKT_TAPER of the lift
+MKT_TAPER            = 0.5
 MIN_MARKETING_PER_SHOW_M = 3.0    # Zach Schlessel's feedback: "$3M marketing minimum for show viability"
 SVOD_SUB_LTV_MO      = 8.0        # SVOD ARPU $/month
 SVOD_MARGIN          = 0.15       # SVOD contribution margin
@@ -166,8 +168,13 @@ class Show:
         """Ad revenue in $M for a season. Folds in the primetime scheduling
         multiplier (1.0/neutral until a slot is actually assigned) so a
         student's day/hour choice is a real financial consequence for this
-        season, not just a display-only grid."""
-        mkt_lift   = 1 + mkt_boost_m * MKT_ROI_PER_M
+        season, not just a display-only grid.
+
+        mkt_boost_m is the NETWORK's total marketing for the year (2026-11-04,
+        Nick #5): it lifts every show's ad revenue by marketing_lift(), as the
+        Financing text promises. It used to be a per-show share, so $20M across
+        20 shows lifted revenue only ~1.5% in total."""
+        mkt_lift   = marketing_lift(mkt_boost_m)
         cord_decay = (1 - CORD_CUT_RATE) ** (year - 1)
         return (self.rating * REV_PER_RATING_POINT * mkt_lift * cord_decay
                 * self.schedule_multiplier())
@@ -213,9 +220,16 @@ class Show:
 def portfolio_cost(shows: list[Show], year: int) -> float:
     return sum(s.annual_amort_expense(year) for s in shows)
 
+def marketing_lift(mkt_total_m: float) -> float:
+    """Ad-revenue multiplier from a year's network marketing: +1.5% per $1M up
+    to $16M, then half as much per extra $1M (diminishing returns)."""
+    m = max(mkt_total_m, 0.0)
+    effective = min(m, MKT_FULL_EFFECT_M) + MKT_TAPER * max(m - MKT_FULL_EFFECT_M, 0.0)
+    return 1 + effective * MKT_ROI_PER_M
+
+
 def portfolio_ad_rev(shows: list[Show], year: int, mkt_total_m: float) -> float:
-    per_show = mkt_total_m / max(len(shows), 1)
-    return sum(s.ad_revenue(year, per_show) for s in shows)
+    return sum(s.ad_revenue(year, mkt_total_m) for s in shows)
 
 def annual_budget(year: int) -> float:
     return BASE_BUDGET * (1 + BUDGET_GROWTH_RATE) ** (year - 1)
@@ -697,7 +711,7 @@ def preview_regional_signal(team_name: str, year: int, show: "Show") -> Optional
 def greenlight_linear(episodes: int, ep_cost_k: float, rating: float,
                       mkt_m: float, year: int) -> dict:
     cost     = episodes * ep_cost_k / 1000
-    mkt_lift = 1 + mkt_m * MKT_ROI_PER_M
+    mkt_lift = marketing_lift(mkt_m)
     decay    = (1 - CORD_CUT_RATE) ** (year - 1)
     rev      = rating * REV_PER_RATING_POINT * mkt_lift * decay
     ocf      = rev - cost - mkt_m
@@ -709,7 +723,7 @@ def greenlight_linear(episodes: int, ep_cost_k: float, rating: float,
 def greenlight_svod(episodes: int, ep_cost_k: float, rating: float,
                     appeal: int, mkt_m: float, year: int) -> dict:
     cost       = episodes * ep_cost_k / 1000
-    mkt_lift   = 1 + mkt_m * MKT_ROI_PER_M
+    mkt_lift   = marketing_lift(mkt_m)
     sub_lift   = rating * 0.3 * (appeal / 100) * mkt_lift
     ltv_3yr    = sub_lift * SVOD_SUB_LTV_MO * 12 * SVOD_MARGIN * 3
     rev_y1     = ltv_3yr / 3

@@ -449,7 +449,13 @@ if ss.registered:
                 if not locked:
                     is_active_net = ss.active_network == net
                     if st.button(label, key=f"net_{net}", use_container_width=True,
-                                 type="primary" if is_active_net else "secondary"):
+                                 type="primary" if is_active_net else "secondary",
+                                 help="You're playing this network." if is_active_net else None):
+                        # Clicking the network you're already on does nothing
+                        # (2026-11-04, Nick #1/#2): it used to restart the level
+                        # at Year 1 without asking. Restart lives on its own button.
+                        if is_active_net and ss.get("tv_network_chosen"):
+                            st.rerun()
                         # An official run with a simulated year can't be abandoned:
                         # coming back would replay the same luck with hindsight.
                         if (ss.get("yearly_log") and is_official_run(
@@ -558,9 +564,13 @@ if not ss.registered and ss.active_section != "leaderboard":
             elif not semester_input.strip():
                 st.error("Please enter your semester/year.")
             else:
-                ss.team_name     = team_input.strip()
-                ss.school        = f"{college_input.strip()}, {university_input.strip()}"
-                ss.class_section = f"{semester_input.strip()} — {class_title_input.strip()}"
+                # Same team/class typed with different capitals or spacing joins
+                # the existing record instead of starting a second one (Nick #7).
+                from utils.game_state import canonical_identity
+                ss.team_name, ss.school, ss.class_section = canonical_identity(
+                    team_input.strip(),
+                    f"{college_input.strip()}, {university_input.strip()}",
+                    f"{semester_input.strip()} — {class_title_input.strip()}")
                 ss.class_abbrev  = class_abbrev_input.strip()
                 ss.team_role     = "driver" if role_label.startswith("🎮") else "viewer"
                 ss.registered    = True

@@ -149,7 +149,7 @@ def render():
 
     with c3:
         gap = net_position - mar1_net
-        cow_coverage = sum(s.ad_revenue(year, mkt/len(shows)) / 12
+        cow_coverage = sum(s.ad_revenue(year, mkt) / 12
                            for s in shows if s.rating >= 1.5)
         funded = "✅ Cash cows cover" if cow_coverage >= abs(net_position) else "❌ Cash gap — raise reserve"
         st.markdown(f"""
@@ -345,7 +345,7 @@ def render():
     """, unsafe_allow_html=True)
 
     earning  = [s for s in active if renew.get(s.id) != "Cancel"]
-    per_show = mkt / max(len(earning), 1)
+    per_show = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
     monthly_rev = [0.0] * 12
     for s in earning:
         months = s.cash_months(s.air_month, s.episodes)

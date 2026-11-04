@@ -203,7 +203,7 @@ def render():
     if "renewal_decisions" not in ss:
         ss.renewal_decisions = {}
 
-    per = mkt / max(len(shows), 1)
+    per = mkt  # network-wide marketing: the lift applies to every show (Nick #5)
     rows = []
     for s in shows:
         curr_cost  = s.total_cost(year)
@@ -656,7 +656,7 @@ def render():
 
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin:4px 0 6px;">'
-        '📊 <b>Reference — sorted by rating.</b> Protect your highest-rated shows with their own best '
+        '📊 <b>Reference only, sorted by rating</b> (clicking a cell changes nothing; set slots with the dropdowns below). Protect your highest-rated shows with their own best '
         'slots (see Day Profile); a show left unscheduled stays neutral. '
         '<b style="color:#e8c547;">⚠</b> = above-median rating, still unscheduled.</div>',
         unsafe_allow_html=True)
@@ -759,7 +759,9 @@ def render():
             for s in shows_ranked:
                 if not available:
                     break
-                d, h = max(available, key=lambda dh: slot_rating_multiplier(dh[0], dh[1], s.genre))
+                # sorted(): ties break the same way in every process (sets iterate in
+                # hash order, which varies with PYTHONHASHSEED; Nick #9).
+                d, h = max(sorted(available), key=lambda dh: slot_rating_multiplier(dh[0], dh[1], s.genre))
                 available.discard((d, h))
                 s.slot_day, s.slot_hour = d, h
             ss[grid_ver_key] += 1

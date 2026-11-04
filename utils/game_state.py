@@ -758,6 +758,39 @@ def _team_key(team_name: str, school: str, class_section: str) -> str:
     return f"{school}||{class_section}||{team_name}"
 
 
+def _norm_identity(s: str) -> str:
+    return " ".join(str(s or "").split()).casefold()
+
+
+def canonical_identity(team_name: str, school: str, class_section: str) -> tuple[str, str, str]:
+    """Adopt the spelling already on record when a school, class or team is
+    re-typed with different capitalization or spacing (2026-11-04, Nick #7:
+    "Team 1" and "team 1" used to be two teams, so Follow Along couldn't find
+    the Driver and scores split). Every later lookup compares exact strings,
+    so matching once at sign-in fixes them all. A brand-new identity is
+    returned unchanged."""
+    known = set()
+    for k in _storage.list_state_keys(TEAM_STATE_FILE):
+        parts = k.split("||")
+        if len(parts) >= 3:
+            known.add((parts[0], parts[1], parts[2]))
+    for rows in (load_leaderboard(), _storage.load_pitches(PITCH_BOARD_FILE),
+                 _storage.load_progress(PROGRESS_FILE)):
+        for e in rows:
+            if e.get("team_name"):
+                known.add((e.get("school", ""), e.get("class_section", ""), e["team_name"]))
+    ordered = sorted(known)
+
+    def pick(value, pool):
+        n = _norm_identity(value)
+        return next((p for p in pool if _norm_identity(p) == n), value.strip())
+
+    school = pick(school, [s for s, _, _ in ordered])
+    class_section = pick(class_section, [c for s, c, _ in ordered if s == school])
+    team_name = pick(team_name, [t for s, c, t in ordered if s == school and c == class_section])
+    return team_name, school, class_section
+
+
 def save_live_state(team_name: str, school: str, class_section: str, snapshot: dict) -> None:
     """Persist a Driver's in-progress decision state so Follow Along
     teammates on other devices/laptops can catch up to it. `snapshot` must

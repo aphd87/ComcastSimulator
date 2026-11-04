@@ -259,6 +259,18 @@ def load_state(file_path: Path, key: str) -> Optional[dict]:
     return entry["state"] if entry else None
 
 
+def list_state_keys(file_path: Path) -> list[str]:
+    """Every saved live-state key (used to match a re-typed team identity)."""
+    eng = _db()
+    if eng is not None:
+        from sqlalchemy import text
+        with eng.connect() as c:
+            return [r[0] for r in c.execute(text("SELECT team_key FROM slate_team_state"))]
+    with _LOCK:
+        states = _read_json(file_path, {}, strict=False)
+    return list(states.keys()) if isinstance(states, dict) else []
+
+
 # ── Public API: Peer Pitch Board (2026-10-01) ────────────────────────────────
 def _append_row(table: str, file_path: Path, entry: dict) -> None:
     """Append one JSON row. Same safety as append_entry: an INSERT on the
