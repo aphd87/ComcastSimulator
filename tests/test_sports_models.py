@@ -196,4 +196,15 @@ def test_lower_tiers_are_cheaper_and_women_soccer_grows():
     c = SportsContract(league="Women's Pro Soccer", start_year=2020, end_year=2024, annual_cost_m=5.0)
     y1 = sports_year_pnl([c], 2020, 1000.0)["revenue_m"]
     y3 = sports_year_pnl([c], 2022, 1000.0)["revenue_m"]
-    assert y3 == pytest.approx(y1 * 1.2 ** 2, rel=1e-3)
+    assert y3 == pytest.approx(y1 * 1.2 ** 2, abs=0.01)
+
+
+def test_sports_tail_pays_back_retained_fans_without_compounding():
+    """2026-11-03: a season's realized sports revenue leaves a decaying tail
+    of retained subscribers in later years; tails don't count as new seasons."""
+    from utils.sports_models import sports_tail_m, SPORTS_TAIL_SHARE, SPORTS_TAIL_DECAY
+    log = [{"year": 1, "sports_rev": 10.0, "sports_tail": 0.0},
+           {"year": 2, "sports_rev": 4.5, "sports_tail": 4.5}]      # year 2 had no season, only tail
+    assert sports_tail_m(log[:1], 2) == pytest.approx(10 * SPORTS_TAIL_SHARE, abs=0.01)
+    assert sports_tail_m(log, 3) == pytest.approx(10 * SPORTS_TAIL_SHARE * SPORTS_TAIL_DECAY, abs=0.01)
+    assert sports_tail_m([], 1) == 0

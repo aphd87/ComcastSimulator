@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from utils.models import (
-    distribution_revenue, portfolio_ad_rev, AMORT_MONTHS_LINEAR, AMORT_MONTHS_SVOD,
+    distribution_revenue, platform_revenue, platform_revenue_label, portfolio_ad_rev, AMORT_MONTHS_LINEAR, AMORT_MONTHS_SVOD,
     TRUE_CRIME_AMORT_MONTHS,
     MONTHS, HOUR_LABELS, HOURLY_INDEX,
 )
@@ -351,7 +351,7 @@ def render():
         months = s.cash_months(s.air_month, s.episodes)
         for m in months:
             monthly_rev[m] += s.ad_revenue(year, per_show) / len(months)
-    monthly_dist = [distribution_revenue(year) / 12] * 12
+    monthly_dist = [platform_revenue(year, earning) / 12] * 12
     monthly_cost = [totals["charged"] / 12] * 12
     monthly_net  = [monthly_rev[i] + monthly_dist[i] - monthly_cost[i] for i in range(12)]
 

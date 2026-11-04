@@ -58,7 +58,9 @@ def _finance_app(year=1, yearly_log=None, sports_contracts=None) -> AppTest:
 def test_peacock_sports_rights_are_included_in_preview_ocf():
     """Not-yet-simulated year: sports revenue/cost must be folded into the
     Net OCF metric, not silently omitted."""
-    contract = SportsContract(league="Premier League", start_year=1, end_year=3, annual_cost_m=25.0)
+    from utils.game_state import LEVEL_START_YEAR
+    _y1 = LEVEL_START_YEAR["peacock"]   # contracts are in calendar years (2026-11-03 fix)
+    contract = SportsContract(league="Premier League", start_year=_y1, end_year=_y1 + 2, annual_cost_m=25.0)
     at_no_sports   = _finance_app(year=1, sports_contracts=[])
     at_with_sports = _finance_app(year=1, sports_contracts=[contract])
 
@@ -71,9 +73,9 @@ def test_peacock_sports_rights_are_included_in_preview_ocf():
     )
 
     # Cross-check against the real sports_year_pnl the actual sim uses.
-    held = held_this_year([contract], 1)
+    held = held_this_year([contract], _y1)
     originals_spend_m = portfolio_cost([_peacock_show()], 1)
-    sp = sports_year_pnl(held, 1, originals_spend_m)
+    sp = sports_year_pnl(held, _y1, originals_spend_m)
     assert sp["revenue_m"] > 0 or sp["cost_m"] > 0   # sanity: contract actually has a real P&L
 
 

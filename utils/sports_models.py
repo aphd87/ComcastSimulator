@@ -113,6 +113,36 @@ SPORTS_LEAGUES = {
     },
 }
 
+# Peacock-only scale (2026-11-03): the Peacock level now runs Peacock's own
+# ~$70-90M/yr business instead of a three-network portfolio, so every
+# package's market price and direct revenue is scaled to it. Ratios between
+# packages (and every structural-loss property) are unchanged.
+SPORTS_SCALE = 1 / 3
+for _lg in SPORTS_LEAGUES.values():
+    _lg["base_rights_cost_m"] = round(_lg["base_rights_cost_m"] * SPORTS_SCALE, 2)
+    _lg["direct_revenue_m"] = round(_lg["direct_revenue_m"] * SPORTS_SCALE, 2)
+
+# Sports as an investment (2026-11-03): fans a season brings in, and your
+# originals keep, partly stay subscribed in later years. Each year's realized
+# sports revenue leaves a tail of SPORTS_TAIL_SHARE in the next year, decaying
+# by SPORTS_TAIL_DECAY each year after: lose money up front, earn it back later
+# if the originals slate holds the fans.
+SPORTS_TAIL_SHARE = 0.45
+SPORTS_TAIL_DECAY = 0.75
+
+
+def sports_tail_m(yearly_log: list, year: int) -> float:
+    """Retained-subscriber revenue this level-year from earlier seasons'
+    sports revenue (each log row's own season revenue, excluding its tail)."""
+    tail = 0.0
+    for r in yearly_log or []:
+        j = r.get("year", 0)
+        if j < year:
+            season = (r.get("sports_rev") or 0.0) - (r.get("sports_tail") or 0.0)
+            tail += season * SPORTS_TAIL_SHARE * SPORTS_TAIL_DECAY ** (year - j - 1)
+    return round(tail, 2)
+
+
 # Originals content-spend "enough to retain the spike" calibration — see
 # retained_fraction(). 0.5 means spending half the season's direct revenue
 # on Peacock originals this year fully retains it (up to 1.0); spending

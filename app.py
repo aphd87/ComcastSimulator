@@ -996,8 +996,10 @@ else:
                 f"It's {LEVEL_START_YEAR['peacock']}. You now run Peacock: "
                 f"{len(PEACOCK_SLATE)} streaming originals and a ~${NETWORK_INFO['peacock']['budget_base']:.0f}M budget. "
                 "Peacock content uses <b style='color:#ffffff;'>36-month amortization</b>, so only a third of each "
-                "season's cost hits this year. Your big call is the mix: sports rights bring a spike of subscribers, "
-                "but they cost more than they earn unless your originals keep those subscribers around. "
+                "season's cost hits this year. You earn <b style='color:#ffffff;'>subscriptions</b>, not cable fees: "
+                "your originals bring subscribers in, and the base grows each year. Your big call is the mix of "
+                "originals, licensed films and sports rights. Sports lose money in their own season and pay off later, "
+                "only if your originals keep those fans subscribed. Doing nothing won't clear the target. "
                 "Hit a <b style='color:#ffffff;'>10% OCF margin</b> to pass."
             ),
             "steps": [

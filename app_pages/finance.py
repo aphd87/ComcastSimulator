@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from utils.models import (
-    annual_budget, cable_subs, distribution_revenue,
+    annual_budget, cable_subs, distribution_revenue, platform_revenue, platform_revenue_label,
     portfolio_ad_rev, portfolio_cost, MONTHS,
     REV_PER_RATING_POINT, SUB_RATE_PER_MONTH
 )
@@ -50,7 +50,7 @@ def render():
         margin    = played["margin"]
     else:
         ad_rev   = portfolio_ad_rev(shows, year, mkt)
-        dist_rev = distribution_revenue(year)
+        dist_rev = platform_revenue(year, shows)
         # Peacock sports rights (2026-08-24 fix): this page was omitting
         # them entirely, unlike the real _compute_year/_preview_pnl, which
         # fold sports revenue/cost straight into total_rev/cost -- for a
@@ -58,12 +58,22 @@ def render():
         # overstated OCF relative to what Simulate actually produces.
         sports_rev_m, sports_cost_m = 0.0, 0.0
         if net == "peacock":
-            held = held_this_year(ss.get("sports_contracts", []), year)
+            from utils.game_state import LEVEL_START_YEAR
+            from utils.sports_models import sports_tail_m
+            _cal = LEVEL_START_YEAR["peacock"] + (year - 1)   # contracts are in calendar years
+            held = held_this_year(ss.get("sports_contracts", []), _cal)
+            sports_rev_m += sports_tail_m(ss.get("yearly_log", []), year)
             if held:
                 peacock_shows = [s for s in shows if s.network == "Peacock"]
                 originals_spend_m = portfolio_cost(peacock_shows, year)
-                sp = sports_year_pnl(held, year, originals_spend_m)
-                sports_rev_m, sports_cost_m = sp["revenue_m"], sp["cost_m"]
+                sp = sports_year_pnl(held, _cal, originals_spend_m)
+                sports_rev_m, sports_cost_m = sports_rev_m + sp["revenue_m"], sp["cost_m"]
+        # Licensed films and casting fees (2026-11-03), same as the Simulate preview.
+        if net == "peacock":
+            from utils.film_licensing import year_film_pnl
+            _fp = year_film_pnl(ss, year)
+            sports_rev_m += _fp["film_rev"]; sports_cost_m += _fp["film_cost"]
+        sports_cost_m += float(ss.get("cast_fees", {}).get(str(year), 0.0))
         total_rev = ad_rev + dist_rev + sports_rev_m
         cost      = portfolio_cost(shows, year) + sports_cost_m
         ga        = total_rev * 0.06
@@ -82,8 +92,12 @@ def render():
                     f"generates {1.5*REV_PER_RATING_POINT:.1f}M before marketing lift and cord-cutting decay. "
                     f"Formula: Rating × \\${REV_PER_RATING_POINT}M × marketing-lift × cord-cutting-decay × "
                     f"schedule-slot multiplier."))
-    c2.metric("Distribution",   f"${dist_rev:.1f}M", f"{subs:.1f}M subs × ${SUB_RATE_PER_MONTH}/mo")
-    c3.metric("Total Revenue",  f"${total_rev:.1f}M","Ad + Distribution")
+    _plat = platform_revenue_label(shows)
+    if _plat == "Subscriptions":
+        c2.metric("Subscriptions", f"${dist_rev:.1f}M", "Grows with your originals")
+    else:
+        c2.metric("Distribution",   f"${dist_rev:.1f}M", f"{subs:.1f}M subs × ${SUB_RATE_PER_MONTH}/mo")
+    c3.metric("Total Revenue",  f"${total_rev:.1f}M", f"Ad + {_plat}")
     c4.metric("Content Spend",  f"${cost:.1f}M",     "Amortized")
     c5.metric("Marketing",      f"${mkt:.1f}M",      "Allocated")
     c6.metric("Net OCF",        f"${net_ocf:.1f}M",  f"Margin: {margin:.1f}%",
@@ -99,7 +113,7 @@ def render():
 
         pl_data = [
             ("Ad Revenue",           ad_rev,    True),
-            ("Distribution Revenue", dist_rev,  True),
+            (f"{_plat} Revenue", dist_rev,  True),
             ("──────────────────",   None,      None),
             ("Gross Revenue",        total_rev, True),
             ("Content Cost",        -cost,      False),

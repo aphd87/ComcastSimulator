@@ -8,6 +8,14 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## 2026-11-03 (final) — Built for Darden MBAs: official-run integrity, per-team secrets, real Peacock economics
+
+- **Official-run integrity** (`utils/game_state.py::is_official_run`): every draw is seeded per team, so undo paths let a team see the future on the run that counts. On an official run (nothing recorded yet for that network/slate): Redo is disabled (TV + Movies); switching/restarting a network is blocked once a year is simulated; Movies genre/concept/source/AI tools lock once a film's theatrical sim has run. Practice attempts keep everything. Drivers **resume** their saved TV and Movies runs when they refresh or re-register (closes "refresh = free restart", and removes the "don't refresh" fragility); `submitted`/`last_score`/`tv_network_chosen` are now in the live snapshot so a resumed finished level isn't recorded twice.
+- **Per-team hidden values**: film true value, film rival bid and sports rival bids now include the team in their seed (all other draws already did). No shared answer key; scouting with a throwaway team name tells you nothing.
+- **Peacock economics**: a streaming-only slate earns **subscription revenue** (`utils/models.py::platform_revenue`), $1.20M per active rating point growing 45%/yr, instead of cable distribution fees. Sports packages scaled to Peacock's own business (`SPORTS_SCALE = 1/3`), and sports now pays back later: 45% of a season's realized sports revenue returns the next year as retained subscribers, decaying 0.75/yr (`sports_tail_m`; `sports_tail` stored per year so tails don't compound). 4-year sweep: renew-all 5-8% (fails 10%), cut losers + value films ~10%, + niche sports / tight marketing ~12-13%, NFL a slow-payback bet (−9% Year 1, recovering by Year 4). P&L tab now uses calendar years for sports (it had been silently dropping held contracts) and includes films/casting.
+- Guides updated (resume on refresh, official-run locks, Peacock subscriptions, sports payback).
+- 599 tests passing. No browser verification.
+
 **AI Grade removed (2026-11-03, end of day, per user: "scrap the AI Grade pitch shows thing across all levels").** `utils/ai_grading.py`, the Greenlighting panel, its tests, the `anthropic` dependency and the README/Secrets docs are gone; `test_no_ai_features_remain` is back. No AI anywhere, no API keys.
 
 ## 2026-11-03 (latest) — Lower-tier sports, film licensing, instructor metrics + archive/clear

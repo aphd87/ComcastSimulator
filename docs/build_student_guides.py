@@ -194,9 +194,9 @@ def sign_in_section(doc, game_button: str, movies: bool):
                 "Playing on several laptops? Exactly **one** person registers as Driver. Everyone else registers "
                 "as Follow Along with the same details, and their screens update automatically every few seconds "
                 "to show the Driver's choices.")
-    callout(doc, "warn",
-            "Don't close or refresh your browser tab mid-level. Your in-progress decisions live in that tab. "
-            "Finished levels and slates save to the leaderboard automatically; one you leave halfway does not.")
+    callout(doc, "tip",
+            "Your Driver's game is saved as you play. If the tab closes or you refresh, sign in again with **exactly "
+            "the same details** as Driver and you pick up where you left off.")
 
 
 def submit_section(doc, final_button: str, unit: str = "year", whole: str = "level"):
@@ -210,9 +210,11 @@ def submit_section(doc, final_button: str, unit: str = "year", whole: str = "lev
     callout(doc, "warn",
             f"**Your FIRST finished {whole} is your official score.** You get 3 attempts in total, but attempts 2 and 3 "
             f"are practice only. Agree as a team before you simulate the last {unit}.")
-    callout(doc, "tip",
-            f"Before your last {unit}, you can still go back: **← Redo** replays only the most recent {unit}, and "
-            f"**↺ Restart** wipes the whole {whole}. Neither one uses up an attempt. Finishing the {whole} does.")
+    callout(doc, "warn",
+            f"**On your official (first) run, results stand.** Redo is turned off, and once you've simulated a {unit} "
+            f"you can't restart or switch away and start over, because the same luck would replay with hindsight. "
+            f"Think before each Simulate. After your official score is recorded, Redo and Restart work freely on "
+            f"practice attempts.")
 
 
 # ── TV / Streaming guide ─────────────────────────────────────────────────────
@@ -251,7 +253,7 @@ def build_tv():
     table(doc, ["Network", "Years", "Starting budget", "Pass if margin ≥", "What makes it different"], [
         ["🔍 **Oxygen**", "2012–2015", "~$95M", "**12%**", "20 cheap true-crime and reality shows, a small loyal audience. True Crime costs are spread over 24 months. The easiest level, so learn the controls here."],
         ["🍸 **Bravo**", "2016–2019", "~$220M", "**15%**", "Bravo's own 20 reality, competition and talk shows, with affluent viewers who bring premium ad rates. Adds **Brand Partnerships** and **Casting Unknowns**. The highest bar to clear."],
-        ["🦚 **Peacock**", "2020–2023", "~$150M", "**10%**", "Peacock's own streaming originals: you spend now and get paid later through subscribers. Adds **Sports Rights** and **Film Licensing**, all competing for one budget."],
+        ["🦚 **Peacock**", "2020–2023", "~$150M", "**10%**", "Peacock's own streaming originals, paid by subscriptions instead of cable fees. Adds **Sports Rights** and **Film Licensing**, all competing for one budget. Doing nothing won't clear the target."],
     ], [0.95, 0.85, 1.0, 0.95, 2.75])
     para(doc, "Each level is one network on its own: you run only that network's shows. Years shown are for the "
               "default 4-year levels. You can usually open any network at any time from the network selector, but "
@@ -280,7 +282,7 @@ def build_tv():
 
     doc.add_heading("1 · 💰 Financing — set your marketing budget  (required)", level=2)
     steps(doc, [
-        "Look at your two revenue sources: **Ad Revenue** (depends on ratings and marketing) and **Distribution** (fees cable companies pay you). Both shrink over time as people cut the cord.",
+        "Look at your two revenue sources: **Ad Revenue** (depends on ratings and marketing) and **Distribution** (fees cable companies pay you), which both shrink as people cut the cord. On **Peacock**, Distribution is replaced by **Subscriptions**: your originals bring in subscribers (every active show's rating adds to it, so cancelling a show loses its subscribers too), and the subscriber base grows each year.",
         "Glance at the **Linear vs. Streaming** chart. TV pays you sooner, and streaming pays off later.",
         "Set the **Marketing ($M this year)** slider.",
     ])
@@ -318,7 +320,8 @@ def build_tv():
     callout(doc, "key",
             "Sports bring in a burst of subscribers. Whether they **stay** afterward depends on how much you spend on original shows. "
             "Sports is the hook, and your entertainment slate is what keeps people subscribed. A winning bid locks you into a contract of 4–7 years. "
-            "Premium rights lose the most money on their own; cheaper packages lose little and keep more fans. Women's Pro Soccer earns 20% more every year you hold it, so buying early is the bet.")
+            "Every package loses money in its own season. The payoff comes later: fans your originals keep stay subscribed, and about 45% of a season's sports revenue comes back the next year, fading after that. "
+            "Premium rights (NFL) pay off slowly; cheaper packages lose little and keep more fans. Women's Pro Soccer earns 20% more every year you hold it, so buying early is the bet.")
 
     doc.add_heading("4 · 🎞️ Film Licensing  (Peacock only, optional)", level=2)
     steps(doc, [
@@ -390,7 +393,7 @@ def build_tv():
         "**Bravo**: how each brand deal turned out (sponsor money or make-good cost) and your casting fees.",
         "**Peacock**: what each licensed film earned against its fee, and your sports rights P&L.",
     ])
-    para(doc, "Then click **→ Start Year [next]**, or **← Redo This Year** to try that year again.")
+    para(doc, "Then click **→ Start Year [next]**. (**← Redo This Year** works only on practice attempts.)")
 
     submit_section(doc, "→ View Final Results & Submit Score")
     para(doc, "After you submit, click **→ Advance to [next network]** to move on, with the shows you greenlit still on your roster.")
@@ -580,7 +583,7 @@ def build_movies():
         "**Surprises**: production trouble, word-of-mouth or piracy swings, and unexpected merchandise wins.",
         "**🎬 Your Slate So Far**: one row per film you've made (including its run length), so you can compare them side by side. A film's NPV can still move one cycle later, when you choose its Pay-2 deal. Other teams' results are on the leaderboard.",
     ])
-    para(doc, "Then click **→ Start [next cycle]**, or **← Redo** to replay that cycle.")
+    para(doc, "Then click **→ Start [next cycle]**. (**← Redo** works only on practice attempts. On your official slate, a film's genre and concept also lock once its theatrical simulation has run.)")
 
     submit_section(doc, "→ View Final Slate & Submit Score", unit="cycle", whole="slate")
 

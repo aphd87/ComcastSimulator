@@ -21,7 +21,7 @@ from utils.seeding import stable_seed
 import plotly.graph_objects as go
 
 from utils.models import (
-    distribution_revenue, portfolio_ad_rev,
+    distribution_revenue, platform_revenue, platform_revenue_label, portfolio_ad_rev,
     greenlight_linear, greenlight_svod, performance_linked_growth,
     MIN_MARKETING_PER_SHOW_M, draw_production_risk_event,
     draw_emergency_budget_shock,
@@ -37,7 +37,7 @@ from utils.game_state import (level_shows, is_official_run,
     YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
     render_vs_competitors_board,
 )
-from utils.sports_models import (
+from utils.sports_models import (sports_tail_m, 
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
     resolve_auction, SportsContract, held_this_year, sports_year_pnl,
 )
@@ -104,7 +104,7 @@ def _preview_pnl(shows, year: int, mkt: float,
     per       = mkt / max(len(active), 1)
 
     ad_rev   = sum(s.ad_revenue(year, per) for s in active)
-    dist_rev = distribution_revenue(year)
+    dist_rev = platform_revenue(year, active)   # subscriptions on Peacock, cable fees elsewhere
     rev      = ad_rev + dist_rev + sports_rev_m
     cost     = _annual_cost(shows, year, prev_cancelled, new_cancel) + sports_cost_m
     ga       = rev * 0.06
@@ -189,7 +189,8 @@ def _compute_year(ss, shows, year: int, mkt: float, new_cancel: set, net: str,
                                "emmy_nomination": emmy_score is not None and emmy_score >= EMMY_NOMINATION_THRESHOLD,
                                "emmy_win": emmy_score is not None and emmy_score >= EMMY_WIN_THRESHOLD})
 
-    dist_rev   = distribution_revenue(year)
+    dist_rev   = platform_revenue(year, [s for s in shows if s.id in {r["id"] for r in show_rows
+                                                                        if r["status"] == "active"}])
     extras     = bravo_year_extras(ss, shows, year, {r["id"] for r in show_rows if r["status"] == "active"})
     films      = year_film_pnl(ss, year) if net == "peacock" else {"film_rev": 0.0, "film_cost": 0.0, "film_rows": []}
     total_rev  = adj_ad_rev + dist_rev + sports_rev_m + extras["brand_rev"] + films["film_rev"]
@@ -530,7 +531,8 @@ def _section_financing(ss, shows, year, net_info, level_budget):
     # the marketing-spend decision so students see ad vs. distribution
     # (subscriber) revenue rather than just a budget number.
     ann_ad_rev   = portfolio_ad_rev(shows, year, ss.get("mkt_budget", 5.0))
-    ann_dist_rev = distribution_revenue(year)
+    ann_dist_rev = platform_revenue(year, _active_shows(shows, ss.cancelled_shows))
+    _plat = platform_revenue_label(shows)
     ann_total    = ann_ad_rev + ann_dist_rev
     ad_pct   = (ann_ad_rev / ann_total * 100) if ann_total else 0
     dist_pct = 100 - ad_pct if ann_total else 0
@@ -539,13 +541,19 @@ def _section_financing(ss, shows, year, net_info, level_budget):
         '<div style="font-size:14px;color:#ffffff;margin-bottom:8px;">'
         'Two revenue streams fund everything below: <b style="color:#ffffff;">ad revenue</b> '
         '(rating × marketing lift, eroding as cord-cutting continues) and '
-        '<b style="color:#ffffff;">distribution revenue</b> (affiliate fees × subscriber count, '
-        'also eroding but with an escalation clause). At current ratings/marketing:</div>',
+        + ('<b style="color:#ffffff;">subscription revenue</b> (subscribers × monthly price). Subscribers '
+           'come for your originals: every active show\'s rating adds to it, and the subscriber base grows '
+           'about 45% a year as the service matures. Cancel a show and you lose its subscribers too. '
+           if _plat == "Subscriptions" else
+           '<b style="color:#ffffff;">distribution revenue</b> (affiliate fees × subscriber count, '
+           'also eroding but with an escalation clause). ')
+        + 'At current ratings/marketing:</div>',
         unsafe_allow_html=True)
 
     rcol1, rcol2, rcol3 = st.columns(3)
     rcol1.metric("📺 Ad Revenue", f"${ann_ad_rev:.1f}M", f"{ad_pct:.0f}% of revenue")
-    rcol2.metric("📡 Distribution", f"${ann_dist_rev:.1f}M", f"{dist_pct:.0f}% of revenue")
+    rcol2.metric("📲 Subscriptions" if _plat == "Subscriptions" else "📡 Distribution",
+                 f"${ann_dist_rev:.1f}M", f"{dist_pct:.0f}% of revenue")
     rcol3.metric("Total Revenue", f"${ann_total:.1f}M")
 
     # ── Linear vs. Streaming economics ──────────────────────────────────────
@@ -659,10 +667,11 @@ def _section_sports_rights_bidding(ss, year, net, sec_num):
                    "Fans who stick around": f"{i['retention_floor']:.0%}+",
                    "Season": f"{i['season_months']} mo"} for lg, i in SPORTS_LEAGUES.items()]
     html_table(pd.DataFrame(_tier_rows))
-    takeaway("Premium rights (NFL) bring the biggest subscriber spike but lose the most money and churn fastest. "
-             "Value and niche packages cost a fraction, lose little, and keep more of their fans. Women's Pro "
-             "Soccer loses a little at first but its revenue grows 20% a year you hold it, so buying early is "
-             "the bet. Sports plus originals is the strategy: originals spending is what keeps sports fans subscribed.")
+    takeaway("Every package costs more than it earns in its own season. The payoff comes later: sports fans your "
+             "originals keep stay subscribed, and about 45% of a season's sports revenue comes back the next year "
+             "(fading after that). Premium rights (NFL) bring the biggest spike and the biggest Year-1 loss, so they "
+             "pay off slowly; value and niche packages cost a fraction and keep more of their fans. Women's Pro Soccer "
+             "grows 20% a year you hold it, so buying early is the bet.")
 
     # 2026-08-24 fix -- found while testing the live-bid-feedback addition
     # below: every call in this function was passing `year` (the in-level
@@ -802,6 +811,14 @@ def _sports_pnl_recap(ss, shows, year, net, new_cancel) -> dict:
     # originals (utils/film_licensing.py, 2026-11-03).
     originals_spend_m += year_film_pnl(ss, year)["retention_credit_m"]
     year_pnl = sports_year_pnl(held, calendar_year, originals_spend_m)
+    # Sports fans kept from earlier seasons keep paying (2026-11-03).
+    _tail = sports_tail_m(ss.yearly_log, year)
+    year_pnl = {**year_pnl, "revenue_m": round(year_pnl["revenue_m"] + _tail, 2),
+                "net_m": round(year_pnl["net_m"] + _tail, 2), "tail_m": _tail}
+    if _tail and not held:
+        st.markdown(f'<div style="font-size:14px;color:#ffffff;margin-bottom:14px;">🏈 Sports fans from earlier '
+                    f'seasons who stayed subscribed bring in <b style="color:{SUCCESS};">+${_tail:.1f}M</b> this '
+                    f'year.</div>', unsafe_allow_html=True)
 
     if held:
         net_c = SUCCESS if year_pnl["net_m"] >= 0 else DANGER
@@ -964,7 +981,7 @@ def _decisions(ss, shows, net_info, year, net):
 
     items = [
         ("Ad Revenue",    f"${p['ad_rev']:.2f}M",  SUCCESS),
-        ("Distribution",  f"${p['dist_rev']:.2f}M", ACCENT2),
+        (platform_revenue_label(shows), f"${p['dist_rev']:.2f}M", ACCENT2),
         ("Content Cost",  f"-${p['cost'] - p['sports_cost'] - cast_fee - _films['film_cost']:.2f}M", WARN),
     ]
     if _films["film_rev"] or _films["film_cost"]:
@@ -1089,6 +1106,7 @@ def _decisions(ss, shows, net_info, year, net):
                                          sports_rev_m=sports_pnl["revenue_m"],
                                          sports_cost_m=sports_pnl["cost_m"])
         result["budget"] = round(level_budget, 2)   # what was available this year, for the Complete-phase chart
+        result["sports_tail"] = sports_pnl.get("tail_m", 0.0)   # so next year's tail doesn't compound on itself
         ss.yearly_log.append(result)
         _post_progress(ss, net)
         ss.cancelled_shows = ss.cancelled_shows | new_cancel

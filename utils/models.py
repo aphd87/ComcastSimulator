@@ -229,6 +229,43 @@ def distribution_revenue(year: int) -> float:
     esc  = min(1 + DISTRIB_ESC_RATE * (year - 1), 1.25)
     return subs * SUB_RATE_PER_MONTH * 12 * esc
 
+# ── Peacock subscription revenue (2026-11-03) ───────────────────────────────
+# Per user ("do all of it", after review flagged that a Peacock-only level
+# still collected cable carriage fees and posted ~67% margins while real
+# Peacock lost billions): a streamer earns subscriptions, not affiliate fees.
+# Subscription revenue scales with the originals slate (more and better-rated
+# active shows bring more subscribers) and grows as the service matures.
+# Calibrated on PEACOCK_SLATE with a 4-year strategy sweep (2026-11-03):
+# renew-everything lands ~5-8% for the level (fails the 10% target); cutting
+# money-losers plus value films passes at ~10%; adding cheap sports packages
+# and tight marketing reaches ~12-13%; NFL is a long bet (Year-1 loss of ~9%,
+# recovering by Year 4 through retained sports subscribers). Growth ~45%/yr
+# is in line with Peacock's real early paid-subscriber growth.
+PEACOCK_SUB_REV_PER_RATING_PT = 1.20    # $M of subscription revenue per active rating point, Year 1
+PEACOCK_SUB_GROWTH            = 0.45    # subscriber base growth per year
+
+
+def subscription_revenue(year: int, active_shows: list) -> float:
+    rating_pts = sum(s.rating for s in active_shows if s.network == "Peacock")
+    return PEACOCK_SUB_REV_PER_RATING_PT * rating_pts * (1 + PEACOCK_SUB_GROWTH) ** (year - 1)
+
+
+def is_streaming_slate(shows: list) -> bool:
+    return bool(shows) and all(s.network == "Peacock" for s in shows)
+
+
+def platform_revenue(year: int, active_shows: list) -> float:
+    """The network's non-ad revenue line: subscriptions for Peacock (a
+    streaming-only slate), cable distribution fees for linear networks."""
+    if is_streaming_slate(active_shows):
+        return subscription_revenue(year, active_shows)
+    return distribution_revenue(year)
+
+
+def platform_revenue_label(shows: list) -> str:
+    return "Subscriptions" if is_streaming_slate(shows) else "Distribution"
+
+
 def portfolio_ocf(shows: list[Show], year: int, mkt_m: float, ga_pct: float = 0.06) -> float:
     rev  = portfolio_ad_rev(shows, year, mkt_m) + distribution_revenue(year)
     cost = portfolio_cost(shows, year)
