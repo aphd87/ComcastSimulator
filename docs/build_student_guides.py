@@ -209,7 +209,8 @@ def submit_section(doc, final_button: str, unit: str = "year", whole: str = "lev
     ])
     callout(doc, "warn",
             f"**Your FIRST finished {whole} is your official score.** You get 3 attempts in total, but attempts 2 and 3 "
-            f"are practice only. Agree as a team before you simulate the last {unit}.")
+            f"are practice only (and only if the official run didn't pass: once you pass, no further runs are recorded). "
+            f"Agree as a team before you simulate the last {unit}.")
     callout(doc, "warn",
             f"**On your official (first) run, results stand.** Redo is turned off, and once you've simulated a {unit} "
             f"you can't restart or switch away and start over, because the same luck would replay with hindsight. "
@@ -298,7 +299,7 @@ def build_tv():
     steps(doc, [
         "**Optional: buy Research** ($2M per show). Open **🔬 Pay for Research** and click a show. You get a 1–5 star signal for how its rating will really move this year, plus sometimes the regions where it plays well.",
         "In **Your Slate**, look at each show card: its **rating** (audience size; higher means more ad revenue), its **IP Score** (franchise value, 0–100), and its projected OCF.",
-        "For every show, pick **Renew** or **Cancel**, and confirm the month it premieres.",
+        "For every show, pick **Renew** or **Cancel**, and confirm the month it premieres. Cancelling isn't free: you still pay 25% of that show's cost for the year (a sunk-cost penalty), so cancelling saves about 75%.",
         "In **Primetime Scheduling**, put your shows into time slots. Or click **⚡ Auto-Fill by Rating** for a sensible starting layout.",
     ])
     callout(doc, "warn",
@@ -470,7 +471,7 @@ def build_movies():
         "**Read the recap** of last cycle and your **🎬 Your Slate So Far** table (from cycle 2 on).",
         "**Watch the strip pinned at the top of the page.** It shows your studio budget, this cycle's deals, this film's capital at risk and risk-adjusted NPV, and your slate so far, and it updates with every click. Below that are the steps: ① Partnerships ② Scouted Concepts ③ Festivals ④ Greenlight ⑤ Holding Deals ⑥ Release ⑦ Simulate. Click any step to jump to it; each gets a ✓ when it's done.",
         "**Fill in your film's row in the Release Plan table** (step 6), click the big **🎬 Run Theatrical Simulation** button under the table, then set PVOD and Pay-1 and choose Pay-2 for any earlier film that's due.",
-        "**Click ▶ Simulate → See Results** once every step has a ✓, read the results, then click **→ Start [next cycle]**.",
+        "**Click ▶ Simulate → See Results** when you're ready, read the results, then click **→ Start [next cycle]**. Steps without a ✓ are deals you passed on; Simulate lists them so skipping is a choice, not an accident.",
     ])
     callout(doc, "key",
             "Your studio starts with a **$3.5B** budget. If your movies average more than $20M NPV in a cycle, next cycle's budget grows 12%. "
@@ -509,7 +510,7 @@ def build_movies():
     doc.add_heading("3 · Film Festival Acquisitions  (optional)", level=2)
     para(doc, "Sundance, TIFF, and Cannes each offer one finished film with its reviews already known. Each card shows your analysts' "
               "**break-even bid**: the most you can pay and still make money on a weak run, and on an expected run. It also shows how "
-              "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on at least one and click **📨 Submit Sealed Bid of $XM**. Bids are "
+              "many rival studios screened it (🔥 Hot, 👀 Warm, 😴 Quiet). Enter a bid on any film you want and click **📨 Submit Sealed Bid of $XM**. Bids are "
               "sealed: the highest bid wins and pays what it bid. Hot films draw more bidders, so winning one often means overpaying "
               "(the **winner's curse**). You see the result, and what the film went on to earn, right away. A film you win joins your "
               "pipeline as an extra release; it does **not** use your greenlight slot.")
@@ -524,7 +525,7 @@ def build_movies():
         "**Concept Type**: New IP (the neutral baseline), Sequel (bigger opening, but the boost fades with each sequel), Family/Kids, or Indie-Horror.",
         "**Source Material**: Original Screenplay, or a Book, Video Game, or TV Show adaptation. Adaptations cost extra up front for the rights.",
         "**🏛️ Revive a Universal Library IP?**: bring back a title Universal already owns, such as Jaws, Back to the Future, The Mummy, Dracula, Shrek, Bourne, or The Purge. Its built-in audience lifts the opening (fully in its home genre, half as much outside it) and replaces Source Material's boost. There's no rights fee, but there is a **legacy fee** for original creators and cast. A short note on each title shows its history.",
-        "**Finish with ✅ Greenlight Film N** at the end of step 4. It becomes clickable once your pitch is written, and ticks step 4. You can still change anything before you run the simulation.",
+        "**Finish with ✅ Greenlight Film N** at the end of step 4. It ticks step 4 (the pitch is optional; if you skip this button, Simulate greenlights the film for you). You can still change anything before you run the simulation.",
         "**Optional: 🔎 Pay for Research ($4M)**: a preview of this exact movie before you commit: audience demand, projected opening weekend, worldwide box office, critics' score, and NPV. The dollar figures update as you change budget, P&A, cast, and screens. Your title and pitch don't change the numbers.",
     ])
     doc.add_heading("💰 Capital", level=3)
@@ -568,9 +569,11 @@ def build_movies():
         "**🎢 Attraction offers** (after a hit): if an earlier film earned theme-park money (an action, sci-fi, animated or family film that hit its expected run with critics at 40+), a card under the table offers to **build a Universal Studios attraction**. It shows the cost (about 35% of the film's domestic box office, $40–150M), the expected payoff and its likely range. Sequels and family films, and better reviews, make it worth more, and making a **Sequel** in that genre later adds 30%. Click **🎢 Build** or **Pass**: one chance, the outcome is revealed when you build, and it counts in your score.",
     ])
     callout(doc, "warn",
-            "**7 · Simulate.** The **▶ Simulate** button stays locked until every step in the bar has a ✓: a signed partnership, an optioned "
-            "concept, a festival bid, an actor hold (except on your final film), a Logline, Pay-2 for any earlier film that's due, and the "
-            "Theatrical Sim, plus an answer to any PVOD rejection. The list under the button names each missing step.")
+            "**7 · Simulate.** Nothing is required: **▶ Simulate** works whenever you click it. The list above the button names "
+            "any step you haven't done (partnership, concept, festival bid, actor hold, Pay-2 for an earlier film), and skipping one means "
+            "passing on that deal. If you haven't greenlit the film or run its Theatrical Simulation, Simulate does both for you, but "
+            "then you never saw the opening before setting PVOD and Pay-1. The one thing that blocks Simulate is an unanswered PVOD "
+            "rejection: choose Hold or Cut first.")
 
     page_break(doc)
     doc.add_heading("Step 3 — Read your results", level=1)
