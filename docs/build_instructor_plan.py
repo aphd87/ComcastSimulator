@@ -582,8 +582,9 @@ def build_tv_plan():
     ])
     para(doc, "**Ask:** \"Did your originals keep the sports fans? How do you know?\" Then: \"Who licensed films, and did they earn their fee?\"")
 
-    doc.add_heading("BOARD 4: THE COST OF CULTURE — WHAT THE SIM DIDN'T CHARGE YOU  (minutes 78–83)", level=1)
-    para(doc, "(Case A's core idea, and the old revenue-curve board's successor. The sim spreads every Peacock show's cost evenly over 36 months; real accounting doesn't.)", muted=True)
+    doc.add_heading("BOARD 4: WHEN YOU PAY vs. WHEN IT HITS EARNINGS  (minutes 78–83)", level=1)
+    para(doc, "(Case A's core idea, and the old revenue-curve board's successor. Two true views of the same show: "
+              "the simulation tracks when you pay; Case A's accounting rules decide when the cost hits earnings.)", muted=True)
     board(doc, [
         "  TENTPOLE ORIGINAL (binge drop)       PROCEDURAL / LIBRARY",
         "  Cost ↑                               Cost ↑",
@@ -594,9 +595,13 @@ def build_tv_plan():
         "  ASU 2019-02: cost follows VIEWING,   Steady viewing → steady charge",
         "  so it lands in the launch period",
         "",
-        "  THE SIM: every show spread evenly over 36 months",
-        "  ⭕ \"Under the real rules, your tentpole hits Year 1 hard.",
-        "     Does your strategy survive that?\"",
+        "  THE SIMULATION = WHEN YOU PAY: a show's cost leaves evenly,",
+        "  month by month, over its contract (36 months on Peacock)",
+        "  CASE A = WHEN IT HITS EARNINGS: cost follows viewing, so a",
+        "  binge tentpole books most of its cost at launch",
+        "",
+        "  ⭕ \"Same show, same total cost. Your cash says one thing;",
+        "     your earnings report says another. A CFO manages both.\"",
         "",
         "  ALSO NOT IN THE SIM:  weekly vs binge release (+48% short-term",
         "  retention, CMU)  ·  premium NBC/Bravo content after Versant",
@@ -624,7 +629,7 @@ def build_tv_plan():
         ["56–68", "Board 2 (frame)", "Buffer; sketch Board 2 while teams finish"],
         ["68–73", "Board 2", "Top / bottom 3; name the pattern"],
         ["73–78", "Board 3", "Sports vs. entertainment revisited"],
-        ["78–83", "Board 4", "The cost of culture: amortization timing"],
+        ["78–83", "Board 4", "When you pay vs. when it hits earnings"],
         ["83–85", "Close", "Memo prompt; bridge to Movie Week"],
     ], [1.0, 1.4, 4.1])
 
@@ -633,7 +638,7 @@ def build_tv_plan():
         "Board 0: \"You're already playing with one hand tied behind your back.\"",
         "Board 2: \"Same platform, same budget. The gap is what you kept, what you cut, and what you bid.\"",
         "Board 3: \"You didn't answer wrong at the start. You just didn't have data. They're both loss leaders; the genius is making one pay for the other.\"",
-        "Board 4: \"The sim was kind to your tentpoles. The accounting rules aren't.\"",
+        "Board 4: \"The sim shows when you pay. The accounting shows when it hits earnings. You have to manage both.\"",
         "Close: \"Not your luck. Your mix.\" (Movie day opens by testing that line.)",
     ])
 
@@ -644,7 +649,7 @@ def build_tv_plan():
         ["\"We couldn't cut that show, it cost so much.\"", "\"That's the sunk-cost trap. The question is next year's revenue against next year's cost.\""],
         ["\"Our shows were just unlucky.\"", "\"Look at Board 2. Luck would be random. The top teams share a pattern.\""],
         ["\"Peacock's target is too easy.\"", "\"Doing nothing misses it. And ask why a streamer gets a 10% bar when Bravo gets 15%.\""],
-        ["\"The sim's accounting isn't realistic.\"", "\"Right: that's Board 4. What would front-loading do to your strategy?\""],
+        ["\"The sim's accounting isn't realistic.\"", "\"The sim tracks when the money leaves; that's real. Board 4 is when it hits earnings. What would front-loading do to your Year 1?\""],
     ], [2.2, 4.3])
 
     doc.add_heading("BOARD 1.5: THE REAL SKILL (creative alignment)", level=2)
@@ -667,10 +672,10 @@ def build_tv_plan():
         ["**Retention link**", "Sports revenue sticks in proportion to that year's originals spend; licensed films count half their fee."],
         ["**Film licensing**", "Three finished films a year, sealed bid against one rival streamer; true value hidden until signed; fee paid every year of the term. Well-reviewed films retain better."],
         ["**Renewal**", "Every show defaults to Renew. Cancelling still charges 25% of that year's cost."],
-        ["**Amortization**", "Peacock shows spread evenly over 36 months (Board 4 contrasts this with ASU 2019-02)."],
+        ["**Amortization**", "Peacock shows paid evenly over 36 months: when you pay (Board 4 adds when it hits earnings under ASU 2019-02)."],
         ["**Greenlighting**", "Up to 3 new shows a year (acquire or build; building needs a pitch). Rival-interest pitches cost 25% more."],
         ["**Benchmarks (4 years)**", "Renew everything ≈ 5–8% (fails). Cut losers + value films ≈ 10%. + niche sports, tight marketing ≈ 12–13%. NFL deeply negative in Year 1, recovering by Year 4."],
-        ["**Marketing**", "Zach's model: the budget is split evenly across active shows; each $1M a show gets lifts its ad revenue ~1.5%; about $3M per show is the viability threshold. Cutting shows makes marketing go further."],
+        ["**Marketing**", "Zach's model: the budget is split evenly across active shows; each $1M a show gets lifts its ad revenue ~1%; about $3M per show is the viability threshold. A 20-show slate can't reach it within the $24M cap: the pressure to cut shows is intended."],
         ["**Official run**", "First finished run counts; Redo, Restart and network switching are locked once a year is simulated. Practice runs are only recorded if the official run didn't pass."],
     ], [1.7, 4.8])
     callout(doc, "tip", "After class, the Leaderboard's **All Submissions — Raw Data** table downloads a CSV of every team's scores, "

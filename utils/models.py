@@ -19,7 +19,8 @@ DISTRIB_ESC_RATE     = 0.05       # Annual affiliate fee escalation (caps Y5)
 CONTENT_COST_ESC     = 0.05       # Per-show renewal escalation
 BUDGET_GROWTH_RATE   = 0.03       # Annual total budget growth
 BASE_BUDGET          = 220.0      # $M year-1 budget (Bravo base; Oxygen uses network_info)
-MKT_ROI_PER_M        = 0.015      # Rating lift per $1M marketing
+MKT_ROI_PER_M        = 0.010      # Rating lift per $1M marketing (per show). Zach: "~1 percentage point
+                                  # rating increase per $1M, threshold dependent" (1.5% until 2026-11-04)
 MIN_MARKETING_PER_SHOW_M = 3.0    # Zach Schlessel's feedback: "$3M marketing minimum for show viability"
 SVOD_SUB_LTV_MO      = 8.0        # SVOD ARPU $/month
 SVOD_MARGIN          = 0.15       # SVOD contribution margin

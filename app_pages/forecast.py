@@ -57,7 +57,7 @@ def render():
 
     # Re-run simulation with custom params
     from utils.models import (portfolio_ad_rev, portfolio_cost,
-                               REV_PER_RATING_POINT, SUB_RATE_PER_MONTH)
+                               REV_PER_RATING_POINT, SUB_RATE_PER_MONTH, MKT_ROI_PER_M)
     import numpy as np
 
     sim_rows = []
@@ -68,7 +68,7 @@ def render():
 
         cord   = (1 - cord_cut_override/100)**(y-1)
         ad     = (sum(s.rating * REV_PER_RATING_POINT * cord for s in shows)
-                  + mkt * 0.015 * sum(s.rating for s in shows) / max(len(shows), 1))
+                  + mkt * MKT_ROI_PER_M * sum(s.rating for s in shows) / max(len(shows), 1))
         subs_m = 45 * cord
         esc    = min(1 + (0.05*(y-1)), 1.25)
         dist   = subs_m * SUB_RATE_PER_MONTH * 12 / 1000 * esc

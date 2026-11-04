@@ -603,7 +603,7 @@ def _section_financing(ss, shows, year, net_info, level_budget):
     st.markdown(
         '<div style="font-size:14px;color:#ffffff;margin-bottom:10px;">'
         'Your marketing budget is split evenly across your active shows. Each $1M a show gets lifts that show\'s '
-        'ad revenue about 1.5%. A show needs about $3M of marketing to be viable, so with a big slate, '
+        'ad revenue about 1%. A show needs about $3M of marketing to be viable, so with a big slate, '
         'either raise marketing or cancel shows so it goes further.</div>', unsafe_allow_html=True)
 
     # The slider has its own widget key and writes ss.mkt_budget on every

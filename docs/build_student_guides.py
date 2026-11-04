@@ -289,7 +289,7 @@ def build_tv():
         "Set the **Marketing ($M this year)** slider.",
     ])
     bullets(doc, [
-        "Your marketing budget is **split evenly across your active shows**. Each $1M a show gets lifts that show's ad revenue about 1.5%. "
+        "Your marketing budget is **split evenly across your active shows**. Each $1M a show gets lifts that show's ad revenue about 1%. "
         "A show needs about **$3M of marketing to be viable**, so a big slate spreads it thin.",
         "If you see a warning that spend is **below $3M per show**, your shows are under-marketed. Either raise the budget or cancel shows so the money goes further.",
     ])
