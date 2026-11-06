@@ -120,6 +120,15 @@ SCORE_WEIGHTS = {
 
 NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
+# OCF margin that earns full Margin points, per network (2026-11-05, user:
+# "oxygen is a warm up, the others should be harder... Bravo just a little
+# bit harder"). Bravo's inherited slate averages ~40% margin with no
+# decisions, which used to max the 35% Margin part for doing nothing; at 50%
+# a hands-off run loses ~7 points, while cutting the money-losers (~60%)
+# still earns full marks. Oxygen stays the warm-up; Peacock is already the
+# hardest (its originals start below the 10% pass target).
+MARGIN_FULL_MARKS = {"oxygen": 40.0, "bravo": 50.0, "peacock": 40.0}
+
 # ── Genre Mix: brand-anchored diversity (2026-11-05) ─────────────────────────
 # Student feedback (Oxygen, all-True-Crime slate scored 0 with no warning) +
 # instructor call: keep the 15% weight, but score it fairly. Raw 1-HHI started
@@ -201,7 +210,7 @@ def compute_score(
     All inputs normalized to 0-1 before weighting.
     """
     # Normalize each component to 0–1
-    s_ocf  = min(max(ocf_margin / 40.0, 0), 1)       # 40% margin = perfect
+    s_ocf  = min(max(ocf_margin / MARGIN_FULL_MARKS.get(network, 40.0), 0), 1)   # see MARGIN_FULL_MARKS
     s_roi  = min(max((avg_roi + 20) / 80.0, 0), 1)   # -20% → 0, +60% → 1
     # Brand-anchored when the network is known (see genre_mix_score);
     # raw 1-HHI only for callers that don't pass one.

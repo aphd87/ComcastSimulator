@@ -565,7 +565,7 @@ Three sequential levels — **Oxygen → Bravo → Peacock** — each independen
 | Peacock | 10% | SVOD early days — thinner margins accepted |
 
 Score is a weighted composite (`compute_score`, `SCORE_WEIGHTS`), not just OCF:
-- OCF margin — 35%
+- OCF margin — 35% (full marks at `MARGIN_FULL_MARKS`: 40% Oxygen/Peacock, 50% Bravo since 2026-11-05 so Bravo is a little harder than the Oxygen warm-up; Peacock stays hardest)
 - Average show ROI — 25%
 - Genre mix — 15% (brand-anchored since 2026-11-05: inherited mix = 50, one genre = 0; see `genre_mix_score`)
 - Marketing efficiency — 15%

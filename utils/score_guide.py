@@ -16,7 +16,7 @@ from __future__ import annotations
 import streamlit as st
 
 from utils.game_state import (SCORE_WEIGHTS, PASS_THRESHOLD, GENRE_BASELINE_HHI,
-                              genre_target_hhi, BRAND_CORE)
+                              genre_target_hhi, BRAND_CORE, MARGIN_FULL_MARKS)
 from utils.movie_models import MOVIE_SCORE_WEIGHTS, MOVIE_LUCK_WEIGHT
 
 NETWORK_NAME = {"oxygen": "Oxygen", "bravo": "Bravo", "peacock": "Peacock"}
@@ -33,7 +33,8 @@ def tv_score_rows(net: str) -> list[tuple[str, str, str]]:
     w = SCORE_WEIGHTS
     return [
         ("OCF Margin", _pct(w["ocf_margin"]),
-         "OCF ÷ revenue across all years of the level. A 40% margin earns full marks."),
+         f"OCF ÷ revenue across all years of the level. A {MARGIN_FULL_MARKS.get(net, 40):.0f}% margin "
+         f"earns full marks."),
         ("Portfolio ROI", _pct(w["roi_avg"]),
          "Average return on your active shows at the end of the level: −20% scores 0, +60% scores 100."),
         ("Genre Mix", _pct(w["genre_mix"]),

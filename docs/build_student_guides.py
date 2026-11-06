@@ -424,7 +424,7 @@ def build_tv():
             "making identical choices can end up with different results. Nobody can copy a winning playbook; compare "
             "your decisions with other teams', not just your scores.")
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
-        ["**OCF margin**", "35%", "40% margin", "Make money. This is the biggest piece."],
+        ["**OCF margin**", "35%", "40% margin (50% on Bravo)", "Make money. This is the biggest piece."],
         ["**Average show ROI**", "25%", "+60% average ROI", "Your shows earn back more than they cost."],
         ["**Genre mix**", "15%", "Real range built around your network's core genre",
          "Keeping the network's inherited mix scores 50. Building range around the brand core earns up to 100. "

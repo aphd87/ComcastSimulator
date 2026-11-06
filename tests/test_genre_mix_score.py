@@ -88,3 +88,13 @@ def test_brand_core_share():
     assert brand_core_share({"Reality": 10}, "oxygen") == 0.0
     assert brand_core_share({}, "oxygen") is None
     assert brand_core_share({"Drama": 5}, "movies") is None
+
+
+def test_bravo_margin_is_a_little_harder():
+    from utils.game_state import compute_score_for_network
+    # Same 40% margin: full Margin marks on Oxygen/Peacock, 80 on Bravo.
+    assert compute_score_for_network("oxygen", 40, 0, 0.5, 50, 10)["ocf_margin"] == 100.0
+    assert compute_score_for_network("peacock", 40, 0, 0.5, 50, 10)["ocf_margin"] == 100.0
+    assert compute_score_for_network("bravo", 40, 0, 0.5, 50, 10)["ocf_margin"] == 80.0
+    assert compute_score_for_network("bravo", 55, 0, 0.5, 50, 10)["ocf_margin"] == 100.0
+    assert "50% margin" in dict((r[0], r[2]) for r in tv_score_rows("bravo"))["OCF Margin"]
