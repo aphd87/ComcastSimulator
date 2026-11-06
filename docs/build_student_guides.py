@@ -208,6 +208,19 @@ def submit_section(doc, final_button: str, unit: str = "year", whole: str = "lev
         "Review the Score Breakdown. It shows exactly where you earned and lost points.",
         "Check the **🏆 Leaderboard** to see where you rank in your class.",
     ])
+    if unit == "year":
+        awards = ("📊 Best OCF Margin, 💹 Best Portfolio ROI, 🌈 Most Diversified Portfolio (best Genre mix), "
+                  "📣 Best Marketing Efficiency and ✂️ Best Renewal Calls")
+        extra = (" Your row also shows your **🏷️ brand core share**: how much of your content spend went to the "
+                 "network's core genre (True Crime on Oxygen, Reality on Bravo, Drama on Peacock), so you can compare "
+                 "how on-brand each team stayed against the range it built.")
+    else:
+        awards = ("💵 Best Risk-Adj. NPV, ⚙️ Best Capital Efficiency, 🧭 Best Strategic Fit and "
+                  "🌈 Most Diversified Slate")
+        extra = ""
+    para(doc, f"**🏆 Class Awards** go to the team that leads each part of the score: {awards}, alongside Top Score "
+              f"and a few others. Only official (first) runs count. Awards update live as teams finish, so they're "
+              f"final once your whole section is done." + extra)
     callout(doc, "warn",
             f"**Your FIRST finished {whole} is your official score.** You get 3 attempts in total, but attempts 2 and 3 "
             f"are practice only (and only if the official run didn't pass: once you pass, no further runs are recorded). "
