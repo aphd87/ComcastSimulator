@@ -41,6 +41,24 @@ def teaches(doc, items):
     bullets(doc, items)
 
 
+
+def reset_leaderboard_section(doc):
+    """How to reset a class's leaderboard (2026-11-05, per user request)."""
+    doc.add_heading("RESETTING THE LEADERBOARD (between sections or semesters)", level=2)
+    steps(doc, [
+        "Open the app → **🏆 Leaderboard** → scroll to the bottom → expand **🔒 Instructor tools**.",
+        "Enter the instructor password (the `INSTRUCTOR_PASSWORD` value in Streamlit Cloud → **Manage app → Settings → Secrets**).",
+        "Pick the **Class** to reset. Schools show in one spelling (e.g. \"Darden School of Business, University of Virginia\"), so UVA and University of Virginia sign-ins are one class.",
+        "Click **⬇️ Download this class's full records (JSON)** and keep the file.",
+        "Tick the confirmation box, then click **🗄️ Archive & clear this class**.",
+    ])
+    bullets(doc, [
+        "Clears that class's **scores, progress and Pitch Board posts**. Other classes and schools are untouched.",
+        "Nothing is deleted: rows move to an archive in the database, and your download is a second copy.",
+        "Use it to remove playtest/QA runs too: clear the class they were saved under.",
+        "Class Awards recalculate automatically from whatever scores remain.",
+    ])
+
 def build_plan():
     doc = new_doc(footer_text="The Slate — Universal Pictures Simulation · Instructor Board Reference")
     title_block(doc, "Opening Movie Week",
@@ -389,6 +407,8 @@ def build_plan():
             "After class, the Leaderboard's **All Submissions — Raw Data** table has a download button for a CSV of every "
             "team's scores.")
 
+    reset_leaderboard_section(doc)
+
     out = OUT_DIR / "The_Slate_Instructor_Plan_Movies_Week_85min.docx"
     doc.save(out)
     return out
@@ -680,6 +700,8 @@ def build_tv_plan():
     ], [1.7, 4.8])
     callout(doc, "tip", "After class, the Leaderboard's **All Submissions — Raw Data** table downloads a CSV of every team's scores, "
                         "including sports, film and cancellation nets.")
+
+    reset_leaderboard_section(doc)
 
     out = OUT_DIR / "The_Slate_Instructor_Plan_Peacock_Case_A_85min.docx"
     doc.save(out)
