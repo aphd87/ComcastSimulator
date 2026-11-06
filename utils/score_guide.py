@@ -16,11 +16,9 @@ from __future__ import annotations
 import streamlit as st
 
 from utils.game_state import (SCORE_WEIGHTS, PASS_THRESHOLD, GENRE_BASELINE_HHI,
-                              genre_target_hhi)
+                              genre_target_hhi, BRAND_CORE)
 from utils.movie_models import MOVIE_SCORE_WEIGHTS, MOVIE_LUCK_WEIGHT
 
-# The genre each network's inherited slate is built around.
-BRAND_CORE = {"oxygen": "True Crime", "bravo": "Reality", "peacock": "Drama"}
 NETWORK_NAME = {"oxygen": "Oxygen", "bravo": "Bravo", "peacock": "Peacock"}
 
 

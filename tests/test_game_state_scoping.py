@@ -17,9 +17,9 @@ def isolated_leaderboard(monkeypatch, tmp_path):
     yield
 
 
-def _record(team, school, cls, score, passed, attempt=1, network="oxygen", notables=None):
+def _record(team, school, cls, score, passed, attempt=1, network="oxygen", notables=None, details=None):
     return gs.record_attempt(team_name=team, network=network, attempt_num=attempt,
-                              score=score, passed=passed, details={"total": score},
+                              score=score, passed=passed, details={"total": score, **(details or {})},
                               school=school, class_section=cls, notables=notables)
 
 
@@ -267,6 +267,38 @@ class TestClassAwards:
                 notables={"diversity_trend": 0.3})
         awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
         assert not any(a["title"] == "🌈 Most Diversified Portfolio" for a in awards)
+
+    def test_one_award_per_tv_score_part(self):
+        # 2026-11-05: who led each part of the score students see up front.
+        _record("Team Alpha", "Kellogg", "Sec A", 80, True,
+                details={"ocf_margin": 90, "roi": 40, "diversity": 0, "marketing": 70, "renewal": 100},
+                notables={"brand_core": "True Crime", "brand_core_share": 100.0})
+        _record("Team Bravo", "Kellogg", "Sec A", 70, True,
+                details={"ocf_margin": 60, "roi": 80, "diversity": 75, "marketing": 70, "renewal": 50},
+                notables={"brand_core": "True Crime", "brand_core_share": 62.0})
+        by_title = {a["title"]: a for a in gs.get_class_awards("oxygen", "Kellogg", "Sec A")}
+        assert by_title["📊 Best OCF Margin"]["team"] == "Team Alpha"
+        assert by_title["💹 Best Portfolio ROI"]["team"] == "Team Bravo"
+        assert by_title["✂️ Best Renewal Calls"]["team"] == "Team Alpha"
+        # Tie on marketing goes to the higher overall rank.
+        assert by_title["📣 Best Marketing Efficiency"]["team"] == "Team Alpha"
+        div = by_title["🌈 Most Diversified Portfolio"]
+        assert div["team"] == "Team Bravo"
+        assert div["value"] == "75/100 · True Crime 62%"
+
+    def test_part_award_skipped_when_everyone_scored_zero(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True, details={"diversity": 0})
+        awards = gs.get_class_awards("oxygen", "Kellogg", "Sec A")
+        assert not any(a["title"] == "🌈 Most Diversified Portfolio" for a in awards)
+
+    def test_movies_get_their_own_score_part_awards(self):
+        _record("Team Alpha", "Kellogg", "Sec A", 60, True, network="movies",
+                details={"risk_adjusted_npv": 55, "capital_efficiency": 40,
+                         "strategic_fit": 50, "portfolio_diversification": 100})
+        titles = {a["title"] for a in gs.get_class_awards("movies", "Kellogg", "Sec A")}
+        assert {"💵 Best Risk-Adj. NPV", "⚙️ Best Capital Efficiency", "🧭 Best Strategic Fit",
+                "🌈 Most Diversified Slate"} <= titles
+        assert "📊 Best OCF Margin" not in titles
 
     def test_emmy_award_prefers_wins_over_more_nominations(self):
         _record("Team Alpha", "Kellogg", "Sec A", 60, True,

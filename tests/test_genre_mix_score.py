@@ -80,3 +80,11 @@ def test_movies_one_genre_one_concept_scores_zero():
 
 def test_movies_single_film_stays_neutral():
     assert portfolio_diversification_score([_film("Drama", "New IP")]) == 100.0
+
+
+def test_brand_core_share():
+    from utils.game_state import brand_core_share
+    assert brand_core_share({"True Crime": 75, "Reality": 25}, "oxygen") == 75.0
+    assert brand_core_share({"Reality": 10}, "oxygen") == 0.0
+    assert brand_core_share({}, "oxygen") is None
+    assert brand_core_share({"Drama": 5}, "movies") is None

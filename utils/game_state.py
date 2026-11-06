@@ -134,6 +134,22 @@ GENRE_BASELINE_HHI = {
     "bravo":   0.402,   # ~58% Reality, 19% Competition, 16% Scripted, 7% Talk
     "peacock": 0.533,   # ~63% Drama, 37% Comedy
 }
+# The genre each network's inherited slate is built around (its brand core).
+BRAND_CORE = {"oxygen": "True Crime", "bravo": "Reality", "peacock": "Drama"}
+
+
+def brand_core_share(genre_costs: dict, network: str) -> Optional[float]:
+    """% of content spend in the network's brand-core genre (2026-11-05).
+    Shown next to Genre Mix so the brand-vs-range trade-off is visible:
+    how on-brand a team stayed vs. how much range it built. None when the
+    network has no defined core or there's no spend."""
+    core = BRAND_CORE.get(network)
+    total = sum(genre_costs.values())
+    if not core or not total:
+        return None
+    return round(genre_costs.get(core, 0.0) / total * 100, 1)
+
+
 GENRE_TARGET_FLOOR_HHI = 0.30   # 100 needs no more than this, or 60% of the baseline, whichever is higher
 
 
@@ -640,14 +656,42 @@ def get_class_awards(network: str, school: Optional[str] = None,
     if consistency:
         awards.append({"title": "🎯 Most Consistent", **consistency})
 
-    # diversity_trend is negative when a team diversified (HHI fell) over
-    # the level -- minimize to find the biggest diversification, and only
-    # award it if genuinely negative (a positive trend means concentration,
-    # not diversification, so there's no "most diversified" team that year).
-    diversified = _leader("diversity_trend", lambda v: f"{abs(v):.3f} HHI drop", minimize=True)
-    if diversified and (next(e for e in board if e["team_name"] == diversified["team"])
-                         ["notables"]["diversity_trend"] < 0):
-        awards.append({"title": "🌈 Most Diversified Portfolio", **diversified})
+    # One award per score part (2026-11-05): students see the weights up
+    # front now, so the board shows who led each part. Read from the stored
+    # score `details`, so teams that finished earlier qualify too. Ties go to
+    # the higher overall rank (board order). A part nobody scored above 0 on
+    # is skipped.
+    def _detail_leader(key):
+        cands = [(e, (e.get("details") or {}).get(key)) for e in board]
+        cands = [(e, v) for e, v in cands if isinstance(v, (int, float)) and v > 0]
+        if not cands:
+            return None
+        return max(cands, key=lambda p: p[1])
+
+    if network == "movies":
+        parts = [("risk_adjusted_npv", "💵 Best Risk-Adj. NPV"),
+                 ("capital_efficiency", "⚙️ Best Capital Efficiency"),
+                 ("strategic_fit", "🧭 Best Strategic Fit"),
+                 ("portfolio_diversification", "🌈 Most Diversified Slate")]
+    else:
+        parts = [("ocf_margin", "📊 Best OCF Margin"),
+                 ("roi", "💹 Best Portfolio ROI"),
+                 ("diversity", "🌈 Most Diversified Portfolio"),
+                 ("marketing", "📣 Best Marketing Efficiency"),
+                 ("renewal", "✂️ Best Renewal Calls")]
+    for key, title in parts:
+        hit = _detail_leader(key)
+        if not hit:
+            continue
+        e, v = hit
+        value = f"{v:.0f}/100"
+        # Most Diversified is the brand-anchored Genre Mix score (was the
+        # biggest HHI drop over the level, which favored networks that
+        # started concentrated). Show the brand-core share beside it.
+        share = (e.get("notables") or {}).get("brand_core_share")
+        if key == "diversity" and share is not None:
+            value += f" · {BRAND_CORE.get(network, 'core')} {share:.0f}%"
+        awards.append({"title": title, "team": e["team_name"], "value": value})
 
     improved = _leader("most_improved", lambda v: f"{v:+.1f} pts", require_positive=True)
     if improved:

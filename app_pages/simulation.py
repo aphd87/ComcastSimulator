@@ -35,7 +35,7 @@ from utils.game_state import (level_shows, is_official_run,
     record_attempt, get_attempt_count, can_advance,
     get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS, MAX_NEW_SHOWS_PER_YEAR,
     YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
-    render_vs_competitors_board,
+    render_vs_competitors_board, BRAND_CORE, brand_core_share,
 )
 from utils.sports_models import (sports_tail_m, 
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
@@ -1202,6 +1202,8 @@ def _level_score(ss, shows, net, year):
     renewal_pct = (sum(1 for r in rois if r > 0) / len(rois) * 100) if rois else 0.0
     mkt_eff     = (total_rev / total_mkt) if total_mkt > 0 else 0.0
     score_d     = compute_score_for_network(net, avg_margin, avg_roi, hhi, renewal_pct, mkt_eff)
+    # Not a score part: shown next to Genre Mix (Complete screen, Leaderboard).
+    score_d["_brand_core_share"] = brand_core_share(genre_costs, net)
     return score_d, active, avg_margin
 
 
@@ -1211,7 +1213,11 @@ def _record_level(ss, shows, team, net, year) -> dict:
     simulated, so a team that closes the tab still shows up. The first
     recorded attempt is the official score, as before."""
     score_d, active, _ = _level_score(ss, shows, net, year)
+    share = score_d.pop("_brand_core_share", None)
     attempts = get_attempt_count(team, net, ss.school, ss.class_section)
+    notables = compute_level_notables(ss.yearly_log, ss.get("total_shows_greenlit", 0))
+    notables["brand_core"] = BRAND_CORE.get(net)
+    notables["brand_core_share"] = share
     entry = record_attempt(
         team_name=team, network=net,
         attempt_num=attempts + 1,
@@ -1222,7 +1228,7 @@ def _record_level(ss, shows, team, net, year) -> dict:
         class_abbrev=ss.get("class_abbrev", ""),
         slate_summary=[{"name": s.name, "genre": s.genre, "network": s.network,
                         "rating": round(s.rating, 2)} for s in active],
-        notables=compute_level_notables(ss.yearly_log, ss.get("total_shows_greenlit", 0)),
+        notables=notables,
     )
     ss.last_score = entry
     ss.submitted  = True
@@ -1657,6 +1663,14 @@ def _complete(ss, shows, net_info, team, net):
               </div>
             </div>
             """, unsafe_allow_html=True)
+
+        _share = score_d.get("_brand_core_share")
+        if _share is not None:
+            st.markdown(
+                f'<div style="font-size:14px;color:#ffffff;margin:-4px 0 10px;">🏷️ Brand core: '
+                f'<b>{BRAND_CORE.get(net)}</b> is <b>{_share:.0f}%</b> of your content spend. '
+                f'Staying on-brand is fine; Genre Mix rewards the range you build around it.</div>',
+                unsafe_allow_html=True)
 
         total_c = SUCCESS if score_d["total"] >= 70 else (WARN if score_d["total"] >= 50 else DANGER)
         passed_badge = (f'<span style="background:{SUCCESS};color:#0b0c10;padding:3px 10px;'

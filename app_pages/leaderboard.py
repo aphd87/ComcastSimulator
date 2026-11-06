@@ -73,6 +73,9 @@ def _format_notables_badges(notables: dict) -> str:
     cs = notables.get("consistency_score")
     if cs is not None:
         badges.append(f"🎯 {cs:.0f}/100 consistency")
+    bcs = notables.get("brand_core_share")
+    if bcs is not None and notables.get("brand_core"):
+        badges.append(f"🏷️ {notables['brand_core']} {bcs:.0f}% of spend")
     sg = notables.get("shows_greenlit")
     if sg:
         badges.append(f"🎬 {sg} greenlit")
@@ -116,6 +119,8 @@ def _export_metrics(e: dict) -> dict:
         "Score: Margin":    v(d.get("ocf_margin")),
         "Score: ROI":       v(d.get("roi")),
         "Score: Diversity": v(d.get("diversity")),
+        "Brand Core":       v(n.get("brand_core")),
+        "Brand Core Share %": v(n.get("brand_core_share")),
         "Score: Renewal":   v(d.get("renewal")),
         "Score: Marketing": v(d.get("marketing")),
         "Shows Greenlit":   v(n.get("shows_greenlit")),
