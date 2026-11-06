@@ -157,9 +157,12 @@ def test_instructor_clear_archives_one_class(monkeypatch, tmp_path):
         storage.append_entry(gs.LEADERBOARD_FILE, {"team_name": "t", "school": "UVA", "class_section": cls,
                                                    "network": "oxygen", "attempt": 1, "score": 50, "passed": True,
                                                    "is_official": True, "timestamp": 0})
-    assert [s[:2] for s in gs.class_scopes()] == [("UVA", "A"), ("UVA", "B")]
-    assert len(gs.class_records("UVA", "A")["leaderboard"]) == 2
-    moved = gs.archive_and_clear_class("UVA", "A")
+    # Stored as "UVA", listed (and cleared) under the canonical spelling
+    # (gs.canonical_school, 2026-11-05).
+    uva = "University of Virginia"
+    assert [s[:2] for s in gs.class_scopes()] == [(uva, "A"), (uva, "B")]
+    assert len(gs.class_records(uva, "A")["leaderboard"]) == 2
+    moved = gs.archive_and_clear_class(uva, "A")
     assert moved == {"leaderboard": 2, "progress": 0, "pitches": 0}
     assert [e["class_section"] for e in gs.load_leaderboard()] == ["B"]
     assert (tmp_path / "leaderboard_archive.json").exists()
@@ -181,3 +184,42 @@ def test_instructor_tools_locked_without_correct_password(monkeypatch):
     at.text_input(key="instructor_pw").set_value("wrong").run()
     assert any("Wrong password" in e.value for e in at.error)
     assert not any(b.key == "instructor_clear" for b in at.button)
+
+
+def test_score_parts_use_labels_not_raw_keys():
+    # 2026-11-05: rows printed raw keys and Movies $M fields as if scores.
+    from app_pages.leaderboard import _score_parts_html
+    tv = _score_parts_html({"total": 80, "passed": True, "ocf_margin": 90, "roi": 40,
+                            "diversity": 50, "marketing": 70, "renewal": 100}, "oxygen")
+    assert "Genre Mix <b>50</b>" in tv and "ocf_margin" not in tv and "passed" not in tv
+    mv = _score_parts_html({"risk_adjusted_npv": 55, "avg_ra_npv_m": -12.0,
+                            "portfolio_diversification": 100}, "movies")
+    assert "NPV <b>55</b>" in mv and "avg_ra_npv_m" not in mv and "-12" not in mv
+    assert _score_parts_html({}, "oxygen") == "<div></div>"
+
+
+def test_board_with_three_teams_renders_pass_colored_chart(monkeypatch, tmp_path):
+    # Score Distribution only draws at 3+ teams; it used to mark 70 points as
+    # the pass line. Colors now follow each entry's real `passed`.
+    for name, score, passed in [("A", 85, True), ("B", 72, False), ("C", 60, True)]:
+        gs.record_attempt(team_name=name, network="oxygen", attempt_num=1, score=score, passed=passed,
+                          details={"total": score, "ocf_margin": 90, "diversity": 50},
+                          school="Darden School of Business, UVA", class_section="Sec A")
+    path = str(tmp_path / "leaderboard.json")
+
+    def _app(path):
+        import streamlit as st
+        import utils.game_state as gs
+        from pathlib import Path
+        gs.LEADERBOARD_FILE = Path(path)
+        st.session_state.team_name = "A"
+        st.session_state.school = "Darden School of Business, University of Virginia"
+        st.session_state.class_section = "Sec A"
+        st.session_state.registered = True
+        from app_pages.leaderboard import render
+        render()
+
+    at = AppTest.from_function(_app, args=(path,)).run(timeout=60)
+    assert not at.exception
+    md = " ".join(m.value for m in at.markdown)
+    assert "70-point pass line" not in md

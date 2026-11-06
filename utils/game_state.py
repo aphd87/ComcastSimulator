@@ -8,6 +8,7 @@ from __future__ import annotations   # list[...]/dict[...]/tuple[...] type hints
                                        # need Python 3.9+ without this; Streamlit Cloud's
                                        # runtime may be older than what's tested locally.
 import json
+import re
 from utils import storage as _storage
 import os
 import time
@@ -407,9 +408,73 @@ def compute_movie_notables(movie_log: list[dict]) -> dict:
 # deployment sets DATABASE_URL, else lock-protected atomic JSON files.
 # LEADERBOARD_FILE / TEAM_STATE_FILE stay here as the file-backend paths
 # (tests monkeypatch them).
+# ── One spelling per school (2026-11-05) ─────────────────────────────────────
+# Registration stores school as "College, University". The class showed up
+# as two schools: "Darden School of Business, UVA" and "Darden School of
+# Business, University of Virginia". canonical_identity only merged
+# capitals/spacing. canonical_school also ignores punctuation, "&" vs "and",
+# a leading "The", and maps known abbreviations below to one full name.
+# Applied at sign-in AND when rows are read, so rows already saved under
+# another spelling join the same school without rewriting stored data.
+# Add a school's common variants here (keys are normalized: lowercase, no
+# punctuation).
+UNIVERSITY_ALIASES = {
+    "uva": "University of Virginia", "u va": "University of Virginia",
+    "univ of virginia": "University of Virginia", "university of virginia": "University of Virginia",
+    "virginia": "University of Virginia", "u of virginia": "University of Virginia",
+}
+COLLEGE_ALIASES = {
+    "darden": "Darden School of Business", "darden school": "Darden School of Business",
+    "darden school of business": "Darden School of Business",
+    "uva darden": "Darden School of Business", "darden business school": "Darden School of Business",
+    "darden graduate school of business administration": "Darden School of Business",
+    "darden graduate school of business": "Darden School of Business",
+    "uva darden school of business": "Darden School of Business",
+}
+
+
+def _alias_key(s: str) -> str:
+    k = str(s or "").casefold().replace("&", " and ")
+    k = re.sub(r"[^\w\s]", " ", k)
+    k = " ".join(k.split())
+    return k[4:] if k.startswith("the ") else k
+
+
+def canonical_school(school: str) -> str:
+    """One display spelling for a "College, University" school string."""
+    if not school:
+        return school or ""
+    college, _, uni = school.rpartition(",")
+    if not college:                      # no comma: treat the whole thing as the university
+        college, uni = "", school
+    uni_c = UNIVERSITY_ALIASES.get(_alias_key(uni), " ".join(uni.split()))
+    col_c = COLLEGE_ALIASES.get(_alias_key(college), " ".join(college.split())) if college else ""
+    return f"{col_c}, {uni_c}" if col_c else uni_c
+
+
+def _canon_rows(rows: list[dict]) -> list[dict]:
+    out = []
+    for e in rows:
+        if e.get("school"):
+            c = canonical_school(e["school"])
+            if c != e["school"]:
+                e = {**e, "school": c}
+        out.append(e)
+    return out
+
+
+def _load_pitch_rows() -> list[dict]:
+    return _canon_rows(_storage.load_pitches(PITCH_BOARD_FILE))
+
+
+def _load_progress_rows() -> list[dict]:
+    return _canon_rows(_storage.load_progress(PROGRESS_FILE))
+
+
 def load_leaderboard() -> list[dict]:
-    """All leaderboard entries, oldest first. Empty list if none yet."""
-    return _storage.load_entries(LEADERBOARD_FILE)
+    """All leaderboard entries, oldest first. Empty list if none yet.
+    School names come back in their canonical spelling (canonical_school)."""
+    return _canon_rows(_storage.load_entries(LEADERBOARD_FILE))
 
 def save_leaderboard(board: list[dict]) -> None:
     _storage.replace_entries(LEADERBOARD_FILE, board)
@@ -476,7 +541,7 @@ def record_attempt(team_name: str, network: str, attempt_num: int,
 def get_team_attempts(team_name: str, network: str, school: str = "", class_section: str = "") -> list[dict]:
     board = load_leaderboard()
     return [e for e in board if e["team_name"] == team_name and e["network"] == network
-            and e.get("school", "") == school and e.get("class_section", "") == class_section]
+            and e.get("school", "") == canonical_school(school) and e.get("class_section", "") == class_section]
 
 def get_official_score(team_name: str, network: str, school: str = "", class_section: str = "") -> Optional[dict]:
     """Returns the first (official) attempt for a team on a given network."""
@@ -526,9 +591,12 @@ def school_in_scope(entry_school: str, school: Optional[str]) -> bool:
     university (2026-10-14). Anything else = that exact school."""
     if school is None:
         return True
+    # Both sides in canonical spelling (canonical_school, 2026-11-05), so a
+    # "UVA" scope matches rows stored as "University of Virginia" and back.
     if school.startswith(UNIVERSITY_SCOPE):
-        return university_of(entry_school).casefold() == school[len(UNIVERSITY_SCOPE):].strip().casefold()
-    return entry_school == school
+        want = canonical_school(school[len(UNIVERSITY_SCOPE):].strip())
+        return university_of(canonical_school(entry_school)).casefold() == want.casefold()
+    return canonical_school(entry_school) == canonical_school(school)
 
 
 def get_network_leaderboard(network: str, school: Optional[str] = None,
@@ -585,7 +653,7 @@ def render_vs_competitors_board(network: str, team_name: str, school: str,
     if not board:
         return
 
-    own_key  = (school, class_section, team_name)
+    own_key  = (canonical_school(school), class_section, team_name)
     own_row  = next((r for r in board
                       if (r.get("school", ""), r.get("class_section", ""), r["team_name"]) == own_key), None)
 
@@ -838,6 +906,22 @@ def _team_key(team_name: str, school: str, class_section: str) -> str:
     return f"{school}||{class_section}||{team_name}"
 
 
+def _load_state_any_spelling(key: str) -> Optional[dict]:
+    """A Driver's saved state under this key, or under a key that differs
+    only in the school's spelling (saved before canonical_school existed).
+    The exact key wins, so once the Driver saves again, that's what loads."""
+    snap = _storage.load_state(TEAM_STATE_FILE, key)
+    if snap is not None:
+        return snap
+    parts = key.split("||")
+    want = (canonical_school(parts[0]), *parts[1:])
+    for k in _storage.list_state_keys(TEAM_STATE_FILE):
+        kp = k.split("||")
+        if len(kp) == len(parts) and (canonical_school(kp[0]), *kp[1:]) == want:
+            return _storage.load_state(TEAM_STATE_FILE, k)
+    return None
+
+
 def _norm_identity(s: str) -> str:
     return " ".join(str(s or "").split()).casefold()
 
@@ -850,12 +934,13 @@ def canonical_identity(team_name: str, school: str, class_section: str) -> tuple
     so matching once at sign-in fixes them all. A brand-new identity is
     returned unchanged."""
     known = set()
+    school = canonical_school(school)
     for k in _storage.list_state_keys(TEAM_STATE_FILE):
         parts = k.split("||")
         if len(parts) >= 3:
-            known.add((parts[0], parts[1], parts[2]))
-    for rows in (load_leaderboard(), _storage.load_pitches(PITCH_BOARD_FILE),
-                 _storage.load_progress(PROGRESS_FILE)):
+            known.add((canonical_school(parts[0]), parts[1], parts[2]))
+    for rows in (load_leaderboard(), _load_pitch_rows(),
+                 _load_progress_rows()):
         for e in rows:
             if e.get("team_name"):
                 known.add((e.get("school", ""), e.get("class_section", ""), e["team_name"]))
@@ -883,7 +968,7 @@ def load_live_state(team_name: str, school: str, class_section: str) -> Optional
     """Returns the Driver's last-saved snapshot dict, or None if this team
     has no Driver state saved yet (e.g. a Follow Along teammate registered
     before the Driver made their first move)."""
-    return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section))
+    return _load_state_any_spelling(_team_key(team_name, school, class_section))
 
 
 def save_movie_live_state(team_name: str, school: str, class_section: str, snapshot: dict) -> None:
@@ -893,7 +978,7 @@ def save_movie_live_state(team_name: str, school: str, class_section: str, snaps
 
 
 def load_movie_live_state(team_name: str, school: str, class_section: str) -> Optional[dict]:
-    return _storage.load_state(TEAM_STATE_FILE, _team_key(team_name, school, class_section) + "||movies")
+    return _load_state_any_spelling(_team_key(team_name, school, class_section) + "||movies")
 
 
 # ── Peer Pitch Board (2026-10-01) ─────────────────────────────────────────────
@@ -932,8 +1017,8 @@ def class_pitches(school: str, class_section: str, sim: Optional[str] = None) ->
     """Pitches posted in this school + class section, newest first, keeping
     only the latest post per (team, sim, key)."""
     latest = {}
-    for e in _storage.load_pitches(PITCH_BOARD_FILE):
-        if e.get("school") != school or e.get("class_section") != class_section:
+    for e in _load_pitch_rows():
+        if e.get("school") != canonical_school(school) or e.get("class_section") != class_section:
             continue
         if sim and e.get("sim") != sim:
             continue
@@ -971,7 +1056,7 @@ def get_progress_board(network: str, school: Optional[str] = None,
     Redo or Restart doesn't drop it a group); within that, its latest
     update counts, so re-simulating a year refreshes its number."""
     latest = {}
-    for e in _storage.load_progress(PROGRESS_FILE):
+    for e in _load_progress_rows():
         if e.get("network") != network or not school_in_scope(e.get("school", ""), school):
             continue
         if class_section is not None and e.get("class_section", "") != class_section:
@@ -1225,22 +1310,26 @@ def class_scopes() -> list[tuple[str, str, int]]:
     for e in load_leaderboard():
         k = (e.get("school", ""), e.get("class_section", ""))
         counts[k] = counts.get(k, 0) + 1
-    for e in _storage.load_progress(PROGRESS_FILE) + _storage.load_pitches(PITCH_BOARD_FILE):
+    for e in _load_progress_rows() + _load_pitch_rows():
         counts.setdefault((e.get("school", ""), e.get("class_section", "")), 0)
     return sorted((s, c, n) for (s, c), n in counts.items())
 
 
 def class_records(school: str, class_section: str) -> dict:
+    school = canonical_school(school)
     match = lambda e: e.get("school", "") == school and e.get("class_section", "") == class_section
     return {"leaderboard": [e for e in load_leaderboard() if match(e)],
-            "progress":    [e for e in _storage.load_progress(PROGRESS_FILE) if match(e)],
-            "pitches":     [e for e in _storage.load_pitches(PITCH_BOARD_FILE) if match(e)]}
+            "progress":    [e for e in _load_progress_rows() if match(e)],
+            "pitches":     [e for e in _load_pitch_rows() if match(e)]}
 
 
 def archive_and_clear_class(school: str, class_section: str) -> dict:
     """Archive, then remove, one class's scores, progress and pitch posts.
-    Exact school + class match only; other classes are untouched."""
-    match = lambda e: e.get("school", "") == school and e.get("class_section", "") == class_section
+    Exact school + class match only (school compared in its canonical
+    spelling, as class_scopes lists it); other classes are untouched."""
+    school = canonical_school(school)
+    match = lambda e: (canonical_school(e.get("school", "")) == school
+                       and e.get("class_section", "") == class_section)
     return {
         "leaderboard": len(_storage.archive_and_remove("slate_leaderboard", LEADERBOARD_FILE, match)),
         "progress":    len(_storage.archive_and_remove("slate_progress", PROGRESS_FILE, match)),

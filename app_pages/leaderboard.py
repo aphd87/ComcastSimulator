@@ -105,6 +105,27 @@ def _format_notables_badges(notables: dict) -> str:
             '</div>')
 
 
+# Score-part labels for each leaderboard row (2026-11-05). Rows used to print
+# every raw details key ("ocf_margin: 90 roi: 40 ..."), and Movies rows mixed
+# in $M figures (avg_ra_npv_m) that read like scores. Same names and weights
+# as the "How you're scored" card.
+_TV_PARTS = [("ocf_margin", "Margin"), ("roi", "ROI"), ("diversity", "Genre Mix"),
+             ("marketing", "Marketing"), ("renewal", "Renewals")]
+_MOVIE_PARTS = [("risk_adjusted_npv", "NPV"), ("capital_efficiency", "Efficiency"),
+                ("strategic_fit", "Fit"), ("portfolio_diversification", "Diversification")]
+
+
+def _score_parts_html(details: dict, net: str) -> str:
+    parts = _MOVIE_PARTS if net == "movies" else _TV_PARTS
+    chips = [f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;white-space:nowrap;">'
+             f'{label} <b>{details[k]:.0f}</b></span>'
+             for k, label in parts if isinstance((details or {}).get(k), (int, float))]
+    if not chips:
+        return '<div></div>'
+    return ('<div style="display:flex;gap:6px 16px;margin-top:6px;flex-wrap:wrap;">'
+            '<span style="font-size:14px;color:#ffffff;">Score parts (0–100):</span>' + "".join(chips) + '</div>')
+
+
 def _export_metrics(e: dict) -> dict:
     """Extra per-submission columns for the instructor CSV (2026-11-03).
     Blank when a metric doesn't apply (Movies entries, older submissions,
@@ -394,10 +415,7 @@ def _render_board_tab(team: str, net: str, info: dict,
               </div>
             </div>
           </div>
-          {'<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;">' +
-           ''.join([f'<span style="font-size:14px;font-family:DM Mono,monospace;color:#ffffff;">{k}: {v:.0f}</span>'
-                    for k,v in details.items() if k not in ("total","passed")]) +
-           '</div>' if details else '<div></div>'}
+          {_score_parts_html(details, net)}
           {notables_html or '<div></div>'}
         </div>
         """, unsafe_allow_html=True)
@@ -426,7 +444,11 @@ def _render_board_tab(team: str, net: str, info: dict,
         st.markdown('<div class="section-title" style="margin-top:12px;">Score Distribution</div>', unsafe_allow_html=True)
         scores = [e["score"] for e in board]
         teams  = [e["team_name"] for e in board]
-        colors = [SUCCESS if s >= 70 else (WARN if s >= 50 else DANGER) for s in scores]
+        # Colored by the real pass rule (OCF margin target on TV, positive
+        # decision NPV on Movies), not by points: 2026-11-05 fix, the chart
+        # used to draw a "Pass threshold" at 70 points, which isn't the rule.
+        passed = [bool(e.get("passed")) for e in board]
+        colors = [SUCCESS if p else DANGER for p in passed]
 
         fig = go.Figure(go.Bar(
             x=teams, y=scores,
@@ -442,15 +464,14 @@ def _render_board_tab(team: str, net: str, info: dict,
                 x0=my_idx-.4, x1=my_idx+.4, y0=0, y1=scores[my_idx],
                 fillcolor="rgba(232,197,71,.2)", line=dict(color="#e8c547", width=2))
 
-        fig.add_hline(y=70, line_dash="dash", line_color=SUCCESS, opacity=0.5,
-                       annotation_text="Pass threshold", annotation_font_color=SUCCESS,
-                       annotation_font_size=12)
         fig.update_layout(**base_layout(f"{info['display_name']} Score Distribution", height=280))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
-        _n_pass = sum(1 for sc in scores if sc >= 70)
+        _n_pass = sum(passed)
         _mid = sorted(scores)[len(scores) // 2]
-        takeaway(f"<b>{_n_pass} of {len(scores)}</b> teams cleared the 70-point pass line; the middle score "
-                 f"is {_mid:.0f}."
+        _rule = ("positive decision NPV" if net == "movies"
+                 else f"the {info.get('pass_threshold', 0):.0f}% OCF margin target")
+        takeaway(f"<b>{_n_pass} of {len(scores)}</b> teams passed (green), which means hitting {_rule}; points "
+                 f"don't decide passing. The middle score is {_mid:.0f}."
                  + (f" Your team scored {scores[teams.index(team)]:.0f} (gold outline)." if team in teams else ""))
 
     # ── Class Awards — superlatives, one per metric ─────────────────────────

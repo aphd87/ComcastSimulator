@@ -31,8 +31,11 @@ def test_financing_text_describes_the_per_show_model():
 # ── #7 Capitalization and spacing don't split a team ─────────────────────────
 def test_retyped_identity_adopts_the_spelling_on_record():
     gs.save_live_state("Team 1", "Darden, UVa", "Fall 2026 — Media Strat", {"year": 1})
-    assert gs.canonical_identity("team 1 ", "darden,  uva", "FALL 2026 — media strat") == \
-        ("Team 1", "Darden, UVa", "Fall 2026 — Media Strat")
+    # School resolves to its canonical spelling (2026-11-05), and the Driver's
+    # state saved under the old spelling still loads.
+    ident = gs.canonical_identity("team 1 ", "darden,  uva", "FALL 2026 — media strat")
+    assert ident == ("Team 1", "Darden School of Business, University of Virginia", "Fall 2026 — Media Strat")
+    assert gs.load_live_state(*ident) == {"year": 1}
 
 
 def test_new_identity_is_left_alone():

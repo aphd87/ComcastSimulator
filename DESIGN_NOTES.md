@@ -8,6 +8,13 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## 2026-11-05 (later) — Leaderboard fixes: one spelling per school, labelled score parts, real pass rule
+
+- **School split** (seen live: "Darden School of Business, UVA" and "…, University of Virginia" listed as two schools). `canonical_school` (`utils/game_state.py`) ignores case, punctuation, "&"/"and" and a leading "The", and maps known abbreviations (`UNIVERSITY_ALIASES`, `COLLEGE_ALIASES`: UVA/U.Va./Virginia → University of Virginia; Darden/UVA Darden/… → Darden School of Business). Applied at sign-in (`canonical_identity`), on every read (leaderboard, progress, pitches: rows come back canonical, stored data is not rewritten), and on both sides of every school comparison (`school_in_scope`, attempt counts, pitch board, instructor class list and Archive & clear). A Driver's saved state under an old spelling still loads (`_load_state_any_spelling`). Add other schools' variants to the alias tables.
+- **Row score parts** were raw keys run together ("ocf_margin: 90 roi: 40 …"; Movies rows showed $M fields like `avg_ra_npv_m` as if scores). Now labelled "Score parts (0–100): Margin 90 · ROI 40 · Genre Mix 50 …" (`_score_parts_html`).
+- **Score Distribution** drew a "Pass threshold" at 70 points. Passing is the OCF margin target (TV) or positive decision NPV (Movies). Bars are now green/red by each entry's real `passed`, and the caption states the rule.
+- **Comedy** added to the TV show builder's genres; Peacock's slate and pitch market had it, the builder didn't.
+
 ## 2026-11-05 — Student feedback after Oxygen (Team Yellowstone): input color, scoring up front, fair genre mix
 
 A student finished Oxygen and raised two points. (1) There are too many colors, so inputs were easy to miss and they re-read Year 1 several times. (2) The score weights only appeared in the Student Guide and at the end, so an all-True-Crime slate scored 0 on diversity without warning. The instructor asked for everything, on every track (Oxygen, Bravo, Peacock, Universal Movies), and for genre diversity to stay at 15% but be scored fairly, still requiring "some within diversity" even for a brand-aligned slate.

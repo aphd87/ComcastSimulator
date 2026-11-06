@@ -579,3 +579,30 @@ def test_level_notables_include_instructor_metrics():
     assert n["total_ocf"] == 50.0 and n["avg_margin"] == 25.0 and n["cancellations"] == 1
     assert (n["brand_deals"], n["brand_landed"], n["brand_net"]) == (2, 1, 1.5)
     assert n["casting_spend"] == 0.4 and n["sports_net"] == -4.0 and n["film_net"] == 1.0
+
+
+class TestCanonicalSchool:
+    """2026-11-05: one class showed up as two schools ("..., UVA" and
+    "..., University of Virginia")."""
+
+    def test_variants_resolve_to_one_spelling(self):
+        want = "Darden School of Business, University of Virginia"
+        for s in ["Darden School of Business, UVA", "darden school of business,  U.Va.",
+                  "Darden, The University of Virginia", want]:
+            assert gs.canonical_school(s) == want
+
+    def test_unknown_schools_are_left_as_typed(self):
+        assert gs.canonical_school("Kellogg School of Management, Northwestern University") == \
+            "Kellogg School of Management, Northwestern University"
+
+    def test_rows_saved_under_either_spelling_rank_together(self):
+        _record("Team Alpha", "Darden School of Business, UVA", "Sec A", 80, True)
+        _record("Team Bravo", "Darden School of Business, University of Virginia", "Sec A", 70, True)
+        board = gs.get_network_leaderboard("oxygen", "Darden School of Business, University of Virginia", "Sec A")
+        assert [e["team_name"] for e in board] == ["Team Alpha", "Team Bravo"]
+
+    def test_sign_in_with_the_abbreviation_finds_the_existing_team(self):
+        _record("Team Alpha", "Darden School of Business, University of Virginia", "Sec A", 80, True)
+        team, school, cls = gs.canonical_identity("team alpha", "Darden School of Business, UVA", "Sec A")
+        assert (team, school) == ("Team Alpha", "Darden School of Business, University of Virginia")
+        assert gs.get_attempt_count(team, "oxygen", school, cls) == 1

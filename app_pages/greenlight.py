@@ -16,7 +16,7 @@ from utils.pitch_market import (
     contested_fee, rival_for, resolve_rival_signings, RIVAL_FEE_PREMIUM, RIVAL_POACH_CHANCE,
 )
 
-_GENRES = ["Reality", "Competition", "Talk", "Scripted", "True Crime", "Drama"]
+_GENRES = ["Reality", "Competition", "Talk", "Scripted", "True Crime", "Drama", "Comedy"]   # Comedy added 2026-11-05: Peacock's slate and pitches have it, the builder didn't
 _NEW_SHOW_IP_SCORE = 40   # unproven new IP -- just above the ~33 flat-maturation threshold
                            # (Show.projected_rating's decay formula), so a fresh concept trends
                            # mildly upward rather than assuming instant franchise value
