@@ -8,6 +8,18 @@ A Streamlit business simulation for teaching video network portfolio economics t
 
 This doc captures the original design intent (from Zach's mechanics brief) reconciled against what's actually implemented, so the two don't drift apart as the codebase evolves.
 
+## 2026-11-05 — Student feedback after Oxygen (Team Yellowstone): input color, scoring up front, fair genre mix
+
+A student finished Oxygen and raised two points. (1) There are too many colors, so inputs were easy to miss and they re-read Year 1 several times. (2) The score weights only appeared in the Student Guide and at the end, so an all-True-Crime slate scored 0 on diversity without warning. The instructor asked for everything, on every track (Oxygen, Bravo, Peacock, Universal Movies), and for genre diversity to stay at 15% but be scored fairly, still requiring "some within diversity" even for a brand-aligned slate.
+
+- **One reserved input color, magenta `#ff66cc`** (`INPUT_C` in `utils/charts.py`; CSS in `utils/styles.py`; `primaryColor` in `.streamlit/config.toml`). Every input box, dropdown, slider, radio, checkbox, widget label and "Your decision" section bar uses it, and nothing read-only does. Gold stays the color of buttons (actions) and the active tab. Movies step-bar chips for open steps are outlined in it.
+- **Decision checklist (TV, all networks)**: `_decision_checklist_html` in `app_pages/simulation.py` lists every input section on the year's page (Financing, Renewal; Sports Rights + Film Licensing on Peacock; Greenlighting; Brands & Casting on Bravo) with its current value and a jump link. It appears at the top and again right above Simulate. Movies already had its step bar.
+- **"How you're scored" up front** (`utils/score_guide.py`): a full card before the first decision (Year 1 / Film 1), then a collapsed reminder every later year or cycle. The weights are read from `SCORE_WEIGHTS` / the new `MOVIE_SCORE_WEIGHTS`, so the card can't drift from the formula. The Complete-phase breakdowns read the same constants.
+- **Brand-anchored Genre Mix (TV, still 15%)**: `genre_mix_score` in `utils/game_state.py`. Raw 1−HHI started each network in a different place (inherited slates scored Oxygen 25, Bravo 60, Peacock 47) and could never reach 100. Now: a single genre = 0 (on-brand or not), the network's inherited mix (`GENRE_BASELINE_HHI`, cost-weighted Year-1 slate) = 50, and range down to `max(0.6 × baseline, 0.30)` HHI = 100, linear in between. Finance's genre donut now reports this score.
+- **Movies Portfolio Diversification**: each axis (genre, concept type) is now normalized by the most diverse mix possible for the number of films, so a 3-film slate with all-different genres and concepts scores 100 (it topped out at 67). One genre is still 0 on that axis.
+- Student Guides + Instructor Plans rebuilt (Genre mix row, magenta inputs note, score card mention). `tests/test_genre_mix_score.py` pins baselines to the slates and checks the anchor points, monotonicity, equal starting footing and the Movies normalization.
+- Official scores already on the Leaderboard were computed under the old formula and are not recomputed.
+
 ## 2026-11-04 — Fixes from Nick's review (12 observations + click-through test)
 
 - **Marketing stays Zach's per-show model** (#5). Nick found the Financing text ("each $1M ≈ +1.5%, diminishing above $16M", network-wide, in the app since the first commit and not from Zach) contradicted the code (budget split evenly across active shows). A network-wide rewrite was briefly shipped and reverted the same day: **Zach's brief is authoritative** ("$3M marketing minimum for show viability"; "~1 percentage point rating increase per $1M, threshold dependent"), so the text and guide were rewritten to describe the per-show split and the $3M threshold. Resolved with the user the same day: the lift is now **~1% per $1M per show** (`MKT_ROI_PER_M` 0.015 → 0.010, Zach's "~1 percentage point"); the $24M slider not funding $3M/show across a 20-show slate is **intended pressure to cut shows** (don't raise the cap); the score locking automatically on the last Simulate stands in for Zach's "Portfolio Submit" step (fine as is).
@@ -547,7 +559,7 @@ Three sequential levels — **Oxygen → Bravo → Peacock** — each independen
 Score is a weighted composite (`compute_score`, `SCORE_WEIGHTS`), not just OCF:
 - OCF margin — 35%
 - Average show ROI — 25%
-- Genre diversification (inverse HHI) — 15%
+- Genre mix — 15% (brand-anchored since 2026-11-05: inherited mix = 50, one genre = 0; see `genre_mix_score`)
 - Marketing efficiency — 15%
 - Sound renewal decisions — 10%
 

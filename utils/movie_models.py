@@ -2307,6 +2307,16 @@ def strategic_fit_score(project: MovieProject, critical_score: Optional[float] =
     return float(min(max(50 + delta_pct * 100, 0), 100))
 
 
+# Single source for the Movies score weights: compute_movie_score, the
+# up-front "How you're scored" panel and the Complete-phase breakdown.
+MOVIE_SCORE_WEIGHTS = {
+    "risk_adjusted_npv":         0.45,
+    "capital_efficiency":        0.20,
+    "strategic_fit":             0.20,
+    "portfolio_diversification": 0.15,
+}
+
+
 def portfolio_diversification_score(projects: list[MovieProject]) -> float:
     """0-100: how diversified the slate is across Genre AND Concept Type,
     weighted by capital committed per project (capital_at_risk()) — mirrors
@@ -2340,9 +2350,22 @@ def portfolio_diversification_score(projects: list[MovieProject]) -> float:
             return 1.0
         return sum((w / total) ** 2 for w in weights.values())
 
-    genre_hhi   = _hhi(lambda p: p.genre)
-    concept_hhi = _hhi(lambda p: p.concept_type)
-    return float(min(max((1 - genre_hhi) * 50 + (1 - concept_hhi) * 50, 0), 100))
+    # 2026-11-05 (student feedback + instructor call, same change as TV's
+    # utils/game_state.py::genre_mix_score): normalize each axis by the
+    # most diverse mix actually possible for this many films, so a slate
+    # with every film in a different genre and concept type scores 100.
+    # Raw 1-HHI topped out at 67 for a 3-film slate. One genre is still 0
+    # on that axis.
+    n = len(projects)
+
+    def _axis(hhi: float, options: int) -> float:
+        k = min(n, options)
+        best = 1 - 1 / k
+        return min(max((1 - hhi) / best, 0.0), 1.0) if best > 0 else 1.0
+
+    genre_s   = _axis(_hhi(lambda p: p.genre), len(GENRES))
+    concept_s = _axis(_hhi(lambda p: p.concept_type), len(CONCEPT_TYPES))
+    return float(min(max(genre_s * 50 + concept_s * 50, 0), 100))
 
 
 def draw_actual_multiplier(team_name: str, cycle: int, genre: str = "Drama",
@@ -2449,7 +2472,9 @@ def compute_movie_score(projects: list[MovieProject], critical_scores: Optional[
     # 0.55/0.20/0.25 down proportionally rather than just appending 0.15 on
     # top, keeping NPV clearly dominant (matches TV/Streaming's own
     # genre_mix weight in utils/game_state.py::SCORE_WEIGHTS).
-    total = s_npv * 0.45 + s_eff * 0.20 + s_fit * 0.20 + s_div * 0.15
+    w = MOVIE_SCORE_WEIGHTS
+    total = (s_npv * w["risk_adjusted_npv"] + s_eff * w["capital_efficiency"]
+             + s_fit * w["strategic_fit"] + s_div * w["portfolio_diversification"])
 
     return {
         "total":                    round(total, 1),

@@ -33,7 +33,7 @@ from utils.film_licensing import year_film_pnl
 from utils.game_state import (level_shows, is_official_run, 
     NETWORK_INFO, NETWORK_ORDER, compute_score_for_network,
     record_attempt, get_attempt_count, can_advance,
-    get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS,
+    get_official_score, MAX_ATTEMPTS, hhi_from_genres, SCORE_WEIGHTS, MAX_NEW_SHOWS_PER_YEAR,
     YEARS_PER_LEVEL, LEVEL_START_YEAR, compute_level_notables,
     render_vs_competitors_board,
 )
@@ -41,7 +41,8 @@ from utils.sports_models import (sports_tail_m,
     SPORTS_LEAGUES, leagues_up_for_bid, cycle_for_year, draw_rival_bids,
     resolve_auction, SportsContract, held_this_year, sports_year_pnl,
 )
-from utils.charts import base_layout, takeaway, html_table, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on
+from utils.charts import base_layout, takeaway, html_table, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, readable_text, ink_on, INPUT_C
+from utils.score_guide import render_tv_score_guide
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -837,6 +838,57 @@ def _sports_pnl_recap(ss, shows, year, net, new_cancel) -> dict:
     return year_pnl
 
 
+def _decision_checklist_items(ss, shows, net, year) -> list:
+    """(anchor, section, what you set there, current value) for every input
+    section on this year's Decisions page, in page order. 2026-11-05, per
+    student feedback ("I had to read through several times to make sure I
+    was not missing any inputs"): one list of every input, with jump links.
+    Values come from widget keys where they exist, so they're current even
+    at the top of the page."""
+    mkt = float(ss.get("mkt_budget_slider", ss.get("mkt_budget", 5.0)))
+    active = _active_shows(shows, ss.cancelled_shows)
+    decisions = ss.get("renewal_decisions", {})
+    n_cancel = sum(1 for s in active
+                   if ss.get(f"ren_{s.id}", decisions.get(s.id, "Renew")) == "Cancel")
+    items = [
+        ("financing", "Financing", "Marketing slider", f"${mkt:.1f}M"),
+        ("renewal", "Renewal",
+         "Renew / Cancel, premiere month and primetime slot for every show",
+         f"{len(active) - n_cancel} renew · {n_cancel} cancel"),
+    ]
+    if net == "peacock":
+        items += [
+            ("sports-rights", "Sports Rights", "Bids on rights packages up for auction", "see section"),
+            ("film-licensing", "Film Licensing", "Sealed bids on this year's films", "see section"),
+        ]
+    used = len(ss.get("greenlit_ids_this_year", set()))
+    items.append(("greenlighting", "Greenlighting (optional)", "Acquire a pitched show or build one",
+                  f"{used} of {MAX_NEW_SHOWS_PER_YEAR} slots used"))
+    if net == "bravo":
+        items.append(("brand-casting", "Brands & Casting", "Brand deals and casting bids for new shows",
+                      "see section"))
+    return items
+
+
+def _decision_checklist_html(ss, shows, net, year, title: str) -> str:
+    rows = []
+    for i, (anchor, section, what, value) in enumerate(_decision_checklist_items(ss, shows, net, year), 1):
+        rows.append(
+            f'<a href="#{anchor}" style="display:flex;gap:10px;align-items:baseline;padding:5px 0;'
+            f'text-decoration:none;color:#ffffff;border-bottom:1px solid rgba(255,102,204,.18);">'
+            f'<b style="color:{INPUT_C};min-width:20px;font-family:DM Mono,monospace;">{i}</b>'
+            f'<span style="min-width:170px;font-weight:600;color:{INPUT_C};">{section}</span>'
+            f'<span style="flex:1;font-size:14px;">{what}</span>'
+            f'<span style="font-family:DM Mono,monospace;font-size:14px;white-space:nowrap;">{value}</span></a>')
+    return (f'<div style="background:#12141a;border:1px solid #252836;border-left:4px solid {INPUT_C};'
+            f'border-radius:8px;padding:10px 18px;margin-bottom:16px;">'
+            f'<div style="font-family:DM Mono,monospace;font-size:14px;color:#ffffff;text-transform:uppercase;'
+            f'letter-spacing:.08em;margin-bottom:4px;">✏️ {title}</div>'
+            f'<div style="font-size:14px;color:#ffffff;margin-bottom:6px;">Everything you can set is in '
+            f'<b style="color:{INPUT_C};">this color</b>. Click a row to jump to it; simulate at the bottom.</div>'
+            f'{"".join(rows)}</div>')
+
+
 def _decisions(ss, shows, net_info, year, net):
     """Single scrolling page (redesigned 2026-07-27, replacing the old
     Back/Next 4-step wizard per user request: "students should have
@@ -861,23 +913,12 @@ def _decisions(ss, shows, net_info, year, net):
     if len(ss.yearly_log) >= 2:
         _progress_chart(ss, threshold)
 
-    nav_links = [
-        '<a href="#financing" style="color:#e8c547;">Financing</a>',
-        '<a href="#renewal" style="color:#e8c547;">Renewal</a>',
-    ]
-    if net == "peacock":
-        nav_links.append('<a href="#sports-rights" style="color:#e8c547;">Sports Rights</a>')
-        nav_links.append('<a href="#film-licensing" style="color:#e8c547;">Film Licensing</a>')
-    nav_links += [
-        '<a href="#greenlighting" style="color:#e8c547;">Greenlighting</a>',
-    ] + (['<a href="#brand-casting" style="color:#e8c547;">Brands &amp; Casting</a>'] if net == "bravo" else []) + [
-        '<a href="#scheduling" style="color:#e8c547;">Scheduling</a>',
-        '<a href="#simulate" style="color:#e8c547;">Simulate</a>',
-    ]
-    st.markdown(
-        '<div style="font-size:14px;color:#ffffff;margin-bottom:14px;">'
-        'Work through each decision as you scroll, then simulate the year at the bottom. '
-        + ' · '.join(nav_links) + '</div>', unsafe_allow_html=True)
+    # Scoring up front (2026-11-05, student feedback): full card in Year 1,
+    # a collapsed reminder every later year.
+    render_tv_score_guide(net, expanded=(year == 1))
+
+    st.markdown(_decision_checklist_html(ss, shows, net, year, "Your decisions this year"),
+                unsafe_allow_html=True)
 
     st.markdown('<a id="financing"></a>', unsafe_allow_html=True)
     _section_financing(ss, shows, year, net_info, level_budget)
@@ -958,6 +999,8 @@ def _decisions(ss, shows, net_info, year, net):
     st.divider()
 
     st.markdown('<a id="simulate"></a>', unsafe_allow_html=True)
+    st.markdown(_decision_checklist_html(ss, shows, net, year, "Before you simulate, check every input"),
+                unsafe_allow_html=True)
     st.markdown('<div class="section-title">Expected This Year</div>', unsafe_allow_html=True)
     p = _preview_pnl(shows, year, mkt, ss.cancelled_shows, new_cancel,
                      sports_rev_m=sports_pnl["revenue_m"], sports_cost_m=sports_pnl["cost_m"])
@@ -1593,12 +1636,13 @@ def _complete(ss, shows, net_info, team, net):
 
     with score_col:
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
+        _w = lambda k: f"{SCORE_WEIGHTS[k] * 100:.0f}%"
         components = [
-            ("OCF Margin",      score_d["ocf_margin"],  "35%"),
-            ("Portfolio ROI",   score_d["roi"],          "25%"),
-            ("Genre Diversity", score_d["diversity"],    "15%"),
-            ("Renewal Quality", score_d["renewal"],      "10%"),
-            ("Mkt Efficiency",  score_d["marketing"],    "15%"),
+            ("OCF Margin",      score_d["ocf_margin"],  _w("ocf_margin")),
+            ("Portfolio ROI",   score_d["roi"],          _w("roi_avg")),
+            ("Genre Mix",       score_d["diversity"],    _w("genre_mix")),
+            ("Renewal Quality", score_d["renewal"],      _w("renewal_pct")),
+            ("Mkt Efficiency",  score_d["marketing"],    _w("mkt_efficiency")),
         ]
         for label, val, weight in components:
             bar_c = SUCCESS if val >= 70 else (WARN if val >= 40 else DANGER)

@@ -15,6 +15,7 @@ SURFACE2 = "#1a1d26"
 BORDER   = "#252836"
 ACCENT   = "#e8c547"
 ACCENT2  = "#4fc3f7"
+INPUT_C  = "#ff66cc"   # reserved for student inputs only (see utils/styles.py)
 DANGER   = "#ef5350"
 SUCCESS  = "#66bb6a"
 WARN     = "#ffa726"

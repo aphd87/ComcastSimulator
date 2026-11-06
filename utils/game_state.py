@@ -119,6 +119,39 @@ SCORE_WEIGHTS = {
 
 NETWORK_ORDER = ["oxygen", "bravo", "peacock"]
 
+# ── Genre Mix: brand-anchored diversity (2026-11-05) ─────────────────────────
+# Student feedback (Oxygen, all-True-Crime slate scored 0 with no warning) +
+# instructor call: keep the 15% weight, but score it fairly. Raw 1-HHI started
+# each network somewhere different (inherited Oxygen 25, Bravo 60, Peacock 47)
+# and could never reach 100. Now every network is anchored to the slate it
+# inherits: keep the brand's inherited mix = 50, build real range around the
+# brand core = up to 100, collapse to a single genre = 0. Brand focus is fine,
+# but some range within it is still required.
+# Baseline = cost-weighted HHI of each network's starting slate in Year 1
+# (utils/data.py; tests/test_genre_mix_score.py pins these to the data).
+GENRE_BASELINE_HHI = {
+    "oxygen":  0.748,   # ~86% True Crime, 8% Reality, 6% Competition
+    "bravo":   0.402,   # ~58% Reality, 19% Competition, 16% Scripted, 7% Talk
+    "peacock": 0.533,   # ~63% Drama, 37% Comedy
+}
+GENRE_TARGET_FLOOR_HHI = 0.30   # 100 needs no more than this, or 60% of the baseline, whichever is higher
+
+
+def genre_target_hhi(network: str) -> float:
+    base = GENRE_BASELINE_HHI.get(network, 0.5)
+    return max(0.6 * base, GENRE_TARGET_FLOOR_HHI)
+
+
+def genre_mix_score(genre_hhi: float, network: str) -> float:
+    """0-1 Genre Mix score. 0 at a single genre (HHI 1), 0.5 at the network's
+    inherited brand mix, 1.0 at the target range. Linear in between."""
+    base = GENRE_BASELINE_HHI.get(network, 0.5)
+    target = genre_target_hhi(network)
+    h = min(max(genre_hhi, 0.0), 1.0)
+    if h >= base:
+        return 0.5 * (1.0 - h) / (1.0 - base)
+    return min(0.5 + 0.5 * (base - h) / (base - target), 1.0)
+
 
 def level_shows(ss, net: str) -> list:
     """The shows a team manages at this level (shallow copy; the Show
@@ -144,6 +177,7 @@ def compute_score(
     genre_hhi: float,      # 0-1, lower = more diverse (good)
     renewal_pct: float,    # % of renewed shows that are ROI-positive
     mkt_efficiency: float, # ad rev per $M marketing
+    network: Optional[str] = None,
 ) -> dict:
     """
     Returns a score dict with component breakdown and total (0-100).
@@ -152,7 +186,9 @@ def compute_score(
     # Normalize each component to 0–1
     s_ocf  = min(max(ocf_margin / 40.0, 0), 1)       # 40% margin = perfect
     s_roi  = min(max((avg_roi + 20) / 80.0, 0), 1)   # -20% → 0, +60% → 1
-    s_div  = max(1 - genre_hhi, 0)                    # lower HHI = higher score
+    # Brand-anchored when the network is known (see genre_mix_score);
+    # raw 1-HHI only for callers that don't pass one.
+    s_div  = genre_mix_score(genre_hhi, network) if network else max(1 - genre_hhi, 0)
     s_ren  = min(max(renewal_pct / 100.0, 0), 1)
     s_mkt  = min(max(mkt_efficiency / 30.0, 0), 1)   # $30M rev/$M mkt = perfect
 
@@ -177,7 +213,7 @@ def compute_score(
 def compute_score_for_network(network: str, ocf_margin: float, avg_roi: float,
                                genre_hhi: float, renewal_pct: float,
                                mkt_efficiency: float) -> dict:
-    result = compute_score(ocf_margin, avg_roi, genre_hhi, renewal_pct, mkt_efficiency)
+    result = compute_score(ocf_margin, avg_roi, genre_hhi, renewal_pct, mkt_efficiency, network=network)
     result["passed"] = ocf_margin >= PASS_THRESHOLD.get(network, 12)
     return result
 

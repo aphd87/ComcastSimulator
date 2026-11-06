@@ -412,7 +412,7 @@ def build_tv_plan():
         ["**Format**", "Teams of ~4: one Driver plays; teammates register **Follow Along** on their own laptops. Use team details students will reuse for Movies, so both scores sit together on the Leaderboard."],
         ["**Timing**", "**0–10 frame & sign-in → 10–56 four years on the clock → 56–68 buffer → 68–85 debrief boards.**"],
         ["**The rule**", "**Every team finishes all four years**, as well as it can. The first finished run is the official score and Redo is off on it, so think, but don't stall."],
-        ["**What counts**", "Pass = level OCF margin at or above **10%**. Score: OCF margin 35%, show ROI 25%, genre mix 15%, marketing efficiency 15%, renewal quality 10%."],
+        ["**What counts**", "Pass = level OCF margin at or above **10%**. Score: OCF margin 35%, show ROI 25%, genre mix 15%, marketing efficiency 15%, renewal quality 10%. Genre mix is brand-anchored: Peacock's inherited Drama/Comedy mix scores 50, more range up to 100, one genre 0. Students see all of this on a How you're scored card before Year 1."],
     ], [1.5, 5.0])
     t = doc.tables[-1]
     t.rows[0]._tr.getparent().remove(t.rows[0]._tr)

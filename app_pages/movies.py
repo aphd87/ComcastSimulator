@@ -63,7 +63,9 @@ from utils.game_state import (
     record_attempt, get_attempt_count, get_official_score, MAX_ATTEMPTS,
     compute_movie_notables, render_vs_competitors_board,
 )
-from utils.charts import base_layout, takeaway, waterfall_chart, donut_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2
+from utils.charts import base_layout, takeaway, waterfall_chart, donut_chart, SUCCESS, DANGER, WARN, ACCENT, ACCENT2, TEXT2, INPUT_C
+from utils.score_guide import render_movie_score_guide
+from utils.movie_models import MOVIE_SCORE_WEIGHTS
 
 MOVIE_NETWORK_KEY = "movies"   # leaderboard/attempt-tracking key — same FERPA-safe infra as Day 1
 RESEARCH_FEE_M = 4.0   # $M -- Movies-side parallel to TV's RESEARCH_FEE (app_pages/renewal.py),
@@ -512,8 +514,9 @@ def _step_bar_html(ss) -> str:
     they are in this film's cycle and what's left before Simulate."""
     chips = []
     for i, label, anchor, done, _ in _numbered_steps(ss):
+        # Open steps use the input color (2026-11-05): "you still decide here".
         bg, border, mark = (("rgba(102,187,106,.15)", SUCCESS, "✓") if done
-                            else ("#1a1d26", "#8b93a8", str(i)))
+                            else ("#1f1520", INPUT_C, str(i)))
         chips.append(f'<a href="#{anchor}" style="text-decoration:none;color:#ffffff;background:{bg};'
                      f'border:1px solid {border};border-radius:14px;padding:3px 10px;font-size:14px;'
                      f'white-space:nowrap;"><b>{mark}</b> {label}</a>')
@@ -1741,6 +1744,10 @@ def _decisions(ss):
            if ss.movie_cycle > 1 else None
     if prev:
         _last_cycle_recap(prev)
+
+    # Scoring up front (2026-11-05, student feedback): full card for film 1,
+    # a collapsed reminder after that.
+    render_movie_score_guide(expanded=(ss.movie_cycle == 1))
 
     # Your Slate table replaces the old NPV-by-year bar chart here
     # (2026-10-05): one row per film says far more than one bar per film.
@@ -3594,21 +3601,23 @@ def _complete(ss):
 
     with score_col:
         st.markdown('<div class="section-title">Score Breakdown</div>', unsafe_allow_html=True)
+        _mw = lambda k: f"{MOVIE_SCORE_WEIGHTS[k] * 100:.0f}%"
         components = [
-            ("Risk-Adj. NPV",           score["risk_adjusted_npv"],       "45%",
+            ("Risk-Adj. NPV",           score["risk_adjusted_npv"],       _mw("risk_adjusted_npv"),
              f"{1 - MOVIE_LUCK_WEIGHT:.0%} your decisions, {MOVIE_LUCK_WEIGHT:.0%} luck. The decision part "
              "weights your bear case at 50% rather than the rosy base case, rewarding risk-aware greenlighting. "
              "The luck part is what each film actually earned: a breakout helps, a flop hurts. It's the "
              "movie business."),
-            ("Capital Efficiency",      score["capital_efficiency"],      "20%",
+            ("Capital Efficiency",      score["capital_efficiency"],      _mw("capital_efficiency"),
              "Total lifetime revenue per P&A dollar spent, averaged across your slate — a real-world "
              "3-6x is healthy; 6x total revenue / P&A scores 100."),
-            ("Strategic Fit",           score["strategic_fit"],           "20%",
+            ("Strategic Fit",           score["strategic_fit"],           _mw("strategic_fit"),
              "Did your release-strategy choice (wide/platform/day-and-date) actually beat a naive "
              "'always go wide theatrical' default, net of cannibalization?"),
-            ("Portfolio Diversification", score["portfolio_diversification"], "15%",
-             "How spread your slate is across Genre AND Concept Type, weighted by capital committed — "
-             "three Sequels in a row scores low even if each one individually did well."),
+            ("Portfolio Diversification", score["portfolio_diversification"], _mw("portfolio_diversification"),
+             "How spread your slate is across Genre AND Concept Type, weighted by capital committed. "
+             "Every film in a different genre and concept type scores 100; three Sequels in a row "
+             "scores low even if each one individually did well."),
         ]
         for label, val, weight, defn in components:
             c = SUCCESS if val >= 70 else (WARN if val >= 40 else DANGER)

@@ -404,6 +404,7 @@ def build_tv():
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)
+    para(doc, "The same table appears in the app as a **📏 How you're scored** card before your first decision, and as a reminder every year after.")
     para(doc, "Your score is out of 100 points and has five parts. **Passing** depends only on margin: you pass if your level OCF margin is at or above the network's target.")
     callout(doc, "key",
             "**Luck is part of your run.** Ratings swings and surprises are drawn separately for each team, so two teams "
@@ -412,7 +413,9 @@ def build_tv():
     table(doc, ["Part", "Weight", "What earns full points", "In plain English"], [
         ["**OCF margin**", "35%", "40% margin", "Make money. This is the biggest piece."],
         ["**Average show ROI**", "25%", "+60% average ROI", "Your shows earn back more than they cost."],
-        ["**Genre mix**", "15%", "Spending spread across genres", "Don't bet everything on one genre."],
+        ["**Genre mix**", "15%", "Real range built around your network's core genre",
+         "Keeping the network's inherited mix scores 50. Building range around the brand core earns up to 100. "
+         "One genre scores 0, even if it's on-brand."],
         ["**Marketing efficiency**", "15%", "$30M revenue per $1M marketing", "Every marketing dollar pulls its weight."],
         ["**Renewal quality**", "10%", "All kept shows have positive ROI", "Cut the money-losers."],
     ], [1.6, 0.7, 1.9, 2.3])
@@ -420,6 +423,8 @@ def build_tv():
     doc.add_heading("Common mistakes", level=1)
     bullets(doc, [
         "**Leaving every show on Renew.** Cut the shows that lose money unless you have a clear franchise reason to keep them.",
+        "**Going all-in on the brand genre.** Staying on-brand is good strategy, but a slate with only one genre scores 0 on Genre mix. Keep the core and add range.",
+        "**Missing an input.** Everything you can set is shown in **magenta** (pink): boxes, dropdowns, sliders, and the \"Your decision\" bars. The checklist at the top of each year lists every input with a link.",
         "**Spreading marketing too thin.** Under $3M per show buys very little.",
         "**Greenlighting because you can.** New shows cost money right away, and they hurt this year's margin.",
         "**Judging streaming on Year 1.** Streaming shows pay off over three years.",
@@ -437,7 +442,7 @@ def build_tv():
         ["**Rating**", "A show's 18–49 demo rating: the share of U.S. adults aged 18–49 watching an average episode (1.0 ≈ 1%). Each point is worth about $7M a year in ad revenue. Typical show: 1.0–1.5. Hit: 2.0+."],
         ["**IP Score**", "A show's franchise or brand value (0–100). A high score helps a show age better."],
         ["**Distribution revenue**", "Fees cable and satellite companies pay to carry your network."],
-        ["**HHI / genre mix**", "A measure of concentration. Lower means a more diversified slate."],
+        ["**HHI / genre mix**", "A measure of concentration (sum of squared spending shares). Lower means a more diversified slate. Your Genre mix score compares yours with your network's inherited mix."],
         ["**Make-good**", "What a sponsor demands when a product placement flops: extra integrations or free ad spots, at your cost."],
         ["**Film license**", "Renting the streaming rights to a finished movie for a set number of years, for an annual fee."],
         ["**Winner's curse**", "Winning an auction by bidding more than the prize turns out to be worth."],
@@ -599,6 +604,7 @@ def build_movies():
 
     page_break(doc)
     doc.add_heading("How you're scored", level=1)
+    para(doc, "The same table appears in the app as a **📏 How you're scored** card before your first film, and as a reminder every cycle after.")
     para(doc, "Your score is out of 100 points and has four parts. **Passing** depends on your decisions alone: your films' risk-adjusted NPV (before luck) must average above $0, so leaving the defaults alone always fails. "
               "Each film's graded NPV is **75% your decisions** (risk-adjusted, so the bear case counts) and **25% luck** (what the film "
               "actually earned). A breakout helps and a flop hurts, but good decisions still matter most. "
@@ -609,12 +615,13 @@ def build_movies():
         ["**Risk-adjusted NPV**", "45%", "+$200M average per movie", "Your movies create value after accounting for risk (plus a little luck)."],
         ["**Capital efficiency**", "20%", "6× revenue per marketing dollar", "You got a lot back for what you spent."],
         ["**Strategic fit**", "20%", "Genre, season, and release choices that fit together", "Your decisions make sense as a set."],
-        ["**Portfolio diversification**", "15%", "A varied slate across cycles", "Don't make the same movie four times."],
+        ["**Portfolio diversification**", "15%", "Every film in a different genre and concept type", "Don't make the same movie twice. Three films in one genre scores 0 on the genre half."],
     ], [1.6, 0.7, 2.0, 2.2])
 
     doc.add_heading("Common mistakes", level=1)
     bullets(doc, [
         "**Leaving the defaults alone.** The default film is an under-funded tentpole; a slate of them always fails.",
+        "**Missing an input.** Everything you can set is shown in **magenta** (pink), and open steps in the step bar are outlined in magenta until done.",
         "**A cheap blockbuster.** A $20M action film looks cheap and underperforms. Fund the genre properly.",
         "**Maxing out P&A or screens.** Past the genre's sweet spot you're paying for empty seats.",
         "**Spending big on marketing for a weak concept.** Marketing buys an opening, not a good movie.",

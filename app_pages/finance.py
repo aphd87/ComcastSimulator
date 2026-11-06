@@ -3,7 +3,7 @@ Tab 3 — P&L / OCF
 Full income statement, revenue decomposition, distribution model.
 """
 import streamlit as st
-from utils.game_state import level_shows
+from utils.game_state import level_shows, genre_mix_score, hhi_from_genres
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
@@ -200,10 +200,18 @@ def render():
             st.plotly_chart(fig_genre, use_container_width=True, config={"displayModeBar": False})
             _top_g = max(genre_costs, key=genre_costs.get)
             _g_share = genre_costs[_top_g] / sum(genre_costs.values()) * 100
+            # 2026-11-05: report the actual brand-anchored Genre Mix score
+            # (utils/game_state.py::genre_mix_score), not a >50% rule of thumb.
+            _net = st.session_state.get("active_network", "oxygen")
+            _mix = genre_mix_score(hhi_from_genres(genre_costs), _net) * 100
+            _verdict = ("a single genre scores 0, even on-brand. Add range around your core."
+                        if len(genre_costs) == 1 else
+                        "below your network's inherited mix, so Genre Mix is costing you points."
+                        if _mix < 50 else
+                        "at or above your network's inherited mix (50). More range earns up to 100.")
             takeaway(f"<b>{_top_g}</b> is {_g_share:.0f}% of your content spend across {len(genre_costs)} "
-                     f"genre{'s' if len(genre_costs) != 1 else ''}. This feeds the Genre Diversity part of your "
-                     f"score: " + ("that's concentrated, so diversity is costing you points."
-                                    if _g_share > 50 else "that's reasonably spread out."))
+                     f"genre{'s' if len(genre_costs) != 1 else ''}. Genre Mix (15% of your score) would be "
+                     f"<b>about {_mix:.0f}/100</b> for this mix: {_verdict}")
 
     st.divider()
 

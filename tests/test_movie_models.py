@@ -593,10 +593,10 @@ class TestPortfolioDiversification:
                          star_power=55, screens=3200, cycle=3, concept_type="Family/Kids"),
         ]
         # 3 distinct genres + 3 distinct concept types, each at equal weight,
-        # is the mathematical ceiling for a 3-project slate: HHI=1/3 on each
-        # axis -> (1 - 1/3)*50*2 = 66.67, not 100 (100 would need many more
-        # distinct categories than 3 projects can ever cover).
-        assert portfolio_diversification_score(projects) == pytest.approx(66.67, abs=0.5)
+        # is the most diverse a 3-project slate can be. Since 2026-11-05 each
+        # axis is normalized by that ceiling, so it scores 100 (it was 66.67
+        # under raw 1-HHI, which no 3-film slate could ever beat).
+        assert portfolio_diversification_score(projects) == pytest.approx(100, abs=0.5)
 
     def test_diversified_slate_outscores_concentrated_slate_in_compute_movie_score(self):
         concentrated = [MovieProject(title=f"Seq {i}", genre="Action/Tentpole", budget_m=150,

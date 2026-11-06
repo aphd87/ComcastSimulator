@@ -3,7 +3,7 @@ base = "dark"
 backgroundColor = "#0b0c10"
 secondaryBackgroundColor = "#12141a"
 textColor = "#ffffff"
-primaryColor = "#e8c547"
+primaryColor = "#ff66cc"   # input color: slider/radio/checkbox fills (buttons are styled gold in utils/styles.py)
 font = "sans serif"
 
 [server]

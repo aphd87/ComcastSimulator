@@ -47,6 +47,7 @@ TAILWIND_INJECT = """
             danger:    '#ef5350',
             warn:      '#ffa726',
             accent2:   '#4fc3f7',
+            input:     '#ff66cc',
           },
           fontFamily: {
             serif: ['"DM Serif Display"', 'serif'],
@@ -102,24 +103,34 @@ h4,h5,h6 { font-family:'DM Sans',sans-serif !important; color:#ffffff !important
 
 [data-testid="stSlider"] > div > div { background:#252836 !important; }
 
+/* ── One reserved input color (2026-11-05) ────────────────────────────────
+   Student feedback: with so many colors on screen, inputs were easy to miss.
+   Magenta #ff66cc (INPUT_C in utils/charts.py) now means one thing only:
+   "you type, pick, or slide here". Every input box, dropdown, slider, radio,
+   checkbox and widget label uses it, plus the "Your decision" section bars.
+   Nothing read-only uses it. Gold stays the color of buttons (actions). */
 [data-testid="stNumberInput"] input,
 [data-testid="stSelectbox"] div,
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea {
-    background:#1a1d26 !important;border-color:#8b93a8 !important;
+    background:#1f1520 !important;border-color:#ff66cc !important;
     color:#ffffff !important;font-family:'DM Mono',monospace !important;
 }
-/* Input/select outlines visible at >=3:1 so students can see where to type or pick. */
+/* Input/select outlines in the input color, >=3:1 against the page. */
 [data-baseweb="select"] > div, [data-baseweb="input"], [data-baseweb="base-input"],
 [data-baseweb="textarea"], [data-testid="stNumberInput"] > div > div {
-    border:2px solid #8b93a8 !important; border-radius:6px !important;
+    border:2px solid #ff66cc !important; border-radius:6px !important;
+    background:#1f1520 !important;
 }
-[data-baseweb="select"] > div:hover, [data-baseweb="input"]:hover { border-color:#e8c547 !important; }
-[data-baseweb="select"] svg { color:#ffffff !important; fill:#ffffff !important; }
-[data-testid="stNumberInput"] button { border-left:1px solid #8b93a8 !important; min-height:auto !important; }
-/* Radio + checkbox controls: visible outlines on the unchecked state. */
+[data-baseweb="select"] > div:hover, [data-baseweb="input"]:hover {
+    border-color:#ff99dd !important; box-shadow:0 0 0 3px rgba(255,102,204,.25) !important;
+}
+[data-baseweb="select"] svg { color:#ff66cc !important; fill:#ff66cc !important; }
+[data-testid="stNumberInput"] button { border-left:1px solid #ff66cc !important; min-height:auto !important; }
+/* Radio + checkbox + toggle controls in the input color, checked or not
+   (the checked fill/slider thumb come from primaryColor in config.toml). */
 [data-testid="stRadio"] label > div:first-child, [data-testid="stCheckbox"] label > span:first-child {
-    border-color:#8b93a8 !important;
+    border-color:#ff66cc !important;
 }
 [data-testid="stExpander"] {
     background:#12141a !important;border:1px solid #7d8499 !important;border-radius:6px !important;
@@ -172,21 +183,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 [data-baseweb="select"] > div:focus-within {
     outline:3px solid #4fc3f7 !important; outline-offset:2px !important;
 }
+input:focus-visible, textarea:focus-visible, [data-baseweb="select"] > div:focus-within {
+    outline-color:#ff66cc !important;
+}
 
 /* Links read as links, not just colored text (SC 1.4.1). */
 [data-testid="stMarkdownContainer"] a:not([style*="text-decoration"]) { text-decoration:underline; text-underline-offset:3px; }
 
 /* ── Decision callouts (2026-10-14) ───────────────────────────────────────
    Any section header tagged class="section-title decision" is somewhere the
-   student must act. Gold bar + label so it stands apart from read-only info. */
+   student must act. Input-color bar + label (2026-11-05, was gold) so it
+   matches the inputs inside it and stands apart from read-only info. */
 .section-title.decision {
-    border-left:5px solid #e8c547; border-bottom:2px solid #e8c547;
-    padding-left:12px; background:linear-gradient(90deg, rgba(232,197,71,.12), transparent 70%);
+    border-left:5px solid #ff66cc; border-bottom:2px solid #ff66cc;
+    padding-left:12px; background:linear-gradient(90deg, rgba(255,102,204,.14), transparent 70%);
     padding-top:6px; border-radius:4px 0 0 0;
 }
 .section-title.decision::before {
     content:"👉 Your decision"; display:block; font-size:14px; font-weight:600;
-    letter-spacing:.08em; color:#ffffff; margin-bottom:2px;
+    letter-spacing:.08em; color:#ff66cc; margin-bottom:2px;
 }
 .section-title.decision.action::before { content:"👉 Next step — click ▶ Simulate below"; }
 
@@ -297,7 +312,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
    st.caption and widget labels in a faded theme color; force near-white. */
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
 .stCaption, .stCaption p { color:#ffffff !important; }
-[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { color:#ffffff !important; }
+/* Widget labels carry the input color (2026-11-05): every "type/pick here"
+   label reads the same, distinct from read-only text. */
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p { color:#ff66cc !important; font-weight:600 !important; }
 [data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color:#ffffff !important; }
 
 /* "?" help tooltips: always on top, high contrast, wide enough to read. */
