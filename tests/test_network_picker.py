@@ -1,11 +1,16 @@
 """Choose Your Network screen (app.py::_render_network_picker): entering
 TV/Streaming for the first time must offer Oxygen, Bravo, and Peacock
 instead of silently defaulting to Oxygen."""
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 
 def _to_tv(role="🎮 Driver — I'll make the decisions"):
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(APP_PY, default_timeout=30)
     at.run()
     at.text_input(key="university_input_field").set_value("Test University")
     at.text_input(key="college_input_field").set_value("Test School")

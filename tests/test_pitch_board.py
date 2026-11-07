@@ -99,6 +99,13 @@ def test_simulating_a_film_posts_its_logline_and_result():
     from tests.test_theatrical_mini_run import _movies_app, _mini_run_button, _simulate_button
     at = _movies_app("Pitch Movie Team")
     _mini_run_button(at).click().run()
+    # This team name draws a PVOD Market Acceptance rejection, which locks
+    # Simulate until answered -- hold the price, as a student would.
+    for _ in range(6):
+        hold = [b for b in at.button if (b.key or "").startswith("pvod_hold_")]
+        if not hold:
+            break
+        hold[0].click().run()
     _simulate_button(at).click().run()
     assert not at.exception, list(at.exception)
     board = gs.class_pitches("", "", sim="movies")

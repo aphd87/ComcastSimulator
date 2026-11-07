@@ -4,7 +4,12 @@ click-through test script."""
 import copy
 
 import pytest
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 import utils.game_state as gs
 from utils.data import OXYGEN_SLATE
@@ -47,7 +52,7 @@ def test_new_identity_is_left_alone():
 
 # ── App-level helpers ─────────────────────────────────────────────────────────
 def _register(team="Team 2", role="🎮 Driver — I'll make the decisions"):
-    at = AppTest.from_file("app.py", default_timeout=90)
+    at = AppTest.from_file(APP_PY, default_timeout=90)
     at.run()
     at.text_input(key="university_input_field").set_value("UVa")
     at.text_input(key="college_input_field").set_value("Darden")

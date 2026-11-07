@@ -11,7 +11,12 @@ script runner, which is required here since the whole point under test is
 what app.py does across multiple runs (Driver saves, Viewer loads).
 """
 import pytest
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 import utils.game_state as gs
 
@@ -51,14 +56,14 @@ def _register(at, role="🎮 Driver — I'll make the decisions", team="Team Syn
 
 class TestRoleSelection:
     def test_default_registration_is_driver(self):
-        at = AppTest.from_file("app.py", default_timeout=30)
+        at = AppTest.from_file(APP_PY, default_timeout=30)
         at.run()
         _register(at)
         assert not at.exception, f"Registration raised: {list(at.exception)}"
         assert at.session_state["team_role"] == "driver"
 
     def test_registering_follow_along_sets_viewer_role(self):
-        at = AppTest.from_file("app.py", default_timeout=30)
+        at = AppTest.from_file(APP_PY, default_timeout=30)
         at.run()
         _register(at, role="👀 Follow Along — view only")
         assert not at.exception, f"Registration raised: {list(at.exception)}"
@@ -68,7 +73,7 @@ class TestRoleSelection:
         """A Follow Along teammate can register before their Driver has
         made any move at all -- load_live_state() returns None and the
         page should render the empty/default state, not throw."""
-        at = AppTest.from_file("app.py", default_timeout=30)
+        at = AppTest.from_file(APP_PY, default_timeout=30)
         at.run()
         _register(at, role="👀 Follow Along — view only", team="Team NoDriverYet")
         assert not at.exception, f"Viewer render raised: {list(at.exception)}"
@@ -79,7 +84,7 @@ class TestLiveStateSync:
         """Registering (role=driver) immediately renders the TV dashboard,
         which should trigger one save_live_state() call -- the team should
         show up in the shared store without any further interaction."""
-        driver = AppTest.from_file("app.py", default_timeout=30)
+        driver = AppTest.from_file(APP_PY, default_timeout=30)
         driver.run()
         _register(driver)
         assert not driver.exception, f"Driver render raised: {list(driver.exception)}"
@@ -95,12 +100,12 @@ class TestLiveStateSync:
         """The real end-to-end path: Driver registers (saving state), then
         a separate Viewer session registering under the identical identity
         should hydrate its session_state from that saved snapshot."""
-        driver = AppTest.from_file("app.py", default_timeout=30)
+        driver = AppTest.from_file(APP_PY, default_timeout=30)
         driver.run()
         _register(driver)
         assert not driver.exception
 
-        viewer = AppTest.from_file("app.py", default_timeout=30)
+        viewer = AppTest.from_file(APP_PY, default_timeout=30)
         viewer.run()
         _register(viewer, role="👀 Follow Along — view only")
         assert not viewer.exception, f"Viewer render raised: {list(viewer.exception)}"
@@ -117,12 +122,12 @@ class TestLiveStateSync:
         the Driver's choices should ever count. Registering and rendering
         as viewer, then re-loading, should still show the Driver's
         untouched state (nothing the viewer rendered overwrote it)."""
-        driver = AppTest.from_file("app.py", default_timeout=30)
+        driver = AppTest.from_file(APP_PY, default_timeout=30)
         driver.run()
         _register(driver)
         driver_year = driver.session_state["year"]
 
-        viewer = AppTest.from_file("app.py", default_timeout=30)
+        viewer = AppTest.from_file(APP_PY, default_timeout=30)
         viewer.run()
         _register(viewer, role="👀 Follow Along — view only")
         assert not viewer.exception
@@ -138,7 +143,7 @@ class TestOfficialRunIntegrity:
     simulated year can't be abandoned by switching networks."""
 
     def test_driver_resumes_saved_run_after_reregistering(self):
-        a = AppTest.from_file("app.py", default_timeout=30)
+        a = AppTest.from_file(APP_PY, default_timeout=30)
         a.run()
         _register(a)
         # Pretend the Driver had simulated Year 1 and saved.
@@ -148,7 +153,7 @@ class TestOfficialRunIntegrity:
         gs.save_live_state("Team Sync", "Test School of Business, Test University",
                            "Fall 2026 — Media Strategy Sec A", snap)
 
-        b = AppTest.from_file("app.py", default_timeout=30)   # a fresh tab after a refresh
+        b = AppTest.from_file(APP_PY, default_timeout=30)   # a fresh tab after a refresh
         b.run()
         b.text_input(key="university_input_field").set_value("Test University")
         b.text_input(key="college_input_field").set_value("Test School of Business")
@@ -162,7 +167,7 @@ class TestOfficialRunIntegrity:
         assert b.session_state["tv_network_chosen"] is True
 
     def test_switching_away_from_an_official_run_with_a_simulated_year_is_blocked(self):
-        a = AppTest.from_file("app.py", default_timeout=30)
+        a = AppTest.from_file(APP_PY, default_timeout=30)
         a.run()
         _register(a)
         a.session_state["yearly_log"] = [{"year": 1, "label": "Year 1", "revenue": 20.0, "ad_rev": 15.0, "dist_rev": 5.0, "cost": 9.0, "mkt": 3.0, "ga": 1.0, "ocf": 6.0, "margin": 30.0, "new_cancellations": [], "shows": [], "budget": 95.0}]

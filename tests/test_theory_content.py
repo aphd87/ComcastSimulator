@@ -9,7 +9,12 @@ cards, meaning the Movies Theory tab was showing actively wrong framing
 loaded, no-amortization cost structure at all). These tests exist so that
 regression can't silently reappear.
 """
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 from utils.game_state import THEORY_CONTENT
 
@@ -40,7 +45,7 @@ class TestTheoryContentStructure:
 
 
 def _fresh_app() -> AppTest:
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(APP_PY, default_timeout=30)
     at.run()
     assert not at.exception, f"Sign-in screen raised: {list(at.exception)}"
     return at
@@ -72,7 +77,7 @@ def _registered_app(active_section: str) -> AppTest:
     """Seeds straight to a registered team on the given active_section,
     single .run(), no button click -- avoids the documented AppTest +
     st.rerun() limitation (see tests/test_registration.py)."""
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(APP_PY, default_timeout=30)
     at.session_state["registered"]    = True
     at.session_state["team_name"]     = "Team Alpha"
     at.session_state["school"]        = "Test School of Business, Test University"
