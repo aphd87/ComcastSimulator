@@ -39,6 +39,8 @@ def test_level_renders_and_simulates_with_its_own_slate(net):
     text = "\n".join(m.value for m in at.markdown)
     if net == "bravo":
         assert "Cold Case" not in text and "(True Crime)" not in text
+    # Oxygen-only carriage-fee margin note (2026-11-07 playtest feedback).
+    assert ("Why is your margin so high and so steady?" in text) == (net == "oxygen")
     sim = [b for b in at.button if "Simulate Year" in b.label]
     assert sim
     sim[0].click().run()

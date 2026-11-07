@@ -16,11 +16,16 @@ Registration moved out of st.sidebar into the main content area on
 2026-07-30 (the left sidebar was removed entirely -- see app.py), so this
 now drives `at.text_input`/`at.button` directly instead of `at.sidebar.*`.
 """
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 
 def _fresh_app():
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(APP_PY, default_timeout=30)
     at.run()
     return at
 
@@ -89,7 +94,7 @@ def test_registration_shows_the_simulation_nav_afterward():
     # tests/test_simulation.py and tests/test_movies_page.py for phase
     # transitions -- a fresh, pre-seeded .run() is outside the harness's
     # documented "second interaction" breakage window.
-    at = AppTest.from_file("app.py", default_timeout=30)
+    at = AppTest.from_file(APP_PY, default_timeout=30)
     at.session_state["registered"]    = True
     at.session_state["team_name"]     = "Team Alpha"
     at.session_state["school"]        = "Test School of Business, Test University"

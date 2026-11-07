@@ -1,7 +1,12 @@
 """Movies Follow Along (2026-11-03): the Driver's Movies state is saved under
 its own key and a Follow Along viewer sees it read-only."""
 import pytest
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
+
+# Absolute path: newer Streamlit resolves a relative from_file() path against
+# the calling test file (tests/app.py), not the working directory.
+APP_PY = str(Path(__file__).resolve().parent.parent / "app.py")
 
 import utils.game_state as gs
 from app_pages.movies_follow import _dec, _enc, apply_snapshot, build_snapshot
@@ -46,7 +51,7 @@ def _register_movies(at, role):
 
 
 def test_viewer_sees_drivers_movie_state_and_no_decision_widgets():
-    driver = AppTest.from_file("app.py", default_timeout=60)
+    driver = AppTest.from_file(APP_PY, default_timeout=60)
     driver.run()
     _register_movies(driver, "🎮 Driver — I'll make the decisions")
     assert not driver.exception, list(driver.exception)
@@ -57,7 +62,7 @@ def test_viewer_sees_drivers_movie_state_and_no_decision_widgets():
     assert gs.load_live_state("Team Film", "Test School of Business, Test University",
                               "Fall 2026 — Media Strategy Sec A") is None
 
-    viewer = AppTest.from_file("app.py", default_timeout=60)
+    viewer = AppTest.from_file(APP_PY, default_timeout=60)
     viewer.run()
     _register_movies(viewer, "👀 Follow Along — view only")
     assert not viewer.exception, list(viewer.exception)
@@ -68,7 +73,7 @@ def test_viewer_sees_drivers_movie_state_and_no_decision_widgets():
 
 
 def test_viewer_before_driver_starts_shows_waiting_message():
-    viewer = AppTest.from_file("app.py", default_timeout=60)
+    viewer = AppTest.from_file(APP_PY, default_timeout=60)
     viewer.run()
     _register_movies(viewer, "👀 Follow Along — view only")
     assert not viewer.exception, list(viewer.exception)

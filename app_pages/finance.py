@@ -101,7 +101,8 @@ def render():
     c4.metric("Content Spend",  f"${cost:.1f}M",     "Amortized")
     c5.metric("Marketing",      f"${mkt:.1f}M",      "Allocated")
     c6.metric("Net OCF",        f"${net_ocf:.1f}M",  f"Margin: {margin:.1f}%",
-              delta_color="inverse" if net_ocf < 0 else "normal")
+              delta_color="inverse" if net_ocf < 0 else "normal",
+              help="OCF = Operating Cash Flow: revenue minus content cost, marketing and overhead.")
 
     st.divider()
 
