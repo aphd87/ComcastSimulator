@@ -470,6 +470,8 @@ def _starting_position(net_info, shows, net):
         its current show slate's built-in ratings and costs, run at a default $5M
         marketing spend with no cancellations. It's a baseline for comparison, not an
         official played year (that starts once you simulate Year 1 below).
+        <b style="color:#ffffff;">OCF</b> means <b style="color:#ffffff;">Operating Cash Flow</b>:
+        revenue minus content cost, marketing and overhead, the cash your slate actually earns.
         <b style="color:#ffffff;">Pass threshold</b> is the minimum OCF margin
         (OCF ÷ Revenue) {net_info['display_name']} needs to hit by the end of the level
         to pass — {net_info['pass_threshold']:.0f}% here — so this baseline's own margin
@@ -1078,6 +1080,18 @@ def _decisions(ss, shows, net_info, year, net):
         budget_note = (f'<div style="font-size:14px;color:{TEXT2};margin-top:6px;'
                        f'font-family:DM Mono,monospace;">Budget: ${level_budget:.1f}M · '
                        f'committed ${spend_this_year:.1f}M</div>')
+    # Playtest feedback (2026-11-07): Oxygen's margin sat near 75-80% every
+    # year whatever the player cancelled or invested in. That's the model,
+    # not a bug -- carriage fees (~$189M) dwarf Oxygen's ~$35M content cost
+    # and don't move with show decisions -- so explain it as the lesson it is.
+    if net == "oxygen":
+        budget_note += (
+            f'<div style="font-size:14px;color:{TEXT2};margin-top:8px;line-height:1.5;">'
+            f'💡 <b style="color:#ffffff;">Why is your margin so high and so steady?</b> About '
+            f'two-thirds of Oxygen\'s revenue is carriage fees: what cable companies pay to carry '
+            f'the channel, no matter which shows you air. Your decisions move ad revenue and costs, '
+            f'which are a much smaller share. That\'s why cable networks were cash cows, and why '
+            f'the move to streaming (Peacock) changes the game.</div>')
 
     st.markdown(f"""
     <div style="background:#12141a;border:1px solid #252836;border-radius:8px;padding:14px;">

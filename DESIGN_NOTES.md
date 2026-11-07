@@ -885,6 +885,13 @@ Verified via `AppTest` through a full 4-year level (Decisions → Results ×4 �
 >
 > Will students manually create show titles or select from a catalog? How frequently does production availability randomize? Should budget constraints shift mid-year (emergency cancellations)? How visible should decay curves be to students (hidden vs. transparent)? Can students see competitors' slates (comparative analysis)? How are tie-breaker decisions (same ROI) handled?
 
+## Oxygen playtest feedback — 2026-11-07
+
+- **Cancelled shows read "Renew" in the Full Renewal Analysis Table** — fixed. `renewal.py` built its rows above the Renew/Cancel cards, so the table, IP scatter and Budget Impact lagged one change behind the selectbox. Rows now read the selectbox's `ren_<id>` widget key first. Regression test in `tests/test_renewal_page.py`.
+- **Slow research clicks led to buying extra research** — every click was charged correctly; the page just took a while to reload. The research box now says to wait for the reload and shows research bought this year ($ and count).
+- **"OCF" undefined** — spelled out (Operating Cash Flow) on the Starting Position card and as a tooltip on Finance's Net OCF.
+- **Oxygen margin ~75–80% every year, barely moving with decisions** — real, not a bug. Year 1: ad $86.7M + carriage $189M revenue vs. $34.5M content cost → 79.7% margin; cancelling any single show moves it under 1.1 pts; cancelling the weakest half gives 84.2%. Bravo (43.9% → 60.5%) and Peacock (2.9% → 11.4%) respond to decisions. For now an in-game note explains it as the cable cash-cow lesson. **Follow-up after class:** recalibrate Oxygen together (its own carriage fee, show costs, pass threshold and the 40% margin-full-marks point) so the margin starts ~25–35% and moves with decisions — carriage alone can't do it (zero carriage still leaves ~48%). Rebuild the student guides after.
+
 ## Original mechanics brief (Zach Schlessel, NBCUniversal — preserved verbatim in spirit)
 
 Recovered from an untracked `Zach Notes.docx` found in a stale duplicate clone (`OneDrive/Desktop/ComcastSimulator`) — preserved here since it's the closest thing to a founding design doc and wasn't committed anywhere.

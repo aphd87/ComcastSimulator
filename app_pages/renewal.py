@@ -159,6 +159,18 @@ def render():
 
         with st.expander(f"🔬 Pay for Research (${RESEARCH_FEE:.0f}M/show)", expanded=False):
             from utils.models import preview_show_variance, variance_to_stars, preview_regional_signal
+            # Playtest feedback (2026-11-07): the page can take a while to
+            # reload after a click, and a player who thought research wasn't
+            # working clicked other shows and spent more than intended. Every
+            # click is charged, so say so and show the running total.
+            _bought = sum(1 for v in ss.research_revealed.values() if v.get("year") == year)
+            st.markdown(
+                f'<div style="font-size:14px;color:{WARN};margin-bottom:8px;">⏳ After you click, '
+                f'<b>wait for the page to reload</b>. It can take a few seconds, especially with the '
+                f'whole class online. Each click is charged ${RESEARCH_FEE:.0f}M. '
+                f'Research bought this year: <b>{_bought} show{"s" if _bought != 1 else ""} '
+                f'(${_bought * RESEARCH_FEE:.0f}M)</b>.</div>',
+                unsafe_allow_html=True)
             nc = 4
             chunks = [active_for_research[i:i+nc] for i in range(0, len(active_for_research), nc)]
             for chunk in chunks:
@@ -216,8 +228,16 @@ def render():
         trend      = "↑" if roi_next > roi_now else ("→" if abs(roi_next-roi_now)<5 else "↓")
         auto_dec   = renewal_decision(s, next_year, per)
 
-        # Student override
-        student_dec = ss.renewal_decisions.get(s.id, auto_dec.split()[1])
+        # Student override. Read the Renew/Cancel selectbox's own widget key
+        # first (2026-11-07 fix, playtest feedback: cancelled shows still read
+        # "Renew" in the Full Renewal Analysis Table) -- this loop runs above
+        # the decision cards, so ss.renewal_decisions isn't updated from the
+        # selectbox until later in the same rerun, and the table, scatter and
+        # Budget Impact all lagged one change behind. Default "Renew" matches
+        # the selectbox's own default.
+        if f"ren_{s.id}" in ss:
+            ss.renewal_decisions[s.id] = ss[f"ren_{s.id}"]
+        student_dec = ss.renewal_decisions.get(s.id, "Renew")
 
         rows.append({
             "_id":       s.id,
@@ -552,7 +572,7 @@ def render():
         "Show","Network","Genre","Curr Cost","Renew Cost","Δ Cost",
         "Proj Rating","Proj Rev","Proj OCF","ROI Now","ROI Next","Trend","IP Score","Auto","Decision"
     ]].copy()
-    display_df["Decision"] = display_df["_id"].apply(lambda i: ss.renewal_decisions.get(i,"Renew")) if "_id" in display_df else display_df["Decision"]
+    display_df["Decision"] = decisions_df["_id"].apply(lambda i: ss.renewal_decisions.get(i, "Renew"))
 
     def style_dec(val):
         if val in ("Renew", "Watch"):  return "color:#81c784;font-weight:600;"

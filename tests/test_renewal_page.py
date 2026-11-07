@@ -59,3 +59,17 @@ def test_no_shows_cancelled_both_shows_still_appear():
     text = "\n".join(md.value for md in at.markdown)
     assert "Alive Show" in text
     assert "Dead Show" in text
+
+
+def test_full_analysis_table_shows_cancel_right_after_it_is_picked():
+    """Playtest feedback (2026-11-07): a show switched to Cancel still read
+    "Renew" in the Full Renewal Analysis Table -- the table's rows are built
+    above the decision cards, so they lagged one change behind the
+    selectbox."""
+    at = _renewal_app(cancelled_ids=set())
+    at.selectbox(key="ren_2").set_value("Cancel").run()
+    assert not at.exception, f"Renewal page raised: {list(at.exception)}"
+    table = next(df.value for df in at.dataframe if "Decision" in df.value.columns)
+    table = getattr(table, "data", table)  # Styler -> DataFrame
+    decisions = dict(zip(table["Show"], table["Decision"]))
+    assert decisions == {"Alive Show": "Renew", "Dead Show": "Cancel"}
