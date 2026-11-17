@@ -8,6 +8,7 @@ is (school, class_section, team_name) — see utils/game_state.py. This
 page lets a team view their own class only, their whole school, or every
 school (cross-school comparison), plus a school-vs-school rollup.
 """
+import html
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -53,6 +54,14 @@ def _format_slate_item(item: dict) -> str:
     return " · ".join(parts)
 
 
+def _badge_span(badge) -> str:
+    text, tip = badge if isinstance(badge, tuple) else (badge, "")
+    title = f' title="{html.escape(tip, quote=True)}"' if tip else ""
+    cursor = "cursor:help;" if tip else ""
+    return (f'<span{title} style="font-size:14px;font-family:DM Mono,monospace;'
+            f'{cursor}color:{ACCENT2};">{text}</span>')
+
+
 def _format_notables_badges(notables: dict) -> str:
     """Small badge row for a leaderboard entry's stored `notables`
     (compute_level_notables for TV, compute_movie_notables for Movies —
@@ -63,16 +72,37 @@ def _format_notables_badges(notables: dict) -> str:
     entries submitted before this feature existed carry neither."""
     if not notables:
         return ""
-    badges = []
+    badges = []   # plain strings, or (text, hover explanation) pairs
+    is_movies = "best_cycle" in notables or "genre_variety" in notables
     best = notables.get("best_year") or notables.get("best_cycle")
     if best:
-        badges.append(f"🏆 Best: {best['label']}")
+        badges.append((f"🏆 Best: {best['label']}",
+                       "The film with the highest NPV in this slate" if is_movies
+                       else "The year with the highest operating margin"))
+    # most_improved is last minus first (Movies: film NPV in $M; TV: operating
+    # margin in % points). It used to print as "-351.1 improvement", which
+    # read like a score penalty. Say what changed, in its units, and which way.
     mi = notables.get("most_improved")
     if mi is not None:
-        badges.append(f"📈 {mi:+.1f} improvement")
+        if is_movies:
+            amt = f"${abs(mi):,.1f}M"
+            text = ("📊 Last film's NPV same as first" if mi == 0 else
+                    f"{'📈' if mi > 0 else '📉'} Last film's NPV {amt} {'above' if mi > 0 else 'below'} first")
+            tip = ("NPV of the team's last film minus NPV of its first film. "
+                   "Only compares those two films; it does not affect the score.")
+        else:
+            amt = f"{abs(mi):.1f} pts"
+            text = ("📊 Margin same in last year as first" if mi == 0 else
+                    f"{'📈' if mi > 0 else '📉'} Margin {'up' if mi > 0 else 'down'} {amt}, first to last year")
+            tip = ("Operating margin in the last year played minus the first year, in percentage points. "
+                   "It does not affect the score.")
+        badges.append((text, tip))
     cs = notables.get("consistency_score")
     if cs is not None:
-        badges.append(f"🎯 {cs:.0f}/100 consistency")
+        badges.append((f"🎯 {cs:.0f}/100 consistency",
+                       "How steady results were from " + ("film to film" if is_movies else "year to year") +
+                       ": 100 = every " + ("film had the same NPV" if is_movies else "year had the same margin") +
+                       "; 0 = very large swings. It does not affect the score."))
     bcs = notables.get("brand_core_share")
     if bcs is not None and notables.get("brand_core"):
         badges.append(f"🏷️ {notables['brand_core']} {bcs:.0f}% of spend")
@@ -100,8 +130,7 @@ def _format_notables_badges(notables: dict) -> str:
     if not badges:
         return ""
     return ('<div style="display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;">' +
-            "".join(f'<span style="font-size:14px;font-family:DM Mono,monospace;color:{ACCENT2};">{b}</span>'
-                    for b in badges) +
+            "".join(_badge_span(b) for b in badges) +
             '</div>')
 
 

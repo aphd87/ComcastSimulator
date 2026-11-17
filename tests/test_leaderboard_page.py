@@ -30,7 +30,7 @@ class TestFormatNotablesBadges:
         }
         html = _format_notables_badges(notables)
         assert "Year 3" in html
-        assert "+15.0 improvement" in html
+        assert "Margin up 15.0 pts, first to last year" in html
         assert "88/100 consistency" in html
         assert "2 greenlit" in html
         assert "genre" not in html   # genre_variety is Movies-only, must not leak in
@@ -42,7 +42,7 @@ class TestFormatNotablesBadges:
         }
         html = _format_notables_badges(notables)
         assert "Hit Movie" in html
-        assert "-10.0 improvement" in html
+        assert "Last film's NPV $10.0M below first" in html
         assert "60/100 consistency" in html
         assert "3 genres" in html
         assert "greenlit" not in html   # shows_greenlit is TV-only, must not leak in
@@ -53,6 +53,18 @@ class TestFormatNotablesBadges:
                      "shows_greenlit": 0}
         html = _format_notables_badges(notables)
         assert html == ""   # every field is falsy/None -- nothing to show
+
+    def test_movies_improvement_reads_as_a_dollar_change_not_a_score(self):
+        # Regression: a team saw "-351.1 improvement" and read it as a penalty.
+        html = _format_notables_badges({"best_cycle": {"label": "X", "npv": 1.0, "irr": 0.1},
+                                        "most_improved": -351.1})
+        assert "improvement" not in html
+        assert "Last film's NPV $351.1M below first" in html
+        assert "title=" in html   # hover text explains the badge
+
+    def test_positive_movies_change_says_above(self):
+        html = _format_notables_badges({"genre_variety": 2, "most_improved": 1250.0})
+        assert "Last film's NPV $1,250.0M above first" in html
 
     def test_singular_genre_count_does_not_pluralize(self):
         html = _format_notables_badges({"genre_variety": 1})
